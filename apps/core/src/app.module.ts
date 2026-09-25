@@ -31,6 +31,7 @@ import { PackAssemblerV0 } from "./services/pack-assembler.js";
 import { Dispatcher, recoverOrphanedRuns } from "./services/dispatcher.js";
 import { ConsoleViews } from "./services/console-views.js";
 import { Signatures } from "./services/signatures.js";
+import { Controls } from "./services/controls.js";
 import { ApiController, TOKENS } from "./http/api.controller.js";
 import { Realtime } from "./http/realtime.gateway.js";
 import { makeLogger } from "./boot/logger.js";
@@ -194,7 +195,17 @@ function buildDispatcher(
       useFactory: buildDispatcher,
       inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime],
     },
-    { provide: TOKENS.activeWorkers, useFactory: () => () => 0 },
+    {
+      provide: TOKENS.controls,
+      useFactory: (db: PrismaClient, uow: PrismaUnitOfWork, dispatcher: Dispatcher) =>
+        new Controls(db, uow, dispatcher),
+      inject: [PRISMA, UOW, DISPATCHER],
+    },
+    {
+      provide: TOKENS.activeWorkers,
+      useFactory: (dispatcher: Dispatcher) => () => dispatcher.activeWorkers(),
+      inject: [DISPATCHER],
+    },
   ],
   exports: [],
 })

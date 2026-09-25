@@ -43,6 +43,19 @@ export class Dispatcher {
   private active = 0;
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
+  private readonly controllers = new Map<string, AbortController>();
+
+  /** Abort a live worker by runId; returns whether one was signalled. */
+  abort(runId: string): boolean {
+    const c = this.controllers.get(runId);
+    if (!c) return false;
+    c.abort();
+    return true;
+  }
+
+  activeWorkers(): number {
+    return this.active;
+  }
 
   constructor(
     private readonly uow: UnitOfWork,
@@ -103,9 +116,11 @@ export class Dispatcher {
     }
     const { runId, incrementId, startPhase, attempt } = parsed.data;
     this.active += 1;
+    const controller = new AbortController();
+    this.controllers.set(runId, controller);
     const log = this.log.child({ runId, incrementId });
     try {
-      const outcome = await this.engine.execute(runId, incrementId, startPhase, attempt);
+      const outcome = await this.engine.execute(runId, incrementId, startPhase, attempt, controller.signal);
       await this.uow.run(async (tx) => tx.outbox.markProcessed(valid.id));
 
       if (outcome.outcome === "parked") {
@@ -132,6 +147,7 @@ export class Dispatcher {
       await this.uow.run(async (tx) => tx.outbox.release(valid.id)).catch(() => {});
     } finally {
       this.active -= 1;
+      this.controllers.delete(runId);
     }
   }
 }

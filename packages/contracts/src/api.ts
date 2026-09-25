@@ -49,6 +49,54 @@ export const QuotaStateViewSchema = z.object({
 });
 export type QuotaStateView = z.infer<typeof QuotaStateViewSchema>;
 
+// ── console control requests ──
+
+export const CreateFeatureRequestSchema = z.object({
+  title: z.string().min(1).max(200),
+  briefMd: z.string().min(1),
+  increments: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(200),
+        declaredSurface: z.array(z.string().min(1)).min(1),
+      }),
+    )
+    .min(1),
+});
+export type CreateFeatureRequest = z.infer<typeof CreateFeatureRequestSchema>;
+
+export const AnswerEscalationRequestSchema = z.object({
+  answer: z.string().min(1),
+});
+export type AnswerEscalationRequest = z.infer<typeof AnswerEscalationRequestSchema>;
+
+export const EscalationViewSchema = z.object({
+  id: z.string(),
+  incrementId: IncrementIdSchema,
+  question: z.string(),
+  raisedAt: z.iso.datetime(),
+});
+export type EscalationView = z.infer<typeof EscalationViewSchema>;
+
+export const ActivityViewSchema = z.object({
+  phases: z.array(
+    z.object({
+      phase: z.string(),
+      attempt: z.number().int(),
+      enteredAt: z.iso.datetime(),
+      completedAt: z.iso.datetime().nullable(),
+    }),
+  ),
+  usage: z.object({
+    inputTokens: z.number().int(),
+    cachedInputTokens: z.number().int(),
+    outputTokens: z.number().int(),
+    costUsd: z.number().nullable(),
+  }),
+  lastError: z.string().nullable(),
+});
+export type ActivityView = z.infer<typeof ActivityViewSchema>;
+
 // WS events pushed to the console
 export const RealtimeEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("increment_changed"), incrementId: IncrementIdSchema }),

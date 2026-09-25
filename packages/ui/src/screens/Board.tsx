@@ -12,21 +12,26 @@ const STAGE_LABEL: Record<string, string> = {
   DONE: "Done",
 };
 
-export function Board({ onOpen }: { onOpen: (id: string) => void }) {
+export function Board({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: () => void }) {
   const features = useQuery({ queryKey: ["features"], queryFn: api.features, refetchInterval: 5000 });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 10000 });
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "var(--space-8) var(--space-4)" }}>
-      <header style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <h1 style={{ fontSize: "var(--fs-xl)", margin: 0 }}>Signet</h1>
-        <QuotaStrip health={health.data} />
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+          <QuotaStrip health={health.data} />
+          <button className="primary" onClick={onNew}>
+            New feature
+          </button>
+        </div>
       </header>
 
       <div style={{ display: "grid", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
         {features.data?.length === 0 && (
           <div style={{ color: "var(--text-dim)", padding: "var(--space-6)", textAlign: "center" }}>
-            No features yet. Seed one through the API to begin.
+            No features yet — create one to begin.
           </div>
         )}
         {features.data?.map((f) => (

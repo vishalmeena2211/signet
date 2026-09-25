@@ -3,10 +3,15 @@
 
 import { z } from "zod";
 import {
+  ActivityViewSchema,
+  EscalationViewSchema,
   FeatureSummarySchema,
   GateVerdictViewSchema,
   IncrementDetailSchema,
   QuotaStateViewSchema,
+  type ActivityView,
+  type CreateFeatureRequest,
+  type EscalationView,
   type FeatureSummary,
   type GateVerdictView,
   type IncrementDetail,
@@ -35,20 +40,45 @@ export const api = {
         feature: FeatureSummarySchema,
         increments: z.array(IncrementDetailSchema),
         verdicts: z.record(z.string(), z.array(GateVerdictViewSchema)),
+        activity: z.record(z.string(), ActivityViewSchema),
+        escalations: z.array(EscalationViewSchema),
       }),
     ) as Promise<{
       feature: FeatureSummary;
       increments: IncrementDetail[];
       verdicts: Record<string, GateVerdictView[]>;
+      activity: Record<string, ActivityView>;
+      escalations: EscalationView[];
     }>,
 
-  approve: async (incrementId: string): Promise<void> => {
-    const res = await fetch(`/api/increments/${incrementId}/approve`, { method: "POST" });
-    if (!res.ok) throw new Error(`approve failed: ${res.status}`);
+  createFeature: async (req: CreateFeatureRequest): Promise<{ featureId: string }> => {
+    const res = await fetch("/api/features", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) throw new Error(`create failed: ${res.status}`);
+    return z.object({ featureId: z.string() }).parse(await res.json());
   },
 
-  merge: async (incrementId: string): Promise<void> => {
-    const res = await fetch(`/api/increments/${incrementId}/merge`, { method: "POST" });
-    if (!res.ok) throw new Error(`merge failed: ${res.status}`);
+  answerEscalation: async (id: string, answer: string): Promise<void> => {
+    const res = await fetch(`/api/escalations/${id}/answer`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ answer }),
+    });
+    if (!res.ok) throw new Error(`answer failed: ${res.status}`);
   },
+
+  approve: post("approve"),
+  merge: post("merge"),
+  retry: post("retry"),
+  abort: post("abort"),
 };
+
+function post(action: string) {
+  return async (incrementId: string): Promise<void> => {
+    const res = await fetch(`/api/increments/${incrementId}/${action}`, { method: "POST" });
+    if (!res.ok) throw new Error(`${action} failed: ${res.status}`);
+  };
+}

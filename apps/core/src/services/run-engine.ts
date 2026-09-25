@@ -23,7 +23,7 @@ import type { WorktreeHandle, WorktreeManager } from "../domain/runtime/worktree
 
 /** What the engine needs from the Claude Code adapter (implemented in domain/adapter). */
 export interface AgentDriver {
-  plan(input: { packDir: string; workspacePath: string }): Promise<
+  plan(input: { packDir: string; workspacePath: string; signal?: AbortSignal }): Promise<
     { ok: true; plan: unknown; sessionRef: SessionRef; usage: ModelUsage[] } | { ok: false; error: SignetError }
   >;
   implement(input: {
@@ -31,6 +31,7 @@ export interface AgentDriver {
     workspacePath: string;
     resumeSession: SessionRef | null;
     repairFeedback: string | null;
+    signal?: AbortSignal;
     onEvent: (ev: AdapterEvent) => Promise<void>;
   }): Promise<{ ok: true; sessionRef: SessionRef } | { ok: false; error: SignetError }>;
 }
@@ -82,7 +83,14 @@ export class RunEngine {
   ) {}
 
   /** Execute a run from a given phase (fresh start or crash-resume). */
-  async execute(runId: RunId, incrementId: IncrementId, startPhase: RunPhaseName, attempt: number): Promise<RunOutcome> {
+  async execute(
+    runId: RunId,
+    incrementId: IncrementId,
+    startPhase: RunPhaseName,
+    attempt: number,
+    signal?: AbortSignal,
+  ): Promise<RunOutcome> {
+    this.signals.set(runId, signal);
     const log = this.log.child({ runId, incrementId });
     let phase: RunPhaseName = startPhase;
     let phaseAttempt = attempt;
@@ -217,7 +225,12 @@ export class RunEngine {
       }
       case "AGENT_PLAN": {
         if (!ctx.packDir || !ctx.handle) return { ok: false, error: nonRecoverable("engine.state", "no pack/workspace") };
-        const res = await this.agent.plan({ packDir: ctx.packDir, workspacePath: ctx.handle.path });
+        const planSignal = this.signals.get(ctx.runId);
+        const res = await this.agent.plan({
+          packDir: ctx.packDir,
+          workspacePath: ctx.handle.path,
+          ...(planSignal ? { signal: planSignal } : {}),
+        });
         if (!res.ok) return { ok: false, error: res.error };
         const parsed = IncrementPlanSchema.safeParse(res.plan);
         if (!parsed.success) {
@@ -249,11 +262,13 @@ export class RunEngine {
         if (!ctx.packDir || !ctx.handle) return { ok: false, error: nonRecoverable("engine.state", "no pack/workspace") };
         const row = await this.runRow(ctx.runId);
         let quotaResetsAt: Date | null = null;
+        const implSignal = this.signals.get(ctx.runId);
         const res = await this.agent.implement({
           packDir: ctx.packDir,
           workspacePath: ctx.handle.path,
           resumeSession: row.sessionRef,
           repairFeedback: ctx.repairFeedback,
+          ...(implSignal ? { signal: implSignal } : {}),
           onEvent: async (ev) => {
             if (ev.type === "usage_update" || ev.type === "completed") {
               await this.uow.run(async (tx) => {
@@ -305,6 +320,7 @@ export class RunEngine {
   // ── persistence helpers (journal-before-act lives in the repos) ───────────
 
   private lastPlanFiles = new Map<RunId, string[]>();
+  private signals = new Map<RunId, AbortSignal | undefined>();
 
   private async enterPhase(runId: RunId, phase: RunPhaseName, attempt: number): Promise<void> {
     RunPhaseNameSchema.parse(phase);

@@ -34,7 +34,7 @@ export class ClaudeAgentDriver implements AgentDriver {
     }
   }
 
-  async plan(input: { packDir: string; workspacePath: string }) {
+  async plan(input: { packDir: string; workspacePath: string; signal?: AbortSignal }) {
     const brief = await this.packSection(input.packDir, "brief.md");
     const acceptance = await this.packSection(input.packDir, "acceptance.md");
     const surface = await this.packSection(input.packDir, "surface.txt");
@@ -61,6 +61,7 @@ export class ClaudeAgentDriver implements AgentDriver {
       prompt,
       maxTurns: Math.min(this.opts.maxTurns, 8),
       ...(this.opts.model !== undefined ? { model: this.opts.model } : {}),
+      ...(input.signal ? { signal: input.signal } : {}),
       onEvent: async (ev: AdapterEvent) => {
         if (ev.type === "usage_update" || ev.type === "completed") usage.push(...ev.perModel);
       },
@@ -89,6 +90,7 @@ export class ClaudeAgentDriver implements AgentDriver {
     workspacePath: string;
     resumeSession: SessionRef | null;
     repairFeedback: string | null;
+    signal?: AbortSignal;
     onEvent: (ev: AdapterEvent) => Promise<void>;
   }) {
     let prompt: string;
@@ -124,6 +126,7 @@ export class ClaudeAgentDriver implements AgentDriver {
       resumeSession: input.resumeSession,
       maxTurns: this.opts.maxTurns,
       ...(this.opts.model !== undefined ? { model: this.opts.model } : {}),
+      ...(input.signal ? { signal: input.signal } : {}),
       onEvent: input.onEvent,
     });
 

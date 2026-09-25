@@ -36,6 +36,7 @@ export interface ExecuteInput {
   resumeSession?: SessionRef | null;
   maxTurns?: number;
   model?: string; // e.g. tiny tasks pin claude-haiku-4-5 to spare the quota window
+  signal?: AbortSignal; // user abort — SIGTERM the worker, classify as aborted
   onEvent: (ev: AdapterEvent) => Promise<void>;
 }
 
@@ -151,6 +152,15 @@ export class ClaudeAdapter {
         }
       }, this.opts.timeoutMs);
       timer.unref();
+
+      const onAbort = () => {
+        if (!settled) {
+          terminalError = nonRecoverable("adapter.aborted", "aborted by user");
+          child.kill("SIGTERM");
+          setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
+        }
+      };
+      input.signal?.addEventListener("abort", onAbort, { once: true });
 
       const handleEvent = async (ev: AdapterEvent) => {
         switch (ev.type) {

@@ -30,7 +30,7 @@ export const ALLOWED_INCREMENT_TRANSITIONS: Record<IncrementStatus, readonly Inc
   MERGED: [],
   ESCALATED: ["CONTEXT_READY", "FAILED"], // answered escalation re-enters with amended brief
   PARKED: ["CONTEXT_READY", "RUNNING"],
-  FAILED: [],
+  FAILED: ["CONTEXT_READY"], // human retry revives a failed increment
 };
 
 // ── Run ──────────────────────────────────────────────────────────────────────

@@ -10,9 +10,9 @@ import { parseConfig } from "./config.js";
 import { AdapterEventSchema } from "./adapter.js";
 
 describe("increment state machine", () => {
-  it("terminal states have no outgoing transitions", () => {
+  it("MERGED is terminal; FAILED is revivable only to CONTEXT_READY (human retry)", () => {
     expect(ALLOWED_INCREMENT_TRANSITIONS.MERGED).toHaveLength(0);
-    expect(ALLOWED_INCREMENT_TRANSITIONS.FAILED).toHaveLength(0);
+    expect(ALLOWED_INCREMENT_TRANSITIONS.FAILED).toEqual(["CONTEXT_READY"]);
   });
 
   it("every transition target is a defined state", () => {

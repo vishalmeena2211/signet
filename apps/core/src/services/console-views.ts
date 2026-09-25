@@ -3,11 +3,15 @@
 // this class is a contracts schema instance.
 
 import {
+  ActivityViewSchema,
+  EscalationViewSchema,
   FeatureSummarySchema,
   GateVerdictViewSchema,
   IncrementDetailSchema,
   IncrementStateSchema,
   QuotaStateViewSchema,
+  type ActivityView,
+  type EscalationView,
   type FeatureSummary,
   type GateVerdictView,
   type IncrementDetail,
@@ -88,6 +92,61 @@ export class ConsoleViews {
         findings: JSON.parse(r.findingsJson), // signet-policy-allow: raw-json-parse -- immediately schema-validated on this line
       }),
     );
+  }
+
+  async openEscalations(featureId: string): Promise<EscalationView[]> {
+    const incs = await this.db.increment.findMany({ where: { featureId }, select: { id: true } });
+    const rows = await this.db.escalation.findMany({
+      where: { incrementId: { in: incs.map((i) => i.id) }, status: "RAISED" },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((r) => {
+      const st = JSON.parse(r.stateJson) as { question?: string }; // signet-policy-allow: raw-json-parse -- narrow shape read; written by us
+      return EscalationViewSchema.parse({
+        id: r.id,
+        incrementId: r.incrementId,
+        question: st.question ?? "(no question recorded)",
+        raisedAt: r.createdAt.toISOString(),
+      });
+    });
+  }
+
+  async activity(incrementId: string): Promise<ActivityView> {
+    const lastRun = await this.db.run.findFirst({
+      where: { incrementId },
+      orderBy: { startedAt: "desc" },
+    });
+    if (!lastRun) {
+      return ActivityViewSchema.parse({
+        phases: [],
+        usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, costUsd: null },
+        lastError: null,
+      });
+    }
+    const phases = await this.db.runPhase.findMany({
+      where: { runId: lastRun.id },
+      orderBy: { enteredAt: "asc" },
+    });
+    const usage = await this.db.usageLedgerEntry.aggregate({
+      where: { runId: lastRun.id },
+      _sum: { inputTokens: true, cachedInputTokens: true, outputTokens: true, costUsd: true },
+    });
+    const runState = JSON.parse(lastRun.stateJson) as { status: string; errorCode?: string; reason?: string }; // signet-policy-allow: raw-json-parse -- narrow shape read; written by us
+    return ActivityViewSchema.parse({
+      phases: phases.map((p) => ({
+        phase: p.phase,
+        attempt: p.attempt,
+        enteredAt: p.enteredAt.toISOString(),
+        completedAt: p.completedAt?.toISOString() ?? null,
+      })),
+      usage: {
+        inputTokens: usage._sum.inputTokens ?? 0,
+        cachedInputTokens: usage._sum.cachedInputTokens ?? 0,
+        outputTokens: usage._sum.outputTokens ?? 0,
+        costUsd: usage._sum.costUsd === null ? null : Number(usage._sum.costUsd),
+      },
+      lastError: runState.errorCode ?? runState.reason ?? null,
+    });
   }
 
   async quotaState(activeWorkers: number): Promise<QuotaStateView> {
