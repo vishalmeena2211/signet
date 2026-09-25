@@ -145,6 +145,7 @@ function buildWorld() {
           briefContentMd: brief.contentMd,
           acceptanceMd: acceptanceByIncrement.get(id) ?? "",
           handoffNote: null,
+          designSliceMd: null,
         };
       },
     },

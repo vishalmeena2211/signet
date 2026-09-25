@@ -30,6 +30,14 @@ export const DesignOfRecordSchema = z.object({
 });
 export type DesignOfRecord = z.infer<typeof DesignOfRecordSchema>;
 
+export const ApproveDesignRequestSchema = z.object({
+  source: DesignSourceSchema,
+  approvedBy: z.string().min(1),
+  intent: DesignOfRecordSchema.shape.intent,
+  referenceImagePath: z.string().optional(),
+});
+export type ApproveDesignRequest = z.infer<typeof ApproveDesignRequestSchema>;
+
 // Per-dimension conformance result — never collapsed to one number
 // (Design2Code lesson: keep the diagnostics visible).
 export const ConformanceDimensionSchema = z.object({

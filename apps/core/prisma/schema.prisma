@@ -169,6 +169,18 @@ model Escalation {
   @@map("escalations")
 }
 
+model DesignRecord {
+  id                 String   @id @db.Uuid
+  incrementId        String   @unique @map("increment_id") @db.Uuid
+  source             String // ingested | resolved
+  approvedBy         String   @map("approved_by")
+  approvedAt         DateTime @map("approved_at")
+  intentJson         String   @map("intent_json")
+  referenceImagePath String?  @map("reference_image_path")
+
+  @@map("design_records")
+}
+
 model Rule {
   id                String     @id @db.Uuid
   repoLabel         String     @map("repo_label")

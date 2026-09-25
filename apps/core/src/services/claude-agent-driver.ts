@@ -38,6 +38,7 @@ export class ClaudeAgentDriver implements AgentDriver {
     const brief = await this.packSection(input.packDir, "brief.md");
     const acceptance = await this.packSection(input.packDir, "acceptance.md");
     const surface = await this.packSection(input.packDir, "surface.txt");
+    const design = await this.packSection(input.packDir, "design.md");
 
     const prompt = [
       "You are planning ONE small implementation increment. Do not write any code yet.",
@@ -51,6 +52,7 @@ export class ClaudeAgentDriver implements AgentDriver {
       brief,
       "## Acceptance criteria",
       acceptance,
+      ...(design ? ["## Design of record (approved — overrides the brief on conflict)", design] : []),
       "## Declared surface (you may only touch files matching these)",
       surface,
     ].join("\n");
@@ -105,16 +107,19 @@ export class ClaudeAgentDriver implements AgentDriver {
       const brief = await this.packSection(input.packDir, "brief.md");
       const acceptance = await this.packSection(input.packDir, "acceptance.md");
       const surface = await this.packSection(input.packDir, "surface.txt");
+      const design = await this.packSection(input.packDir, "design.md");
       prompt = [
         "Implement this increment now, following your approved plan.",
         "Rules: touch only files inside the declared surface; write or update tests",
         "that FAIL without your change and PASS with it; do not touch existing tests",
         "except to keep them honest; make the project's test suite pass.",
+        ...(design ? ["The design of record below is APPROVED and overrides the brief on any conflict."] : []),
         "",
         "## Brief",
         brief,
         "## Acceptance criteria",
         acceptance,
+        ...(design ? ["## Design of record (approved)", design] : []),
         "## Declared surface",
         surface,
       ].join("\n");

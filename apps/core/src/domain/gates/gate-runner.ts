@@ -20,6 +20,8 @@ export interface GateContext {
   baseRef: string;
   changedFiles: string[];
   runId: RunId;
+  /** Which increment this run belongs to — the conformance gate loads its approved design. */
+  incrementId?: string;
 }
 
 export interface Gate {

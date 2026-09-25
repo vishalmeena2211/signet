@@ -25,6 +25,8 @@ export interface PackSources {
     briefContentMd: string;
     acceptanceMd: string;
     handoffNote: string | null;
+    /** Rendered design-of-record slice — the approved constraints, known BEFORE implementing. */
+    designSliceMd: string | null;
   }>;
 }
 
@@ -52,6 +54,9 @@ export class PackAssemblerV0 implements PackAssembler {
         file: "surface.txt",
         content: inc.declaredSurface.join("\n") + "\n",
       },
+      ...(inc.designSliceMd !== null
+        ? [{ name: "design_of_record_slice" as const, file: "design.md", content: inc.designSliceMd }]
+        : []),
       ...(inc.handoffNote !== null
         ? [{ name: "handoff_note" as const, file: "handoff.md", content: inc.handoffNote }]
         : []),

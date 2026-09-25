@@ -107,6 +107,7 @@ function buildEngine(driver: AgentDriver) {
           briefContentMd: "brief",
           acceptanceMd: "acceptance",
           handoffNote: null,
+          designSliceMd: null,
         };
       },
     },

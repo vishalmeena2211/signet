@@ -9,11 +9,13 @@ import {
   FeatureIdSchema,
   IncrementIdSchema,
   LearnRequestSchema,
+  ApproveDesignRequestSchema,
 } from "@signet/contracts";
 import type { ConsoleViews } from "../services/console-views.js";
 import type { Signatures } from "../services/signatures.js";
 import type { Controls } from "../services/controls.js";
 import type { RuleStore } from "../services/rule-store.js";
+import type { DesignStore } from "../services/design-store.js";
 import type { Realtime } from "./realtime.gateway.js";
 
 export const TOKENS = {
@@ -21,6 +23,7 @@ export const TOKENS = {
   signatures: "signet.signatures",
   controls: "signet.controls",
   rules: "signet.rules",
+  designs: "signet.designs",
   realtime: "signet.realtime",
   activeWorkers: "signet.activeWorkers",
 } as const;
@@ -32,6 +35,7 @@ export class ApiController {
     @Inject(TOKENS.signatures) private readonly signatures: Signatures,
     @Inject(TOKENS.controls) private readonly controls: Controls,
     @Inject(TOKENS.rules) private readonly rules: RuleStore,
+    @Inject(TOKENS.designs) private readonly designs: DesignStore,
     @Inject(TOKENS.realtime) private readonly realtime: Realtime,
     @Inject(TOKENS.activeWorkers) private readonly activeWorkers: () => number,
   ) {}
@@ -93,6 +97,29 @@ export class ApiController {
     const res = await this.controls.abort(incId);
     this.realtime.broadcast({ kind: "increment_changed", incrementId: incId });
     return res;
+  }
+
+  // ── design of record (the approved ground truth the conformance gate judges) ──
+
+  @Post("increments/:id/design")
+  async approveDesign(@Param("id") id: string, @Body() body: unknown) {
+    const incId = IncrementIdSchema.parse(id);
+    const req = ApproveDesignRequestSchema.parse(body);
+    const record = await this.designs.approve(incId, {
+      source: req.source,
+      approvedBy: req.approvedBy,
+      intent: req.intent,
+      ...(req.referenceImagePath ? { referenceImagePath: req.referenceImagePath } : {}),
+    });
+    this.realtime.broadcast({ kind: "increment_changed", incrementId: incId });
+    return { approved: true, intent: record.intent };
+  }
+
+  @Get("increments/:id/design")
+  async getDesign(@Param("id") id: string) {
+    const record = await this.designs.get(IncrementIdSchema.parse(id));
+    if (!record) throw new NotFoundException();
+    return record;
   }
 
   // ── design-system learner + confirmation queue ──

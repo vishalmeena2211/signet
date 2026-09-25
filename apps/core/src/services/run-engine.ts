@@ -43,6 +43,7 @@ export interface GateRunner {
     baseRef: string;
     changedFiles: string[];
     runId: RunId;
+    incrementId: IncrementId;
   }): Promise<{ passed: true } | { passed: false; repairFeedback: string; error: SignetError }>;
 }
 
@@ -300,6 +301,7 @@ export class RunEngine {
           baseRef: this.cfg.baseRef,
           changedFiles: changed,
           runId: ctx.runId,
+          incrementId: ctx.incrementId,
         });
         if (!verdict.passed) {
           return { ok: false, error: verdict.error, repairFeedback: verdict.repairFeedback };

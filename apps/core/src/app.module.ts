@@ -24,7 +24,9 @@ import { ClaudeAdapter } from "./domain/adapter/claude-adapter.js";
 import { GateSuite } from "./domain/gates/gate-runner.js";
 import { lintGate, testsGate, typecheckGate } from "./domain/gates/standard-gates.js";
 import { rulesGate } from "./domain/gates/rules-gate.js";
+import { conformanceGate } from "./domain/gates/conformance-gate.js";
 import { makeRunOnBase } from "./domain/gates/base-overlay.js";
+import { DesignStore } from "./services/design-store.js";
 import { checkScope } from "./domain/pipeline/scope-checker.js";
 import { RunEngine } from "./services/run-engine.js";
 import { ClaudeAgentDriver } from "./services/claude-agent-driver.js";
@@ -52,6 +54,7 @@ function buildDispatcher(
   log: Logger,
   realtime: Realtime,
   rules: RuleStore,
+  designs: DesignStore,
 ): Dispatcher {
   const worktrees = new WorktreeManager(cfg.targetRepoPath, cfg.workspacesRoot);
   const adapter = new ClaudeAdapter({ binary: cfg.claudeBinary, timeoutMs: 20 * 60_000 }, log);
@@ -63,6 +66,7 @@ function buildDispatcher(
       lintGate(),
       testsGate({ runOnBase: makeRunOnBase() }),
       rulesGate({ loadConfirmedRules: () => rules.confirmedRules(targetLabel) }), // warn-first
+      conformanceGate({ loadDesign: (incId) => designs.get(incId) }), // blocks: the design was signed
     ],
     async (runId, v) => {
       await db.gateVerdict.create({
@@ -83,6 +87,7 @@ function buildDispatcher(
       async loadIncrement(id) {
         const row = await db.increment.findUniqueOrThrow({ where: { id } });
         const brief = await db.briefVersion.findUniqueOrThrow({ where: { id: row.briefVersionId } });
+        const design = await designs.get(id);
         return {
           title: row.title,
           declaredSurface: row.declaredSurface,
@@ -90,6 +95,7 @@ function buildDispatcher(
           briefContentMd: brief.contentMd,
           acceptanceMd: "",
           handoffNote: null,
+          designSliceMd: design ? designs.renderSlice(design) : null,
         };
       },
     },
@@ -205,9 +211,14 @@ function buildDispatcher(
       inject: [PRISMA, LOGGER],
     },
     {
+      provide: TOKENS.designs,
+      useFactory: (db: PrismaClient) => new DesignStore(db),
+      inject: [PRISMA],
+    },
+    {
       provide: DISPATCHER,
       useFactory: buildDispatcher,
-      inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime, TOKENS.rules],
+      inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime, TOKENS.rules, TOKENS.designs],
     },
     {
       provide: TOKENS.controls,
