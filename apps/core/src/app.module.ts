@@ -32,6 +32,7 @@ import { Dispatcher, recoverOrphanedRuns } from "./services/dispatcher.js";
 import { ConsoleViews } from "./services/console-views.js";
 import { Signatures } from "./services/signatures.js";
 import { Controls } from "./services/controls.js";
+import { RuleStore } from "./services/rule-store.js";
 import { ApiController, TOKENS } from "./http/api.controller.js";
 import { Realtime } from "./http/realtime.gateway.js";
 import { makeLogger } from "./boot/logger.js";
@@ -200,6 +201,11 @@ function buildDispatcher(
       useFactory: (db: PrismaClient, uow: PrismaUnitOfWork, dispatcher: Dispatcher) =>
         new Controls(db, uow, dispatcher),
       inject: [PRISMA, UOW, DISPATCHER],
+    },
+    {
+      provide: TOKENS.rules,
+      useFactory: (db: PrismaClient, log: Logger) => new RuleStore(db, log),
+      inject: [PRISMA, LOGGER],
     },
     {
       provide: TOKENS.activeWorkers,

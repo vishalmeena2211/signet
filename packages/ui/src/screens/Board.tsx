@@ -12,16 +12,29 @@ const STAGE_LABEL: Record<string, string> = {
   DONE: "Done",
 };
 
-export function Board({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: () => void }) {
+export function Board({
+  onOpen,
+  onNew,
+  onConstitution,
+}: {
+  onOpen: (id: string) => void;
+  onNew: () => void;
+  onConstitution: () => void;
+}) {
   const features = useQuery({ queryKey: ["features"], queryFn: api.features, refetchInterval: 5000 });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 10000 });
+  const queue = useQuery({ queryKey: ["rules"], queryFn: () => api.ruleQueue(), refetchInterval: 8000 });
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "var(--space-8) var(--space-4)" }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <h1 style={{ fontSize: "var(--fs-xl)", margin: 0 }}>Signet</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
           <QuotaStrip health={health.data} />
+          <button onClick={onConstitution}>
+            Constitution
+            {queue.data && queue.data.length > 0 ? ` · ${queue.data.length} to review` : ""}
+          </button>
           <button className="primary" onClick={onNew}>
             New feature
           </button>

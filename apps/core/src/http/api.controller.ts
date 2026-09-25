@@ -1,22 +1,26 @@
 // The console API. Thin: validate in, call services, contracts-shaped out.
 // Host-header guard applied globally in main.ts (DNS-rebinding defence).
 
-import { Body, Controller, Get, Inject, NotFoundException, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, NotFoundException, Param, Post, Query } from "@nestjs/common";
 import {
   AnswerEscalationRequestSchema,
   CreateFeatureRequestSchema,
+  EditRuleRequestSchema,
   FeatureIdSchema,
   IncrementIdSchema,
+  LearnRequestSchema,
 } from "@signet/contracts";
 import type { ConsoleViews } from "../services/console-views.js";
 import type { Signatures } from "../services/signatures.js";
 import type { Controls } from "../services/controls.js";
+import type { RuleStore } from "../services/rule-store.js";
 import type { Realtime } from "./realtime.gateway.js";
 
 export const TOKENS = {
   views: "signet.views",
   signatures: "signet.signatures",
   controls: "signet.controls",
+  rules: "signet.rules",
   realtime: "signet.realtime",
   activeWorkers: "signet.activeWorkers",
 } as const;
@@ -27,6 +31,7 @@ export class ApiController {
     @Inject(TOKENS.views) private readonly views: ConsoleViews,
     @Inject(TOKENS.signatures) private readonly signatures: Signatures,
     @Inject(TOKENS.controls) private readonly controls: Controls,
+    @Inject(TOKENS.rules) private readonly rules: RuleStore,
     @Inject(TOKENS.realtime) private readonly realtime: Realtime,
     @Inject(TOKENS.activeWorkers) private readonly activeWorkers: () => number,
   ) {}
@@ -88,6 +93,43 @@ export class ApiController {
     const res = await this.controls.abort(incId);
     this.realtime.broadcast({ kind: "increment_changed", incrementId: incId });
     return res;
+  }
+
+  // ── design-system learner + confirmation queue ──
+
+  @Post("learn")
+  async learn(@Body() body: unknown) {
+    const req = LearnRequestSchema.parse(body);
+    const label = req.label ?? req.repoPath.split("/").filter(Boolean).pop() ?? "repo";
+    const res = await this.rules.learn(req.repoPath, label);
+    this.realtime.broadcast({ kind: "quota_changed" }); // cheap nudge to refresh the queue
+    return { label, ...res };
+  }
+
+  @Get("rules/queue")
+  async ruleQueue(@Query("repo") repo?: string) {
+    return this.rules.queue(repo);
+  }
+
+  @Post("rules/:id/confirm")
+  async confirmRule(@Param("id") id: string) {
+    await this.rules.confirm(id);
+    this.realtime.broadcast({ kind: "quota_changed" });
+    return { confirmed: true };
+  }
+
+  @Post("rules/:id/reject")
+  async rejectRule(@Param("id") id: string) {
+    await this.rules.reject(id);
+    this.realtime.broadcast({ kind: "quota_changed" });
+    return { rejected: true };
+  }
+
+  @Post("rules/:id/edit")
+  async editRule(@Param("id") id: string, @Body() body: unknown) {
+    const req = EditRuleRequestSchema.parse(body);
+    await this.rules.edit(id, req);
+    return { edited: true };
   }
 
   @Post("increments/:id/approve")

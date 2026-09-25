@@ -169,6 +169,38 @@ model Escalation {
   @@map("escalations")
 }
 
+model Rule {
+  id                String     @id @db.Uuid
+  repoLabel         String     @map("repo_label")
+  statement         String
+  kind              String
+  confidence        Float
+  trend             String
+  status            String // PROPOSED | CONFIRMED | REJECTED | DEMOTED | RETIRED | SUPERSEDED
+  checkJson         String?    @map("check_json")
+  exceptionsJson    String     @default("[]") @map("exceptions_json")
+  fpCount           Int        @default(0) @map("fp_count")
+  sourceFindingKind String?    @map("source_finding_kind")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  evidence          RuleEvidence[]
+
+  @@index([repoLabel, status])
+  @@map("rules")
+}
+
+model RuleEvidence {
+  id     String @id @db.Uuid
+  ruleId String @map("rule_id") @db.Uuid
+  ref    String
+  kind   String
+  detail String?
+  rule   Rule   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@map("rule_evidence")
+}
+
 model GateVerdict {
   id          String   @id @db.Uuid
   runId       String   @map("run_id") @db.Uuid

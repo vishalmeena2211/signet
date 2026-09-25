@@ -9,6 +9,7 @@ import {
   GateVerdictViewSchema,
   IncrementDetailSchema,
   QuotaStateViewSchema,
+  RuleCardSchema,
   type ActivityView,
   type CreateFeatureRequest,
   type EscalationView,
@@ -16,6 +17,7 @@ import {
   type GateVerdictView,
   type IncrementDetail,
   type QuotaStateView,
+  type RuleCard,
 } from "@signet/contracts";
 
 async function get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
@@ -74,6 +76,36 @@ export const api = {
   merge: post("merge"),
   retry: post("retry"),
   abort: post("abort"),
+
+  ruleQueue: (repo?: string): Promise<RuleCard[]> =>
+    get(`/api/rules/queue${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`, z.array(RuleCardSchema)),
+
+  learn: async (repoPath: string): Promise<{ label: string; proposed: number; skipped: number }> => {
+    const res = await fetch("/api/learn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ repoPath }),
+    });
+    if (!res.ok) throw new Error(`learn failed: ${res.status}`);
+    return z.object({ label: z.string(), proposed: z.number(), skipped: z.number() }).parse(await res.json());
+  },
+
+  confirmRule: async (id: string): Promise<void> => {
+    const res = await fetch(`/api/rules/${id}/confirm`, { method: "POST" });
+    if (!res.ok) throw new Error(`confirm failed: ${res.status}`);
+  },
+  rejectRule: async (id: string): Promise<void> => {
+    const res = await fetch(`/api/rules/${id}/reject`, { method: "POST" });
+    if (!res.ok) throw new Error(`reject failed: ${res.status}`);
+  },
+  editRule: async (id: string, statement: string): Promise<void> => {
+    const res = await fetch(`/api/rules/${id}/edit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ statement }),
+    });
+    if (!res.ok) throw new Error(`edit failed: ${res.status}`);
+  },
 };
 
 function post(action: string) {
