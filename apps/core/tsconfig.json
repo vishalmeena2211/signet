@@ -1,0 +1,22 @@
+{
+  "extends": "@signet/typescript-config/base.json",
+  "compilerOptions": {
+    // Nest-specific requirements on top of the shared strict base.
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "resolvePackageJsonExports": true,
+    "removeComments": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "incremental": true,
+    "declaration": false,
+    "declarationMap": false,
+    // DOCUMENTED EXCEPTION (policy-allowlisted): Nest property injection
+    // initializes fields via the DI container, which strictPropertyInitialization
+    // cannot see. This is the only strictness carve-out in this package.
+    "strictPropertyInitialization": false,
+    "types": ["vitest/globals", "node"]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@signet/policy",
+  "version": "0.0.1",
+  "description": "The enforcement arm: dependency boundaries, tsconfig-drift, contracts-only-parse, any-ban, no-console. Every repo invariant worth having is a check here that fails.",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "policy": "node src/run-all.mjs"
+  },
+  "devDependencies": {
+    "dependency-cruiser": "^17.0.0"
+  }
+}

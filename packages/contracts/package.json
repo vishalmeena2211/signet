@@ -1,0 +1,26 @@
+{
+  "name": "@signet/contracts",
+  "version": "0.0.1",
+  "description": "The spine: every cross-boundary shape is a zod schema here first, an inferred type second. Branded IDs, state machines, adapter events, config, API shapes, error taxonomy.",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "oxlint src/"
+  },
+  "dependencies": {
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@signet/typescript-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "oxlint": "^1.58.0",
+    "typescript": "7.0.2",
+    "vitest": "^4.1.2"
+  }
+}

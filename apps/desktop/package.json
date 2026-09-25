@@ -1,0 +1,11 @@
+{
+  "name": "@signet/desktop",
+  "version": "0.0.0",
+  "description": "Signet desktop shell (Electron). Stub until Phase 2 — renders @signet/ui, manages the local core service and Claude Code detection, native notifications, tray state. No business logic ever lives here.",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "check-types": "echo 'desktop: stub until Phase 2'",
+    "lint": "echo 'desktop: stub until Phase 2'"
+  }
+}
