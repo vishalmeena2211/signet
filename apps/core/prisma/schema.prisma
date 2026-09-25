@@ -1,0 +1,180 @@
+// Signet Phase 0 schema. State payloads live as validated JSON (stateJson)
+// parsed through @signet/contracts at the repository boundary — the DB stores,
+// contracts decide. Status columns are duplicated out of the JSON for indexing.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SIGNET_DATABASE_URL")
+}
+
+model Feature {
+  id         String      @id @db.Uuid
+  title      String
+  stage      String // INTAKE | DESIGN | DECOMPOSED | IMPLEMENTING | DONE
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  increments Increment[]
+  briefs     BriefVersion[]
+
+  @@map("features")
+}
+
+model BriefVersion {
+  id          String   @id @db.Uuid
+  featureId   String   @map("feature_id") @db.Uuid
+  version     Int
+  contentMd   String   @map("content_md") // PRD + answers + signed assumptions
+  frozenAt    DateTime @default(now()) @map("frozen_at")
+  feature     Feature  @relation(fields: [featureId], references: [id])
+
+  @@unique([featureId, version])
+  @@map("brief_versions")
+}
+
+model Increment {
+  id              String   @id @db.Uuid
+  featureId       String   @map("feature_id") @db.Uuid
+  title           String
+  status          String // mirror of stateJson.status for indexing
+  stateJson       String   @map("state_json") // contracts IncrementState
+  declaredSurface String[] @map("declared_surface")
+  briefVersionId  String   @map("brief_version_id") @db.Uuid
+  repairAttempt   Int      @default(0) @map("repair_attempt")
+  freshRestarts   Int      @default(0) @map("fresh_restarts")
+  orderIndex      Int      @map("order_index")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  feature         Feature  @relation(fields: [featureId], references: [id])
+  runs            Run[]
+
+  @@index([featureId, status])
+  @@map("increments")
+}
+
+model Run {
+  id           String     @id @db.Uuid
+  incrementId  String     @map("increment_id") @db.Uuid
+  status       String // CREATED | PHASE | SUCCEEDED | FAILED | ABORTED
+  stateJson    String     @map("state_json") // contracts RunState
+  workspacePath String?   @map("workspace_path")
+  sessionRef   String?    @map("session_ref")
+  startedAt    DateTime   @default(now()) @map("started_at")
+  finishedAt   DateTime?  @map("finished_at")
+  increment    Increment  @relation(fields: [incrementId], references: [id])
+  phases       RunPhase[]
+  effects      Effect[]
+  usage        UsageLedgerEntry[]
+
+  @@index([incrementId, status])
+  @@index([status]) // completer scans for orphans by status
+  @@map("runs")
+}
+
+model RunPhase {
+  id         String    @id @db.Uuid
+  runId      String    @map("run_id") @db.Uuid
+  phase      String // contracts RunPhaseName
+  attempt    Int       @default(1)
+  enteredAt  DateTime  @default(now()) @map("entered_at")
+  completedAt DateTime? @map("completed_at")
+  run        Run       @relation(fields: [runId], references: [id])
+
+  @@unique([runId, phase, attempt]) // recovery point identity
+  @@map("run_phases")
+}
+
+model Effect {
+  id             String   @id @db.Uuid
+  runId          String   @map("run_id") @db.Uuid
+  phase          String
+  kind           String // contracts EffectKind
+  idempotencyKey String   @unique @map("idempotency_key")
+  status         String // JOURNALED | EXECUTING | DONE | FAILED
+  payloadJson    String   @map("payload_json")
+  resultJson     String?  @map("result_json")
+  attempt        Int      @default(1)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  run            Run      @relation(fields: [runId], references: [id])
+
+  @@index([runId, status])
+  @@map("effect_journal")
+}
+
+model OutboxMessage {
+  id          String    @id @db.Uuid
+  topic       String // run.dispatch | run.resume | gate.execute | notify
+  payloadJson String    @map("payload_json")
+  availableAt DateTime  @default(now()) @map("available_at") // future = parked/delayed
+  claimedAt   DateTime? @map("claimed_at")
+  processedAt DateTime? @map("processed_at")
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([processedAt, availableAt]) // dispatcher scan
+  @@map("outbox")
+}
+
+model QuotaWindow {
+  id         String    @id @db.Uuid
+  kind       String // five_hour | weekly
+  exhaustedAt DateTime? @map("exhausted_at")
+  resetsAt   DateTime? @map("resets_at")
+  observedAt DateTime  @default(now()) @map("observed_at")
+
+  @@index([kind, observedAt])
+  @@map("quota_windows")
+}
+
+model UsageLedgerEntry {
+  id           String   @id @db.Uuid
+  runId        String   @map("run_id") @db.Uuid
+  model        String
+  inputTokens  Int      @map("input_tokens")
+  cachedInputTokens Int @default(0) @map("cached_input_tokens")
+  outputTokens Int      @map("output_tokens")
+  costUsd      Decimal? @map("cost_usd") @db.Decimal(10, 6)
+  recordedAt   DateTime @default(now()) @map("recorded_at")
+  run          Run      @relation(fields: [runId], references: [id])
+
+  @@index([runId])
+  @@map("usage_ledger")
+}
+
+model ContextPackManifest {
+  id            String   @id @db.Uuid
+  runId         String   @unique @map("run_id") @db.Uuid
+  manifestJson  String   @map("manifest_json") // contracts ContextPackManifest
+  packHash      String   @map("pack_hash")
+  assembledAt   DateTime @default(now()) @map("assembled_at")
+
+  @@map("context_pack_manifests")
+}
+
+model Escalation {
+  id          String   @id @db.Uuid
+  incrementId String   @map("increment_id") @db.Uuid
+  status      String // RAISED | ANSWERED | BRIEF_AMENDED
+  stateJson   String   @map("state_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([incrementId, status])
+  @@map("escalations")
+}
+
+model GateVerdict {
+  id          String   @id @db.Uuid
+  runId       String   @map("run_id") @db.Uuid
+  gate        String // typecheck | lint | tests | conformance | rules
+  outcome     String // pass | fail | warn | skipped
+  findingsJson String  @map("findings_json") // contracts GateVerdictView.findings
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+
+  @@index([runId, gate])
+  @@map("gate_verdicts")
+}
