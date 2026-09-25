@@ -1,9 +1,11 @@
 {
-  "extends": "@signet/typescript-config/react-library.json",
+  "extends": "@signet/typescript-config/base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "strictNullChecks": true
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "types": ["vite/client"]
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src", "vite.config.ts"]
 }

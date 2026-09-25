@@ -6,15 +6,19 @@
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
+    "build": "tsc",
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "oxlint src/"
   },
   "dependencies": {
-    "zod": "^4.1.0"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@signet/typescript-config": "workspace:*",

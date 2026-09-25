@@ -13,8 +13,11 @@ export const SignetConfigSchema = z.object({
   // ── database ──
   databaseUrl: z.string().min(1),
 
-  // ── workspaces ──
+  // ── workspaces / target ──
   workspacesRoot: z.string().min(1), // parent dir for per-increment worktrees
+  targetRepoPath: z.string().min(1), // Phase 0: one target repository
+  baseRef: z.string().default("main"),
+  packsRoot: z.string().min(1),
 
   // ── adapter ──
   claudeBinary: z.string().default("claude"),
@@ -37,6 +40,9 @@ export function parseConfig(env: Record<string, string | undefined>): SignetConf
     allowedHostnames: env["SIGNET_ALLOWED_HOSTNAMES"]?.split(",").map((s) => s.trim()).filter(Boolean),
     databaseUrl: env["SIGNET_DATABASE_URL"],
     workspacesRoot: env["SIGNET_WORKSPACES_ROOT"],
+    targetRepoPath: env["SIGNET_TARGET_REPO_PATH"],
+    baseRef: env["SIGNET_BASE_REF"],
+    packsRoot: env["SIGNET_PACKS_ROOT"],
     claudeBinary: env["SIGNET_CLAUDE_BINARY"],
     maxConcurrentWorkers: env["SIGNET_MAX_CONCURRENT_WORKERS"],
     maxRepairIterations: env["SIGNET_MAX_REPAIR_ITERATIONS"],

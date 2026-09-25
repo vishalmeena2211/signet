@@ -59,14 +59,17 @@ describe("config", () => {
   it("refuses to start on missing databaseUrl with a readable report", () => {
     expect(() => parseConfig({ SIGNET_WORKSPACES_ROOT: "/tmp/ws" })).toThrow(/refusing to start/);
   });
-  it("applies safe defaults: loopback host, 2 workers, 3 repairs", () => {
+  it("applies safe defaults: loopback host, 2 workers, 3 repairs, main base", () => {
     const cfg = parseConfig({
       SIGNET_DATABASE_URL: "postgres://localhost/signet",
       SIGNET_WORKSPACES_ROOT: "/tmp/ws",
+      SIGNET_TARGET_REPO_PATH: "/tmp/repo",
+      SIGNET_PACKS_ROOT: "/tmp/packs",
     });
     expect(cfg.host).toBe("127.0.0.1");
     expect(cfg.maxConcurrentWorkers).toBe(2);
     expect(cfg.maxRepairIterations).toBe(3);
+    expect(cfg.baseRef).toBe("main");
   });
 });
 

@@ -1,0 +1,57 @@
+/* Signet console tokens — the single source of visual values (we dogfood our
+   own constitution: no hardcoded colors/spacing outside this file). Neutral
+   theme; brand pass comes later as token edits only. */
+
+:root {
+  --bg: #0f1115;
+  --surface: #171a21;
+  --surface-raised: #1e232d;
+  --border: #2a3140;
+  --text: #e6e9ef;
+  --text-dim: #8b93a7;
+  --accent: #6ea8fe;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --fail: #f87171;
+  --running: #818cf8;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --fs-sm: 12px;
+  --fs-base: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-base);
+}
+button {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #0b1020; font-weight: 600; }
+button:disabled { opacity: 0.5; cursor: default; }
+a { color: var(--accent); text-decoration: none; }
+code { font-family: var(--mono); font-size: var(--fs-sm); }
