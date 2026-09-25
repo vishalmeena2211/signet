@@ -3,10 +3,16 @@ packages:
   - "packages/*"
   - "tooling/*"
 allowBuilds:
-  '@embedded-postgres/darwin-arm64': set this to true or false
-  esbuild: set this to true or false
-  msgpackr-extract: set this to true or false
-  workerd: set this to true or false
+  # Postgres binaries must unpack; prisma generates its client; esbuild speeds vitest.
+  '@embedded-postgres/darwin-arm64': true
+  embedded-postgres: true
+  prisma: true
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  # Transitive natives we don't execute at build time:
+  msgpackr-extract: false
+  workerd: false
 minimumReleaseAgeExclude:
   - '@turbo/darwin-64@2.11.4'
   - '@turbo/darwin-arm64@2.11.4'

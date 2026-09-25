@@ -3,12 +3,12 @@
 // contracts decide. Status columns are duplicated out of the JSON for indexing.
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/persistence/generated"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("SIGNET_DATABASE_URL")
 }
 
 model Feature {
