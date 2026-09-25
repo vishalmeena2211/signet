@@ -11,5 +11,6 @@ export * from "./config.js";
 export * from "./api.js";
 export * from "./effects.js";
 export * from "./rules.js";
+export * from "./design.js";
 
 export const CONTRACTS_VERSION = "0.0.1" as const;
