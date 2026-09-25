@@ -23,6 +23,7 @@ import { WorktreeManager } from "./domain/runtime/worktree-manager.js";
 import { ClaudeAdapter } from "./domain/adapter/claude-adapter.js";
 import { GateSuite } from "./domain/gates/gate-runner.js";
 import { lintGate, testsGate, typecheckGate } from "./domain/gates/standard-gates.js";
+import { rulesGate } from "./domain/gates/rules-gate.js";
 import { makeRunOnBase } from "./domain/gates/base-overlay.js";
 import { checkScope } from "./domain/pipeline/scope-checker.js";
 import { RunEngine } from "./services/run-engine.js";
@@ -50,12 +51,19 @@ function buildDispatcher(
   db: PrismaClient,
   log: Logger,
   realtime: Realtime,
+  rules: RuleStore,
 ): Dispatcher {
   const worktrees = new WorktreeManager(cfg.targetRepoPath, cfg.workspacesRoot);
   const adapter = new ClaudeAdapter({ binary: cfg.claudeBinary, timeoutMs: 20 * 60_000 }, log);
   const driver = new ClaudeAgentDriver(adapter, { maxTurns: 60 });
+  const targetLabel = cfg.targetRepoPath.split("/").filter(Boolean).pop() ?? "repo";
   const gates = new GateSuite(
-    [typecheckGate(), lintGate(), testsGate({ runOnBase: makeRunOnBase() })],
+    [
+      typecheckGate(),
+      lintGate(),
+      testsGate({ runOnBase: makeRunOnBase() }),
+      rulesGate({ loadConfirmedRules: () => rules.confirmedRules(targetLabel) }), // warn-first
+    ],
     async (runId, v) => {
       await db.gateVerdict.create({
         data: {
@@ -192,20 +200,20 @@ function buildDispatcher(
       inject: [UOW, CONFIG],
     },
     {
+      provide: TOKENS.rules,
+      useFactory: (db: PrismaClient, log: Logger) => new RuleStore(db, log),
+      inject: [PRISMA, LOGGER],
+    },
+    {
       provide: DISPATCHER,
       useFactory: buildDispatcher,
-      inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime],
+      inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime, TOKENS.rules],
     },
     {
       provide: TOKENS.controls,
       useFactory: (db: PrismaClient, uow: PrismaUnitOfWork, dispatcher: Dispatcher) =>
         new Controls(db, uow, dispatcher),
       inject: [PRISMA, UOW, DISPATCHER],
-    },
-    {
-      provide: TOKENS.rules,
-      useFactory: (db: PrismaClient, log: Logger) => new RuleStore(db, log),
-      inject: [PRISMA, LOGGER],
     },
     {
       provide: TOKENS.activeWorkers,
