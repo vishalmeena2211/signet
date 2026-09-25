@@ -48,6 +48,9 @@ const ResultLine = z
     session_id: z.string().min(1),
     result: z.string().optional(),
     is_error: z.boolean().default(false),
+    // Real CLI observation: is_error may be true while subtype stays "success";
+    // terminal_reason carries the honest classification then.
+    terminal_reason: z.string().optional(),
     total_cost_usd: z.number().nonnegative().optional(),
     num_turns: z.number().int().nonnegative().optional(),
     modelUsage: z.record(z.string(), ModelUsageEntry).optional(),
@@ -121,6 +124,17 @@ export function parseStreamLine(rawLine: string, now: Date): AdapterEvent[] {
       const raw = r.result ?? r.subtype;
       const limit = limitEventFromText(raw, now);
       if (limit) return [limit];
+      if (/failed to authenticate|oauth session expired|authentication_failed/i.test(raw)) {
+        // Only a human can refresh subscription auth — hard needs-you.
+        return [
+          validate({
+            type: "failed",
+            errorCode: "adapter.auth_expired",
+            errorKind: "non_recoverable",
+            rawMessage: raw,
+          }),
+        ];
+      }
       if (r.subtype === "error_max_turns") {
         return [
           validate({
@@ -131,10 +145,12 @@ export function parseStreamLine(rawLine: string, now: Date): AdapterEvent[] {
           }),
         ];
       }
+      // Prefer terminal_reason over a subtype that may still read "success".
+      const reason = r.terminal_reason && r.terminal_reason !== "success" ? r.terminal_reason : r.subtype;
       return [
         validate({
           type: "failed",
-          errorCode: `adapter.${r.subtype || "error"}`,
+          errorCode: `adapter.${reason && reason !== "success" ? reason : "error"}`,
           errorKind: "recoverable",
           rawMessage: raw,
         }),

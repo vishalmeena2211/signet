@@ -117,4 +117,48 @@ describe("stream parser", () => {
   it("blank lines produce nothing", () => {
     expect(parseStreamLine("   ", now)).toEqual([]);
   });
+
+  // Fixture captured from the REAL CLI (2.1.281): is_error=true while
+  // subtype="success", terminal_reason="api_error", auth expiry in result.
+  it("real-world auth expiry: is_error with subtype success → non-recoverable auth_expired", () => {
+    const events = parseStreamLine(
+      JSON.stringify({
+        type: "result",
+        subtype: "success",
+        is_error: true,
+        terminal_reason: "api_error",
+        session_id: "f409b939-8031-40cf-ba56-9b24d30daace",
+        total_cost_usd: 0,
+        num_turns: 1,
+        modelUsage: {},
+        result: "Failed to authenticate: OAuth session expired and could not be refreshed",
+      }),
+      now,
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "failed",
+      errorCode: "adapter.auth_expired",
+      errorKind: "non_recoverable",
+    });
+  });
+
+  it("real-world api_error without auth text → adapter.api_error, recoverable", () => {
+    const events = parseStreamLine(
+      JSON.stringify({
+        type: "result",
+        subtype: "success",
+        is_error: true,
+        terminal_reason: "api_error",
+        session_id: "s2",
+        result: "upstream 500",
+      }),
+      now,
+    );
+    expect(events[0]).toMatchObject({
+      type: "failed",
+      errorCode: "adapter.api_error",
+      errorKind: "recoverable",
+    });
+  });
 });
