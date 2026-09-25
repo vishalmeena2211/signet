@@ -109,11 +109,13 @@ model OutboxMessage {
   id          String    @id @db.Uuid
   topic       String // run.dispatch | run.resume | gate.execute | notify
   payloadJson String    @map("payload_json")
-  availableAt DateTime  @default(now()) @map("available_at") // future = parked/delayed
-  claimedAt   DateTime? @map("claimed_at")
-  processedAt DateTime? @map("processed_at")
+  // timestamptz: the dispatcher compares these against now() in raw SQL —
+  // naive timestamps break on any non-UTC server (found by live test).
+  availableAt DateTime  @default(now()) @map("available_at") @db.Timestamptz(3) // future = parked/delayed
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
   attempts    Int       @default(0)
-  createdAt   DateTime  @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([processedAt, availableAt]) // dispatcher scan
   @@map("outbox")
