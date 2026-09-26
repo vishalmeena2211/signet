@@ -15,6 +15,13 @@ export interface WorktreeHandle {
   path: string;
   branch: string;
   lockPath: string;
+  /**
+   * The repo this worktree was added to. Carried on the handle because `git worktree
+   * remove` has to run in the SAME repo that added it — with the repo only on the
+   * manager, a feature targeting a non-default repo would have its worktree created in
+   * one repo and removed from another, which fails confusingly and leaks the worktree.
+   */
+  repoPath: string;
 }
 
 export type WorktreeResult<T> = { ok: true; value: T } | { ok: false; error: SignetError };
@@ -36,7 +43,15 @@ export class WorktreeManager {
    * A live foreign pid → conflict error (dispatcher re-queues); a dead pid's
    * lock is stale and gets replaced (crash recovery).
    */
-  async acquire(incrementId: string, baseRef: string): Promise<WorktreeResult<WorktreeHandle>> {
+  async acquire(
+    incrementId: string,
+    baseRef: string,
+    /**
+     * The repo to branch from. Omitted means the instance default, which is what every
+     * increment created before features could name their own repo means.
+     */
+    repoPath: string = this.repoPath,
+  ): Promise<WorktreeResult<WorktreeHandle>> {
     const path = join(this.workspacesRoot, `inc-${incrementId}`);
     const branch = `signet/inc-${incrementId}`;
     const lockPath = join(this.workspacesRoot, `inc-${incrementId}.lock`);
@@ -58,7 +73,7 @@ export class WorktreeManager {
     if (!exists) {
       try {
         // -B: (re)create branch at baseRef even if it exists from a torn run
-        await this.git(["worktree", "add", "-B", branch, path, baseRef], this.repoPath);
+        await this.git(["worktree", "add", "-B", branch, path, baseRef], repoPath);
       } catch (e) {
         await rm(lockPath, { force: true });
         return {
@@ -67,7 +82,7 @@ export class WorktreeManager {
         };
       }
     }
-    return { ok: true, value: { path, branch, lockPath } };
+    return { ok: true, value: { path, branch, lockPath, repoPath } };
   }
 
   /** Commit everything in the worktree with a deterministic message; returns commit sha or null when clean. */
@@ -124,11 +139,11 @@ export class WorktreeManager {
   async release(handle: WorktreeHandle, opts: { removeWorktree: boolean }): Promise<void> {
     if (opts.removeWorktree) {
       try {
-        await this.git(["worktree", "remove", "--force", handle.path], this.repoPath);
+        await this.git(["worktree", "remove", "--force", handle.path], handle.repoPath);
       } catch {
         await rm(handle.path, { recursive: true, force: true });
         try {
-          await this.git(["worktree", "prune"], this.repoPath);
+          await this.git(["worktree", "prune"], handle.repoPath);
         } catch {
           /* prune is best-effort */
         }

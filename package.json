@@ -11,7 +11,7 @@
     "policy": "turbo run policy",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "check": "turbo run check-types lint policy test"
+    "check": "turbo run build check-types lint policy test"
   },
   "devDependencies": {
     "prettier": "3.9.6",

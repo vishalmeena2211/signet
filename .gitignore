@@ -41,3 +41,7 @@ apps/core/.devdb/
 
 # stray dir created by a tool at runtime (investigate)
 apps/core/"#"/
+
+# Incremental-build state. Machine-specific and regenerated on every build, so it
+# only ever shows up as noise in a diff.
+*.tsbuildinfo

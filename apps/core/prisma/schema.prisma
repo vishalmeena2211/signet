@@ -15,6 +15,18 @@ model Feature {
   id         String      @id @db.Uuid
   title      String
   stage      String // INTAKE | DESIGN | DECOMPOSED | IMPLEMENTING | DONE
+  // Which repository this feature is built into. Null means "whichever repo this
+  // Signet instance is configured with", which is what every feature created before
+  // now means — so existing rows need no backfill and behave exactly as they did.
+  repoPath   String?     @map("repo_path")
+  // local | github. A github repo can be surveyed and planned against out of the
+  // connector's clone cache, but merging into one needs a push. Recording the origin
+  // is what lets a run refuse up front with a reason, instead of failing somewhere
+  // deep inside git.
+  repoOrigin String      @default("local") @map("repo_origin")
+  // What to show the user. An absolute cache path is noise on screen for a github
+  // repo, where "owner/name" is the thing they actually picked.
+  repoLabel  String?     @map("repo_label")
   createdAt  DateTime    @default(now()) @map("created_at")
   updatedAt  DateTime    @updatedAt @map("updated_at")
   increments Increment[]
@@ -42,6 +54,11 @@ model Increment {
   status          String // mirror of stateJson.status for indexing
   stateJson       String   @map("state_json") // contracts IncrementState
   declaredSurface String[] @map("declared_surface")
+  // What "done" means for this step. Defaults to empty so existing rows are
+  // untouched, but a blank one is a bug being carried forward: the context pack
+  // shipped acceptance.md as the empty string for every run ever made, so until
+  // now no agent had ever been told what it was aiming at.
+  acceptanceMd    String   @default("") @map("acceptance_md")
   briefVersionId  String   @map("brief_version_id") @db.Uuid
   repairAttempt   Int      @default(0) @map("repair_attempt")
   freshRestarts   Int      @default(0) @map("fresh_restarts")
@@ -223,4 +240,91 @@ model GateVerdict {
 
   @@index([runId, gate])
   @@map("gate_verdicts")
+}
+
+// ── automation ────────────────────────────────────────────────────────────────
+//
+// One concept with three faces. A Recipe is a saved request: a description, a target
+// repo, and optionally a fixed step plan. Fill in its blanks and it is a template;
+// leave it with none and it is a one-click action. A Workflow is an ordered list of
+// recipes plus a trigger.
+//
+// Nothing here can merge. A workflow runs work up to the point of landing it and then
+// stops, because the merge signature stays human — that is the one part of the two
+// signatures automation does not get to take.
+
+model Recipe {
+  id          String   @id @db.Uuid
+  name        String
+  /** What to build. May contain {{placeholders}}, which makes it a template. */
+  goalMd      String   @map("goal_md")
+  /** Target repo, same meaning as on Feature: null is the configured one. */
+  repoPath    String?  @map("repo_path")
+  repoOrigin  String   @default("local") @map("repo_origin")
+  repoLabel   String?  @map("repo_label")
+  /**
+   * A fixed step plan, as JSON, for a recipe that should not be re-planned every time.
+   * Null means propose the breakdown fresh on each run, which is the usual case.
+   */
+  stepsJson   String?  @map("steps_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  steps       WorkflowStep[]
+
+  @@map("recipes")
+}
+
+model Workflow {
+  id          String   @id @db.Uuid
+  name        String
+  /** Off by default. An automation nobody armed should never have fired. */
+  enabled     Boolean  @default(false)
+  /** Validated through contracts: schedule | event | manual, with its parameters. */
+  triggerJson String   @map("trigger_json")
+  /**
+   * How many times a run of this workflow may cause another run. Event triggers can
+   * cascade — a workflow reacting to a merge can create work that merges — and a
+   * counter is the difference between a loop that stops and one that does not.
+   */
+  maxDepth    Int      @default(1) @map("max_depth")
+  /** When the schedule last fired, so a restart does not replay missed windows. */
+  lastFiredAt DateTime? @map("last_fired_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  steps       WorkflowStep[]
+  runs        WorkflowRun[]
+
+  @@map("workflows")
+}
+
+model WorkflowStep {
+  id         String   @id @db.Uuid
+  workflowId String   @map("workflow_id") @db.Uuid
+  recipeId   String   @map("recipe_id") @db.Uuid
+  orderIndex Int      @map("order_index")
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  recipe     Recipe   @relation(fields: [recipeId], references: [id])
+
+  @@unique([workflowId, orderIndex])
+  @@map("workflow_steps")
+}
+
+model WorkflowRun {
+  id          String    @id @db.Uuid
+  workflowId  String    @map("workflow_id") @db.Uuid
+  /** schedule | event | manual — what actually started this, not what could have. */
+  triggeredBy String    @map("triggered_by")
+  /** The event that caused it, when there was one. Kept for tracing a cascade. */
+  causeJson   String?   @map("cause_json")
+  /** 0 for a run a human or a schedule started; +1 for each link in a cascade. */
+  depth       Int       @default(0)
+  status      String // running | succeeded | failed | skipped
+  /** What it did, and why it stopped. The only honest record of an unattended run. */
+  outcomeJson String?   @map("outcome_json")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, startedAt])
+  @@map("workflow_runs")
 }

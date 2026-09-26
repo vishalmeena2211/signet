@@ -9,7 +9,7 @@ export interface ScopeVerdict {
 }
 
 export function checkScope(planFiles: string[], declaredSurface: string[]): ScopeVerdict {
-  const matchers = declaredSurface.map(compile);
+  const matchers = declaredSurface.map(compileSurfacePattern);
   const outside = planFiles.filter((f) => !matchers.some((m) => m.test(normalize(f))));
   return { inScope: outside.length === 0, outside };
 }
@@ -18,7 +18,12 @@ function normalize(p: string): string {
   return p.replace(/^\.\//, "").replace(/\\/g, "/");
 }
 
-function compile(pattern: string): RegExp {
+/**
+ * Exported so a proposed surface can be checked against the SAME matcher that will
+ * later judge it. A second, subtly different glob implementation elsewhere would let
+ * a proposal pass review and then fail scope check — the worst of both.
+ */
+export function compileSurfacePattern(pattern: string): RegExp {
   const norm = normalize(pattern);
   let re = "";
   for (let i = 0; i < norm.length; i++) {

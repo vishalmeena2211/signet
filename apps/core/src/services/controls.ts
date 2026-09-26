@@ -17,6 +17,12 @@ export interface AbortRegistry {
 }
 
 export class Controls {
+  /**
+   * Turns what the picker sent into the repo to record. Optional so existing callers
+   * and tests keep working without it.
+   */
+  resolveRepo?: (repoId: string | undefined) => { path: string; label: string; origin: string };
+
   constructor(
     private readonly db: PrismaClient,
     private readonly uow: UnitOfWork,
@@ -29,7 +35,18 @@ export class Controls {
     const featureId = randomUUID();
     const briefId = randomUUID();
     await this.db.$transaction(async (tx) => {
-      await tx.feature.create({ data: { id: featureId, title: req.title, stage: "IMPLEMENTING" } });
+      // Recorded on the feature, not left implicit in an env var. A null repoPath
+      // means "the configured one", which is what every feature created before this
+      // existed means — so old rows keep working untouched.
+      const repo = this.resolveRepo?.(req.repoId) ?? null;
+      await tx.feature.create({
+        data: {
+          id: featureId,
+          title: req.title,
+          stage: "IMPLEMENTING",
+          ...(repo ? { repoPath: repo.path, repoOrigin: repo.origin, repoLabel: repo.label } : {}),
+        },
+      });
       await tx.briefVersion.create({
         data: { id: briefId, featureId, version: 1, contentMd: req.briefMd },
       });
@@ -43,6 +60,9 @@ export class Controls {
             status: "CONTEXT_READY",
             stateJson: JSON.stringify({ status: "CONTEXT_READY" }),
             declaredSurface: inc.declaredSurface,
+            // Falls back to empty for the old request shape, which is the state every
+            // increment created before now is already in. A proposal always supplies it.
+            acceptanceMd: inc.acceptanceMd ?? "",
             briefVersionId: briefId,
             orderIndex: order++,
           },

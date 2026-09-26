@@ -28,6 +28,8 @@ export class RuleStore {
   constructor(
     private readonly db: PrismaClient,
     private readonly log: Logger,
+    /** Optional: without it the store behaves exactly as it did, with no automation. */
+    private readonly events?: { publish(event: "rules_proposed", cause?: object): Promise<void> },
   ) {}
 
   /** Run the learner on a repo and enqueue fresh proposals (idempotent by statement). */
@@ -79,6 +81,9 @@ export class RuleStore {
       proposed++;
     }
     this.log.info("learn.done", { repoPath, label, proposed, skipped });
+    // Only when something new actually appeared. Firing on a learn that proposed
+    // nothing would wake automation up for no reason on every re-scan.
+    if (proposed > 0) await this.events?.publish("rules_proposed");
     return { proposed, skipped };
   }
 

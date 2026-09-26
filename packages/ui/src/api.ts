@@ -48,6 +48,21 @@ import {
   type IncrementDiffView,
   type QuotaStateView,
   type RuleCard,
+  FeatureProposalResponseSchema,
+  RepoOptionsResponseSchema,
+  AutomationStateSchema,
+  RecipeSchema,
+  WorkflowSchema,
+  WorkflowRunViewSchema,
+  type ProposeFeatureRequest,
+  type FeatureProposalResponse,
+  type RepoOptionsResponse,
+  type AutomationState,
+  type Recipe,
+  type CreateRecipeRequest,
+  type Workflow,
+  type SaveWorkflowRequest,
+  type WorkflowRunView,
 } from "@signet/contracts";
 
 /** An API failure with the server's reason attached, ready to render. */
@@ -128,6 +143,47 @@ export const api = {
       activity: Record<string, ActivityView>;
       escalations: EscalationView[];
     }>,
+
+  // ── automation ──
+  automationState: (): Promise<AutomationState> => get("/api/automation", AutomationStateSchema),
+  setAutomationPaused: (paused: boolean): Promise<AutomationState> =>
+    send("/api/automation", { paused }, AutomationStateSchema),
+
+  recipes: (): Promise<Recipe[]> => get("/api/recipes", z.array(RecipeSchema)),
+  createRecipe: (req: CreateRecipeRequest): Promise<{ id: string }> =>
+    send("/api/recipes", req, z.object({ id: z.string() })),
+  deleteRecipe: async (id: string): Promise<void> => {
+    const res = await fetch(`/api/recipes/${id}`, { method: "DELETE" });
+    if (!res.ok) throw await explain(res);
+  },
+
+  workflows: (): Promise<Workflow[]> => get("/api/workflows", z.array(WorkflowSchema)),
+  saveWorkflow: (req: SaveWorkflowRequest): Promise<{ id: string }> =>
+    send("/api/workflows", req, z.object({ id: z.string() })),
+  setWorkflowEnabled: (id: string, enabled: boolean): Promise<void> =>
+    send(`/api/workflows/${id}/enabled`, { enabled }, Ack).then(() => undefined),
+  deleteWorkflow: async (id: string): Promise<void> => {
+    const res = await fetch(`/api/workflows/${id}`, { method: "DELETE" });
+    if (!res.ok) throw await explain(res);
+  },
+  /** Returns the reason when nothing happened, rather than a silent success. */
+  runWorkflow: (id: string): Promise<{ started: boolean; reason?: string | undefined; runId?: string | undefined }> =>
+    send(
+      `/api/workflows/${id}/run`,
+      undefined,
+      z.object({ started: z.boolean(), reason: z.string().optional(), runId: z.string().optional() }),
+    ),
+  workflowRuns: (): Promise<WorkflowRunView[]> => get("/api/workflow-runs", z.array(WorkflowRunViewSchema)),
+
+  /** Every repo work can be sent to: local ones found on this machine, plus github. */
+  repoOptions: (): Promise<RepoOptionsResponse> => get("/api/repos", RepoOptionsResponseSchema),
+
+  /**
+   * Asks for a breakdown. Persists nothing — the user reviews what comes back and
+   * creates the feature from it, so a bad proposal costs one model call and no rows.
+   */
+  propose: (body: ProposeFeatureRequest): Promise<FeatureProposalResponse> =>
+    send("/api/propose", body, FeatureProposalResponseSchema),
 
   createFeature: (req: CreateFeatureRequest): Promise<{ featureId: string }> =>
     send("/api/features", req, z.object({ featureId: z.string() })),

@@ -16,6 +16,7 @@ export type Route =
   | { view: "activity" }
   | { view: "graph" }
   | { view: "system" }
+  | { view: "automations" }
   | { view: "new" };
 
 export const NAV: readonly { view: Route["view"]; label: string; hint: string }[] = [
@@ -24,6 +25,7 @@ export const NAV: readonly { view: Route["view"]; label: string; hint: string }[
   { view: "runs", label: "Runs", hint: "Every attempt, and how it went" },
   { view: "constitution", label: "Rules", hint: "What Signet learned from your code" },
   { view: "graph", label: "Graph", hint: "How everything Signet learned connects" },
+  { view: "automations", label: "Automations", hint: "Saved requests, and what runs them on a schedule" },
   { view: "activity", label: "Activity", hint: "What the system has been doing" },
   { view: "system", label: "System", hint: "How this copy of Signet is set up" },
 ];
@@ -57,6 +59,8 @@ export function href(route: Route): string {
       return "#/graph";
     case "system":
       return "#/system";
+    case "automations":
+      return "#/automations";
     case "new":
       return "#/new";
   }
@@ -86,6 +90,8 @@ export function parseRoute(hash: string): Route {
       const q = p.get("q");
       return { view: "work", ...(status ? { status } : {}), ...(q ? { q } : {}) };
     }
+    case "automations":
+      return { view: "automations" };
     case "runs": {
       const outcome = p.get("outcome");
       const selected = p.get("run");

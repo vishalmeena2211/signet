@@ -149,7 +149,32 @@ export async function prepareTestDatabase(url: string): Promise<void> {
     templateReady = templateName;
   }
 
-  if (dbName !== templateName) await createDatabase(adminUrl.toString(), dbName, templateName);
+  // Recreated from the template every run, not reused. A per-suite database that
+  // already existed was previously kept as-is, because CREATE DATABASE tolerates
+  // "already exists" — so the template picked up a new migration and the clones did
+  // not, and six suites failed with "column does not exist" against a schema that was
+  // three minutes old. Cloning costs about a hundred milliseconds; being wrong about
+  // the schema costs a debugging session.
+  if (dbName !== templateName) {
+    await dropDatabase(adminUrl.toString(), dbName);
+    await createDatabase(adminUrl.toString(), dbName, templateName);
+  }
+}
+
+/**
+ * DROP DATABASE, tolerating "does not exist". FORCE terminates leftover connections —
+ * without it a client the previous run failed to disconnect blocks the drop, and the
+ * suite fails for a reason that has nothing to do with what it tests.
+ */
+async function dropDatabase(adminUrl: string, name: string): Promise<void> {
+  assertDisposable(`postgresql://u:p@h:5432/${name}`);
+  if (!/^[a-zA-Z0-9_]+$/.test(name)) throw new Error(`unsafe database name: ${name}`);
+  const admin = new PrismaClient({ adapter: new PrismaPg({ connectionString: adminUrl }) });
+  try {
+    await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+  } finally {
+    await admin.$disconnect();
+  }
 }
 
 /** A client on the test database. */

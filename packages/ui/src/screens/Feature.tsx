@@ -31,6 +31,8 @@ import {
 } from "../ui/primitives.js";
 import { ConfirmButton, EmptyState, ErrorNote, QueryState, useToast } from "../ui/feedback.js";
 import { Forensics, RowDivider, Understand } from "../ui/tiers.js";
+import { Journey } from "../ui/journey.js";
+import { LiveRun } from "../ui/live-run.js";
 import {
   Bytes,
   CodeBlock,
@@ -156,6 +158,9 @@ function IncrementCard({
   const toast = useToast();
   const s = inc.state.status;
   const meta = INCREMENT_STATE[s];
+  // Only some states carry a run. Narrowing through the union rather than casting
+  // keeps the live panel from being handed an id that does not exist yet.
+  const runId = "runId" in inc.state ? inc.state.runId : null;
 
   // Each action owns its error, so the message lands on the button pressed.
   const approve = useMutation({
@@ -202,6 +207,15 @@ function IncrementCard({
           </Stack>
           <Id value={inc.id} label="step" />
         </Row>
+
+        {/* Where this step is, drawn. The badge above says the current state; this
+            says the shape of the journey and which of the two signatures is owed. */}
+        <Journey status={s} repairAttempt={inc.repairAttempt} />
+
+        {/* What is happening right now, only while something is. Everything here was
+            already recorded during a run and only shown after it ended, which made a
+            healthy slow run indistinguishable from a wedged one. */}
+        {(s === "RUNNING" || s === "VERIFYING") && runId && <LiveRun runId={runId} verdicts={verdicts} />}
 
         {inc.state.status === "FAILED" && (
           <div

@@ -195,8 +195,11 @@ describe("the console mounts", () => {
     render(wrap(<App />));
     // "New feature" is also the top-bar button, so match the heading.
     await waitFor(() => expect(screen.getByRole("heading", { name: "New feature" })).toBeTruthy());
-    // The form says what is missing rather than just disabling the button.
-    expect(screen.getByText(/Give the feature a title/)).toBeTruthy();
+    // The form says what is missing rather than just disabling the button. The first
+    // thing it needs is the description — steps and file surfaces are proposed from it
+    // rather than demanded up front, which is the whole point of the screen.
+    expect(screen.getByText(/Describe the outcome you want/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Propose a plan/ })).toBeTruthy();
   });
 
   it("shows the real cost rather than rounding a sub-dollar run to nothing", async () => {

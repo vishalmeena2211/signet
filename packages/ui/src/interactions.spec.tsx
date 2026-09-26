@@ -204,18 +204,18 @@ describe("keyboard shortcuts", () => {
   it("does NOT steal keystrokes from a text field", async () => {
     location.hash = "#/new";
     render(wrap(<App />));
-    const title = await screen.findByPlaceholderText(/Cart: discount support/);
+    const field = await screen.findByPlaceholderText(/Add percentage discounts/);
     // Typing "n" or "g" into a form must type, not navigate.
-    fireEvent.keyDown(title, { key: "n" });
-    fireEvent.keyDown(title, { key: "g" });
+    fireEvent.keyDown(field, { key: "n" });
+    fireEvent.keyDown(field, { key: "g" });
     expect(location.hash).toBe("#/new");
   });
 
   it("still opens the palette from inside a text field, since that is a global", async () => {
     location.hash = "#/new";
     render(wrap(<App />));
-    const title = await screen.findByPlaceholderText(/Cart: discount support/);
-    fireEvent.keyDown(title, { key: "k", metaKey: true });
+    const field = await screen.findByPlaceholderText(/Add percentage discounts/);
+    fireEvent.keyDown(field, { key: "k", metaKey: true });
     await waitFor(() => expect(screen.getByRole("dialog", { name: /Command palette/ })).toBeTruthy());
   });
 });

@@ -59,6 +59,24 @@ export interface ScopeChecker {
   check(planFiles: string[], declaredSurface: string[]): { inScope: true } | { inScope: false; outside: string[] };
 }
 
+/**
+ * Where an increment's work goes. Optional on the engine: without it every run uses the
+ * instance's configured repo, which is what every increment created before features
+ * could name their own repo relies on.
+ */
+export interface RepoResolver {
+  forIncrement(incrementId: IncrementId): Promise<{
+    path: string;
+    label: string;
+    /**
+     * False for a github repo, where merging needs a push. The run refuses BEFORE doing
+     * any work — spending a model call on something that cannot be merged is worse than
+     * saying no immediately.
+     */
+    canMerge: boolean;
+  }>;
+}
+
 export interface RunEngineConfig {
   baseRef: string;
   maxRepairIterations: number;
@@ -81,7 +99,24 @@ export class RunEngine {
     private readonly scope: ScopeChecker,
     private readonly cfg: RunEngineConfig,
     private readonly log: Logger,
+    private readonly repos?: RepoResolver,
   ) {}
+
+  /** The repo this increment builds into, and whether finishing there is possible. */
+  private async repoFor(incrementId: IncrementId): Promise<{ path: string | undefined; error: SignetError | null }> {
+    if (!this.repos) return { path: undefined, error: null };
+    const repo = await this.repos.forIncrement(incrementId);
+    if (!repo.canMerge) {
+      return {
+        path: undefined,
+        error: nonRecoverable(
+          "repo.cannot_merge",
+          `${repo.label} is a GitHub repository. Signet can plan against it, but cannot merge into it yet, so this step would never finish. Point the feature at a local clone instead.`,
+        ),
+      };
+    }
+    return { path: repo.path, error: null };
+  }
 
   /** Execute a run from a given phase (fresh start or crash-resume). */
   async execute(
@@ -105,7 +140,9 @@ export class RunEngine {
       const pack = await this.packs.assemble({ incrementId, runId, workspacePath: null });
       packDir = pack.packDir;
       declaredSurface = pack.declaredSurface;
-      const acq = await this.worktrees.acquire(incrementId, this.cfg.baseRef);
+      const repo = await this.repoFor(incrementId);
+      if (repo.error) return { outcome: "failed", error: repo.error };
+      const acq = await this.worktrees.acquire(incrementId, this.cfg.baseRef, repo.path);
       if (!acq.ok) return this.fail(runId, acq.error);
       handle = acq.value;
     }
@@ -216,7 +253,9 @@ export class RunEngine {
         return { ok: true };
       }
       case "CREATE_WORKSPACE": {
-        const acq = await this.worktrees.acquire(ctx.incrementId, this.cfg.baseRef);
+        const repo = await this.repoFor(ctx.incrementId);
+        if (repo.error) return { ok: false as const, error: repo.error };
+        const acq = await this.worktrees.acquire(ctx.incrementId, this.cfg.baseRef, repo.path);
         if (!acq.ok) return { ok: false, error: acq.error };
         ctx.setHandle(acq.value);
         await this.uow.run(async (tx) => {

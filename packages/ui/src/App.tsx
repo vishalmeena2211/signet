@@ -18,6 +18,7 @@ import { Activity } from "./screens/Activity.js";
 import { Graph } from "./screens/Graph.js";
 import { System } from "./screens/System.js";
 import { NewFeature } from "./screens/NewFeature.js";
+import { Automations } from "./screens/Automations.js";
 
 export function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute(location.hash));
@@ -74,6 +75,8 @@ function Screen({ route }: { route: Route }) {
       return <Graph />;
     case "system":
       return <System />;
+    case "automations":
+      return <Automations />;
     case "new":
       return <NewFeature />;
     default:

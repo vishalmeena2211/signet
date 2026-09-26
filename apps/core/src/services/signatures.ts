@@ -26,6 +26,21 @@ export class Signatures {
     private readonly baseRef: string,
   ) {}
 
+  /**
+   * Where this increment's branch should be merged. A feature can target its own repo,
+   * so merging into the configured one regardless would land the work in the wrong
+   * codebase — silently, and with a real commit. Falls back to the configured repo,
+   * which is what a feature with no repo of its own means.
+   */
+  repoForIncrement?: (incrementId: string) => Promise<string | null>;
+
+  /**
+   * Fired after a successful merge, so automation can react to work landing. Optional
+   * and awaited with its errors swallowed: an automation that throws must never make a
+   * merge that already happened look like it failed.
+   */
+  onMerged?: (incrementId: string) => Promise<void>;
+
   /** Signature #1 — approve the increment; the run starts. */
   async approve(incrementId: string): Promise<{ runId: string }> {
     const incId = IncrementIdSchema.parse(incrementId);
@@ -57,6 +72,7 @@ export class Signatures {
       });
     }
     const branch = `signet/inc-${incId}`;
+    const repoPath = (await this.repoForIncrement?.(incId)) ?? this.targetRepoPath;
     await pexec(
       "git",
       [
@@ -70,7 +86,7 @@ export class Signatures {
         `signet: merge increment ${incId}`,
         branch,
       ],
-      { cwd: this.targetRepoPath },
+      { cwd: repoPath },
     );
     await this.uow.run(async (tx) => {
       await tx.increments.transition(incId, "AWAITING_SIGNATURE", {
@@ -78,6 +94,14 @@ export class Signatures {
         mergedAt: new Date().toISOString(),
       });
     });
+
+    // After the transition, never inside it: the merge is done and recorded, and a
+    // downstream automation failing is not a reason to report that it was not.
+    try {
+      await this.onMerged?.(incId);
+    } catch {
+      /* automation is best-effort; the merge stands */
+    }
   }
 
   /** The increment's current status, or a not-found the HTTP layer maps to 404. */

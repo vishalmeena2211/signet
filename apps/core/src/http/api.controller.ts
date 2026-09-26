@@ -1,7 +1,12 @@
 // The console API. Thin: validate in, call services, contracts-shaped out.
 // Host-header guard applied globally in main.ts (DNS-rebinding defence).
 
-import { Body, Controller, Get, Inject, NotFoundException, Param, Post, Query } from "@nestjs/common";
+import { z } from "zod";
+import { Body, Controller, Delete, Get, Inject, NotFoundException, Param, Post, Query } from "@nestjs/common";
+import { FeatureProposer } from "../services/feature-proposer.js";
+import type { RepoDiscovery } from "../services/repo-discovery.js";
+import type { AutomationStore } from "../services/automation-store.js";
+import type { WorkflowEngine } from "../services/workflow-engine.js";
 import {
   AnswerEscalationRequestSchema,
   CreateFeatureRequestSchema,
@@ -10,6 +15,15 @@ import {
   IncrementIdSchema,
   IncrementDiffViewSchema,
   LearnRequestSchema,
+  ProposeFeatureRequestSchema,
+  RepoOptionsResponseSchema,
+  AutomationStateSchema,
+  AutomationControlRequestSchema,
+  RecipeSchema,
+  CreateRecipeRequestSchema,
+  WorkflowSchema,
+  SaveWorkflowRequestSchema,
+  WorkflowRunViewSchema,
   ApproveDesignRequestSchema,
   DispatcherControlRequestSchema,
   DispatcherStateSchema,
@@ -45,6 +59,10 @@ export const TOKENS = {
   dispatcher: "signet.dispatcherControl",
   realtime: "signet.realtime",
   activeWorkers: "signet.activeWorkers",
+  proposer: "signet.proposer",
+  repos: "signet.repos",
+  automation: "signet.automation",
+  workflows: "signet.workflows",
 } as const;
 
 @Controller("api")
@@ -66,6 +84,10 @@ export class ApiController {
     @Inject(TOKENS.github) private readonly github: GithubConnector,
     @Inject(TOKENS.dispatcher) private readonly dispatcher: Dispatcher,
     @Inject(TOKENS.activeWorkers) private readonly activeWorkers: () => number,
+    @Inject(TOKENS.proposer) private readonly proposer: FeatureProposer,
+    @Inject(TOKENS.repos) private readonly repos: RepoDiscovery,
+    @Inject(TOKENS.automation) private readonly automation: AutomationStore,
+    @Inject(TOKENS.workflows) private readonly workflowEngine: WorkflowEngine,
   ) {}
 
   @Get("health")
@@ -175,6 +197,111 @@ export class ApiController {
     }
     const escalations = await this.views.openEscalations(id);
     return { ...detail, verdicts, activity, escalations };
+  }
+
+  // ── automation ──
+  //
+  // Nothing here can merge. A workflow runs work up to the point of landing it and then
+  // stops, because signature 2 stays human. That is enforced in the engine, not here.
+
+  @Get("automation")
+  async automationState() {
+    return AutomationStateSchema.parse(await this.automation.state());
+  }
+
+  @Post("automation")
+  async setAutomation(@Body() body: unknown) {
+    const req = AutomationControlRequestSchema.parse(body);
+    this.workflowEngine.setPaused(req.paused);
+    return AutomationStateSchema.parse(await this.automation.state());
+  }
+
+  @Get("recipes")
+  async listRecipes() {
+    return z.array(RecipeSchema).parse(await this.automation.listRecipes());
+  }
+
+  @Post("recipes")
+  async createRecipe(@Body() body: unknown) {
+    return this.automation.createRecipe(CreateRecipeRequestSchema.parse(body));
+  }
+
+  @Delete("recipes/:id")
+  async deleteRecipe(@Param("id") id: string) {
+    await this.automation.deleteRecipe(id);
+    return { ok: true };
+  }
+
+  @Get("workflows")
+  async listWorkflows() {
+    return z.array(WorkflowSchema).parse(await this.automation.listWorkflows());
+  }
+
+  @Post("workflows")
+  async saveWorkflow(@Body() body: unknown) {
+    return this.automation.saveWorkflow(SaveWorkflowRequestSchema.parse(body));
+  }
+
+  @Post("workflows/:id/enabled")
+  async setWorkflowEnabled(@Param("id") id: string, @Body() body: unknown) {
+    const req = z.object({ enabled: z.boolean() }).parse(body);
+    await this.automation.setWorkflowEnabled(id, req.enabled);
+    return { ok: true };
+  }
+
+  @Delete("workflows/:id")
+  async deleteWorkflow(@Param("id") id: string) {
+    await this.automation.deleteWorkflow(id);
+    return { ok: true };
+  }
+
+  /**
+   * Runs a workflow now. Always allowed, even while automation is paused: the switch
+   * exists to stop things firing while nobody is watching, and a person pressing a button
+   * is not the thing being guarded against.
+   */
+  @Post("workflows/:id/run")
+  async runWorkflow(@Param("id") id: string) {
+    const result = await this.workflowEngine.run(id, { triggeredBy: "manual" });
+    if ("skipped" in result) {
+      await this.workflowEngine.recordSkip(id, "manual", result.reason);
+      return { started: false, reason: result.reason };
+    }
+    return { started: true, runId: result.runId };
+  }
+
+  @Get("workflow-runs")
+  async workflowRuns() {
+    return z.array(WorkflowRunViewSchema).parse(await this.automation.listRuns());
+  }
+
+  /**
+   * Every repository work can be sent to: local git repos found on this machine, plus
+   * the user's github repos. Each says whether a run can actually finish there, so the
+   * push limitation is visible at the point of choosing rather than at the merge.
+   */
+  @Get("repos")
+  async repoOptions() {
+    return RepoOptionsResponseSchema.parse(await this.repos.list());
+  }
+
+  /**
+   * Proposes a breakdown from a plain description, and persists NOTHING. The user
+   * reviews what comes back and creates the feature from it, so a bad proposal costs
+   * one model call and no rows.
+   *
+   * Surveying is deterministic and free; the model call is not, which is why this is a
+   * deliberate user action rather than something that fires as they type.
+   */
+  @Post("propose")
+  async propose(@Body() body: unknown) {
+    const req = ProposeFeatureRequestSchema.parse(body);
+    const result = await this.proposer.propose(req);
+    // Thrown so the error filter maps it to a status and a sentence, rather than
+    // returning 200 with a failure inside — the console would have to learn a second
+    // way of discovering something went wrong.
+    if (!result.ok) throw result.error;
+    return result.response;
   }
 
   @Post("features")

@@ -54,9 +54,18 @@ function Loaded({ data }: { data: Awaited<ReturnType<typeof api.overview>> }) {
       <Decide
         title="Needs you"
         meta={
-          attention.length > 0 ? (
-            <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>oldest first</span>
-          ) : undefined
+          /* Starting work is the one thing you cannot reach from this screen without
+             first going somewhere else, and this is the screen people land on. It
+             lived only on Work, which meant the primary action of the whole product
+             was one navigation away from the default view. */
+          <Row gap="var(--s3)">
+            {attention.length > 0 && (
+              <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>oldest first</span>
+            )}
+            <Button size="sm" variant="primary" onClick={() => navigate({ view: "new" })}>
+              New feature
+            </Button>
+          </Row>
         }
       >
         <FocalMetric
@@ -69,7 +78,19 @@ function Loaded({ data }: { data: Awaited<ReturnType<typeof api.overview>> }) {
         {attention.length === 0 ? (
           <EmptyState
             title="Nothing is waiting on you"
-            body="Everything is either building, merged, or waiting for your Claude quota to reset."
+            body={
+              counts.features === 0
+                ? "Describe what you want built and Signet will take it from there. You sign off twice: once on what you asked for, once on the code it wrote."
+                : "Everything is either building, merged, or waiting for your Claude quota to reset."
+            }
+            action={
+              /* An empty queue on a fresh install is the first thing a new user sees,
+                 and "nothing is waiting on you" is a dead end unless it also says
+                 what to do instead. */
+              <Button variant="primary" onClick={() => navigate({ view: "new" })}>
+                {counts.features === 0 ? "Create your first feature" : "New feature"}
+              </Button>
+            }
           />
         ) : (
           /* Hairline rows in one surface, not a card each — a stack of equal boxes is

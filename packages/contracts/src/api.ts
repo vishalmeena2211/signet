@@ -71,16 +71,149 @@ export type QuotaStateView = z.infer<typeof QuotaStateViewSchema>;
 export const CreateFeatureRequestSchema = z.object({
   title: z.string().min(1).max(200),
   briefMd: z.string().min(1),
+  /** Which repo to build into. Omitted means the configured one. */
+  repoId: z.string().optional(),
   increments: z
     .array(
       z.object({
         title: z.string().min(1).max(200),
         declaredSurface: z.array(z.string().min(1)).min(1),
+        /**
+         * What "done" means for this step. Optional so the old shape still parses,
+         * but every proposal fills it in — the context pack shipped an empty
+         * acceptance.md to every run ever made, so no agent has been told what it
+         * was aiming at.
+         */
+        acceptanceMd: z.string().optional(),
       }),
     )
     .min(1),
 });
 export type CreateFeatureRequest = z.infer<typeof CreateFeatureRequestSchema>;
+
+// ── proposing a breakdown instead of demanding one ──
+//
+// Creating a feature used to require the user to name the steps AND the file globs
+// each step could touch. Only somebody who already knows the codebase can answer
+// that, and being wrong is not forgiving: a plan touching a file outside its declared
+// surface is a NON-recoverable error, so the run dies with no repair. Two of the four
+// items in the pilot's attention queue are that exact failure.
+//
+// So the guessing moves to the side holding the repository. The user says what they
+// want; Signet surveys the repo and proposes the breakdown; the user approves or
+// edits it. The surfaces do not disappear — they stop being the user's homework.
+
+// ── which repository the work goes into ──
+//
+// Phase 0 had one repo per Signet instance, set by an env var, and the create form
+// never mentioned it — so "which codebase is this going into" was answered by a
+// config file nobody looked at. A feature now records its own target.
+
+export const RepoOriginSchema = z.enum(["local", "github"]);
+export type RepoOrigin = z.infer<typeof RepoOriginSchema>;
+
+export const RepoOptionSchema = z.object({
+  /** What the picker sends back: the absolute path for local, "owner/name" for github. */
+  id: z.string(),
+  label: z.string(),
+  origin: RepoOriginSchema,
+  /** Absolute path a run would use. Null for a github repo not yet cloned locally. */
+  path: z.string().nullable(),
+  /**
+   * Whether a run can actually finish here. False for github, because merging means
+   * pushing — auth, branches, pull requests — which is separate work. Saying so at the
+   * point of choosing beats discovering it when the merge fails.
+   */
+  canMerge: z.boolean(),
+  /** Why not, when canMerge is false. Null when there is nothing to warn about. */
+  limitation: z.string().nullable(),
+  /** Branch, description, or last-updated — whatever helps tell two repos apart. */
+  detail: z.string().nullable(),
+  /** True for the repo this instance is configured with, so it can be offered first. */
+  isConfigured: z.boolean(),
+});
+export type RepoOption = z.infer<typeof RepoOptionSchema>;
+
+export const RepoOptionsResponseSchema = z.object({
+  repos: z.array(RepoOptionSchema),
+  /** Where we looked, so an absent repo is explainable rather than mysterious. */
+  scannedRoots: z.array(z.string()),
+  github: z.object({ authenticated: z.boolean(), reason: z.string().nullable() }),
+});
+export type RepoOptionsResponse = z.infer<typeof RepoOptionsResponseSchema>;
+
+export const ProposeFeatureRequestSchema = z.object({
+  /**
+   * What the user wants built, in their own words. The floor is deliberately higher
+   * than one character: a proposal derived from "fix the thing" is a guess wearing a
+   * plan's clothing, and it is kinder to refuse than to produce one.
+   */
+  goal: z.string().min(20).max(20_000),
+  /**
+   * Which repo to plan against. Omitted means the configured one, which keeps the
+   * older request shape working.
+   */
+  repoId: z.string().optional(),
+});
+export type ProposeFeatureRequest = z.infer<typeof ProposeFeatureRequestSchema>;
+
+export const ProposedStepSchema = z.object({
+  title: z.string().min(1).max(200),
+  /** Why this is its own step rather than part of a neighbour. */
+  rationale: z.string().min(1),
+  declaredSurface: z.array(z.string().min(1)).min(1),
+  /** What "done" means, specifically enough to be checked. */
+  acceptanceMd: z.string().min(1),
+});
+export type ProposedStep = z.infer<typeof ProposedStepSchema>;
+
+export const SurfaceWarningSchema = z.object({
+  stepTitle: z.string(),
+  pattern: z.string(),
+  /**
+   * Why this surface is suspect. A glob matching nothing is the single most common
+   * way a proposal looks reasonable and then kills the run it produced.
+   */
+  reason: z.enum(["matches_nothing", "matches_everything", "outside_repo"]),
+});
+export type SurfaceWarning = z.infer<typeof SurfaceWarningSchema>;
+
+export const FeatureProposalSchema = z.object({
+  title: z.string().min(1).max(200),
+  /**
+   * The goal restated as Signet understood it. Shown back before anything is built,
+   * so a misread is caught while it is still cheap — the same reason the brief
+   * read-back exists.
+   */
+  understanding: z.string().min(1),
+  /**
+   * Capped, because a "breakdown" of thirty steps is not a plan a human can sign,
+   * and the whole point of this screen is producing something signable.
+   */
+  steps: z.array(ProposedStepSchema).min(1).max(12),
+  /**
+   * What the proposer was unsure about. Carried rather than hidden: a plan that
+   * hides its doubts is indistinguishable from a confident one, and the user is the
+   * person who can resolve them.
+   */
+  uncertainties: z.array(z.string()),
+});
+export type FeatureProposal = z.infer<typeof FeatureProposalSchema>;
+
+export const FeatureProposalResponseSchema = z.object({
+  proposal: FeatureProposalSchema,
+  /** Which repo this was proposed against, so the user is never guessing. */
+  repoPath: z.string(),
+  repoLabel: z.string(),
+  repoOrigin: RepoOriginSchema,
+  /** Files the survey found. Zero means the proposal is built on nothing. */
+  filesSurveyed: z.number().int(),
+  /** True when the survey hit its ceiling, so the proposal saw only part of the repo. */
+  surveyTruncated: z.boolean(),
+  /** Surfaces that look wrong, checked against files that actually exist. */
+  surfaceWarnings: z.array(SurfaceWarningSchema),
+});
+export type FeatureProposalResponse = z.infer<typeof FeatureProposalResponseSchema>;
 
 export const AnswerEscalationRequestSchema = z.object({
   answer: z.string().min(1),
