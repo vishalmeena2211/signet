@@ -4,6 +4,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "turbo run build",
+    "console": "node scripts/console.mjs",
     "dev": "turbo run dev",
     "test": "turbo run test",
     "lint": "turbo run lint",

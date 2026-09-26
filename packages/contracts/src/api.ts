@@ -97,6 +97,16 @@ export const ActivityViewSchema = z.object({
 });
 export type ActivityView = z.infer<typeof ActivityViewSchema>;
 
+/** What the human is actually signing at signature 2. */
+export const IncrementDiffViewSchema = z.object({
+  available: z.boolean(),
+  reason: z.string().optional(),
+  files: z.array(z.object({ path: z.string(), added: z.number().int(), removed: z.number().int() })),
+  patch: z.string(),
+  truncated: z.boolean(),
+});
+export type IncrementDiffView = z.infer<typeof IncrementDiffViewSchema>;
+
 // WS events pushed to the console
 export const RealtimeEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("increment_changed"), incrementId: IncrementIdSchema }),

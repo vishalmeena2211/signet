@@ -9,15 +9,21 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Request, Response, NextFunction } from "express";
 import { parseConfig } from "@signet/contracts";
-import { AppModule } from "./app.module.js";
+import { AppModule, LOGGER } from "./app.module.js";
 import { Realtime } from "./http/realtime.gateway.js";
+import { SignetErrorFilter } from "./http/signet-error.filter.js";
 import { TOKENS } from "./http/api.controller.js";
+import type { Logger } from "./domain/runtime/logger.js";
 
 async function bootstrap() {
   const cfg = parseConfig(process.env); // refuses to start on bad config
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: false });
   app.enableShutdownHooks();
+
+  // Typed domain errors become readable HTTP answers, so an action that is
+  // refused says why instead of arriving at the console as a bare 500.
+  app.useGlobalFilters(new SignetErrorFilter(app.get<Logger>(LOGGER)));
 
   // Host-header guard: an unauthenticated browser can be tricked into
   // resolving an attacker domain to 127.0.0.1 (DNS rebinding). Only known

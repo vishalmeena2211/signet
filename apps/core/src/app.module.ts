@@ -27,6 +27,7 @@ import { rulesGate } from "./domain/gates/rules-gate.js";
 import { conformanceGate } from "./domain/gates/conformance-gate.js";
 import { makeRunOnBase } from "./domain/gates/base-overlay.js";
 import { DesignStore } from "./services/design-store.js";
+import { DiffReader } from "./services/diff-reader.js";
 import { checkScope } from "./domain/pipeline/scope-checker.js";
 import { RunEngine } from "./services/run-engine.js";
 import { ClaudeAgentDriver } from "./services/claude-agent-driver.js";
@@ -44,7 +45,7 @@ import type { Logger } from "./domain/runtime/logger.js";
 const CONFIG = "signet.config";
 const PRISMA = "signet.prisma";
 const UOW = "signet.uow";
-const LOGGER = "signet.logger";
+export const LOGGER = "signet.logger";
 const DISPATCHER = "signet.dispatcher";
 
 function buildDispatcher(
@@ -214,6 +215,11 @@ function buildDispatcher(
       provide: TOKENS.designs,
       useFactory: (db: PrismaClient) => new DesignStore(db),
       inject: [PRISMA],
+    },
+    {
+      provide: TOKENS.diffs,
+      useFactory: (cfg: SignetConfig) => new DiffReader(cfg.workspacesRoot, cfg.baseRef),
+      inject: [CONFIG],
     },
     {
       provide: DISPATCHER,

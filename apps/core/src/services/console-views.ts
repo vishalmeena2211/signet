@@ -19,6 +19,19 @@ import {
 } from "@signet/contracts";
 import type { PrismaClient } from "../persistence/generated/client.js";
 
+/**
+ * The increments are the truth about how far a feature got, so the board
+ * derives the late stages instead of trusting the stored column — which is
+ * written once at creation and would otherwise report "Implementing" forever
+ * next to "1/1 increments merged". The early stages (intake, design,
+ * decomposition) happen before any increment exists, so those still come from
+ * the column.
+ */
+function deriveStage(stored: string, total: number, merged: number): string {
+  if (total > 0 && merged === total) return "DONE";
+  return stored;
+}
+
 export class ConsoleViews {
   constructor(private readonly db: PrismaClient) {}
 
@@ -46,7 +59,7 @@ export class ConsoleViews {
         title: f.title,
         needsHuman,
         ...(needsHumanWhy !== undefined ? { needsHumanWhy } : {}),
-        stage: f.stage,
+        stage: deriveStage(f.stage, total, merged),
         incrementsTotal: total,
         incrementsMerged: merged,
       });

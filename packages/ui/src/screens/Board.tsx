@@ -3,6 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api.js";
+import { QueryState } from "../components.js";
 
 const STAGE_LABEL: Record<string, string> = {
   INTAKE: "In intake",
@@ -26,6 +27,7 @@ export function Board({
   const queue = useQuery({ queryKey: ["rules"], queryFn: () => api.ruleQueue(), refetchInterval: 8000 });
 
   return (
+    <QueryState isPending={features.isPending} error={features.error} onRetry={() => void features.refetch()}>
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "var(--space-8) var(--space-4)" }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <h1 style={{ fontSize: "var(--fs-xl)", margin: 0 }}>Signet</h1>
@@ -75,6 +77,7 @@ export function Board({
         ))}
       </div>
     </div>
+    </QueryState>
   );
 }
 

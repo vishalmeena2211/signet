@@ -6,7 +6,14 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { IncrementIdSchema, RunIdSchema } from "@signet/contracts";
+import {
+  IncrementIdSchema,
+  RunIdSchema,
+  conflict,
+  nonRecoverable,
+  type IncrementId,
+  type IncrementStatus,
+} from "@signet/contracts";
 import type { UnitOfWork } from "../domain/runtime/ports.js";
 import { enqueueRun } from "./dispatcher.js";
 
@@ -22,6 +29,10 @@ export class Signatures {
   /** Signature #1 — approve the increment; the run starts. */
   async approve(incrementId: string): Promise<{ runId: string }> {
     const incId = IncrementIdSchema.parse(incrementId);
+    // Check it exists before enqueueing: otherwise the first failure is a
+    // foreign-key violation from inside the run insert, which reaches the
+    // caller as a database error rather than "no such increment".
+    await this.requireIncrement(incId);
     const runId = await enqueueRun(this.uow, incId);
     await this.uow.run(async (tx) => {
       await tx.increments.transition(incId, "CONTEXT_READY", {
@@ -35,6 +46,16 @@ export class Signatures {
   /** Signature #2 — merge the increment's branch into the base. */
   async merge(incrementId: string): Promise<void> {
     const incId = IncrementIdSchema.parse(incrementId);
+    // Check the state BEFORE touching git. The transition below also guards,
+    // but it runs after the merge — so without this an increment that is not
+    // awaiting signature would have its branch merged into the base branch and
+    // only then be refused, leaving unreviewed code in the repository.
+    const current = await this.requireIncrement(incId);
+    if (current !== "AWAITING_SIGNATURE") {
+      throw Object.assign(new Error(`increment ${incId} is ${current}, not AWAITING_SIGNATURE`), {
+        signet: conflict("increment.illegal_transition", `${current} -> MERGED`),
+      });
+    }
     const branch = `signet/inc-${incId}`;
     await pexec(
       "git",
@@ -57,6 +78,17 @@ export class Signatures {
         mergedAt: new Date().toISOString(),
       });
     });
+  }
+
+  /** The increment's current status, or a not-found the HTTP layer maps to 404. */
+  private async requireIncrement(incId: IncrementId): Promise<IncrementStatus> {
+    const row = await this.uow.run(async (tx) => tx.increments.get(incId));
+    if (!row) {
+      throw Object.assign(new Error(`increment not found: ${incId}`), {
+        signet: nonRecoverable("increment.not_found", `no increment with id ${incId}`),
+      });
+    }
+    return row.state.status;
   }
 
   get base(): string {

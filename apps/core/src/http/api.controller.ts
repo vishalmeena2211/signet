@@ -8,6 +8,7 @@ import {
   EditRuleRequestSchema,
   FeatureIdSchema,
   IncrementIdSchema,
+  IncrementDiffViewSchema,
   LearnRequestSchema,
   ApproveDesignRequestSchema,
 } from "@signet/contracts";
@@ -16,6 +17,7 @@ import type { Signatures } from "../services/signatures.js";
 import type { Controls } from "../services/controls.js";
 import type { RuleStore } from "../services/rule-store.js";
 import type { DesignStore } from "../services/design-store.js";
+import type { DiffReader } from "../services/diff-reader.js";
 import type { Realtime } from "./realtime.gateway.js";
 
 export const TOKENS = {
@@ -24,6 +26,7 @@ export const TOKENS = {
   controls: "signet.controls",
   rules: "signet.rules",
   designs: "signet.designs",
+  diffs: "signet.diffs",
   realtime: "signet.realtime",
   activeWorkers: "signet.activeWorkers",
 } as const;
@@ -36,6 +39,7 @@ export class ApiController {
     @Inject(TOKENS.controls) private readonly controls: Controls,
     @Inject(TOKENS.rules) private readonly rules: RuleStore,
     @Inject(TOKENS.designs) private readonly designs: DesignStore,
+    @Inject(TOKENS.diffs) private readonly diffs: DiffReader,
     @Inject(TOKENS.realtime) private readonly realtime: Realtime,
     @Inject(TOKENS.activeWorkers) private readonly activeWorkers: () => number,
   ) {}
@@ -120,6 +124,12 @@ export class ApiController {
     const record = await this.designs.get(IncrementIdSchema.parse(id));
     if (!record) throw new NotFoundException();
     return record;
+  }
+
+  /** Signature 2 needs evidence: what did the agent actually change. */
+  @Get("increments/:id/diff")
+  async diff(@Param("id") id: string) {
+    return IncrementDiffViewSchema.parse(await this.diffs.read(IncrementIdSchema.parse(id)));
   }
 
   // ── design-system learner + confirmation queue ──

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RuleCard } from "@signet/contracts";
 import { api } from "../api.js";
+import { ErrorNote } from "../components.js";
 
 const TREND_COLOR: Record<string, string> = {
   new: "var(--accent)",
@@ -79,7 +80,10 @@ export function Constitution({ onBack }: { onBack: () => void }) {
           Learned {learn.data.label}: {learn.data.proposed} new proposals ({learn.data.skipped} already known).
         </div>
       )}
-      {learn.isError && <div style={{ color: "var(--fail)", marginTop: "var(--space-2)" }}>{String(learn.error)}</div>}
+      <div style={{ marginTop: "var(--space-2)" }}>
+        <ErrorNote error={learn.error} onDismiss={() => learn.reset()} />
+        <ErrorNote error={queue.error} />
+      </div>
 
       <div style={{ display: "grid", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
         {queue.data?.length === 0 && (
@@ -160,6 +164,15 @@ function RuleCardView({ rule, onDone }: { rule: RuleCard; onDone: () => void }) 
           ))}
         </div>
       </details>
+
+      <ErrorNote
+        error={confirm.error ?? reject.error ?? save.error}
+        onDismiss={() => {
+          confirm.reset();
+          reject.reset();
+          save.reset();
+        }}
+      />
 
       <div style={{ display: "flex", gap: "var(--space-2)" }}>
         {editing ? (

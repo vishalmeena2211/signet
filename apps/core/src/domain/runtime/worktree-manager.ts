@@ -3,7 +3,7 @@
 // ONLY cross-run persistence path (the no-remote-git contract). Workers never
 // push; the master owns every remote interaction.
 
-import { mkdir, rm, writeFile, readFile, access } from "node:fs/promises";
+import { mkdir, rm, rmdir, writeFile, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -72,6 +72,7 @@ export class WorktreeManager {
 
   /** Commit everything in the worktree with a deterministic message; returns commit sha or null when clean. */
   async commitAll(handle: WorktreeHandle, message: string): Promise<string | null> {
+    await this.discardOwnArtifacts(handle.path);
     await this.git(["add", "-A"], handle.path);
     const status = await this.git(["status", "--porcelain"], handle.path);
     if (status === "") return null;
@@ -80,6 +81,33 @@ export class WorktreeManager {
       handle.path,
     );
     return this.git(["rev-parse", "HEAD"], handle.path);
+  }
+
+  /**
+   * Files Signet writes into the worktree for its own purposes. They must never
+   * reach a commit: the customer's repository would gain our sandbox profile in
+   * its history at merge, and the scope checker would have to be taught to
+   * ignore paths outside the increment's declared surface.
+   *
+   * Restoring rather than deleting is deliberate — a repository that tracks its
+   * own .claude/settings.json gets its version back, instead of losing it.
+   */
+  private async discardOwnArtifacts(worktreePath: string): Promise<void> {
+    const own = [".claude/settings.json"];
+    for (const rel of own) {
+      // Tracked in the repo? Put the committed version back.
+      try {
+        await this.git(["checkout", "--", rel], worktreePath);
+        continue;
+      } catch {
+        // Not tracked, so there is nothing to restore — remove ours.
+      }
+      await rm(join(worktreePath, rel), { force: true });
+    }
+    // Remove the directory only when we are the reason it exists. rmdir fails
+    // on a non-empty directory, which is exactly the guard we want: a
+    // repository with its own .claude/ contents keeps them.
+    await rmdir(join(worktreePath, ".claude")).catch(() => {});
   }
 
   /** Diff of the worktree branch against its base — what the gates judge. */

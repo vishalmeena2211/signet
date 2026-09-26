@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "console",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@signet/ui", "dev"],
+      "port": 4701
+    }
+  ]
+}
