@@ -5,6 +5,8 @@ import type { DriftAnalysis } from "./drift-analyzer.js";
 
 const analysis: DriftAnalysis = {
   palette: [],
+  brandConfidence: "named" as const,
+  brandReason: "declared as --brand",
   brand: {
     canonicalHex: "#6609be",
     members: ["#6609be"],

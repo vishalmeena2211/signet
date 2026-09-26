@@ -225,3 +225,233 @@ describe("asset drift precision", () => {
     expect(analysis.findings.filter((f) => f.kind === "legacy_asset_conflict")).toHaveLength(1);
   });
 });
+
+// Knowing when NOT to conclude.
+//
+// On tailwindcss.com the extractor found exactly one declared colour token —
+// `--color-clifford`, from a documentation page teaching readers how to define a
+// colour — and the analyzer judged 1,360 colours against that example. Their real
+// brand, #38bdf8, was reported as "off-palette", because on a utility-first
+// codebase colour lives in class names this learner cannot read.
+//
+// The fix is not a cleverer guess. It is refusing to guess.
+
+describe("brand inference confidence", () => {
+  const base = (
+    tokens: SourceExtraction["declaredTokens"],
+    colors: SourceExtraction["colors"] = [],
+  ): SourceExtraction => ({
+    root: "/x",
+    scannedFiles: 50,
+    colors,
+    declaredTokens: tokens,
+    assets: [],
+  });
+
+  const token = (name: string, hex: string, file = "src/theme.css") => ({
+    name,
+    value: hex,
+    resolvedHex: hex,
+    file,
+    line: 1,
+  });
+
+  it("says NONE when the only declared token comes from a documentation page", () => {
+    // The literal tailwindcss.com case.
+    const analysis = analyzeDrift(
+      base([token("--color-clifford", "#da373d", "src/app/(docs)/docs/installation/page.tsx")]),
+      [],
+    );
+    expect(analysis.brand).toBeNull();
+    expect(analysis.brandConfidence).toBe("none");
+    expect(analysis.brandReason).toMatch(/utility classes|not a palette|documentation/i);
+    // And with no palette to conform to, it must not emit palette findings.
+    expect(analysis.findings.filter((f) => f.kind === "off_palette_color")).toHaveLength(0);
+  });
+
+  it("says NONE rather than picking the most common literal", () => {
+    // The old fallback was `clusters[0]` — the most frequent chromatic literal.
+    // On a codebase with no declared palette that is a syntax-highlighting colour
+    // as often as a brand, and it produced a confident rule from nothing.
+    const analysis = analyzeDrift(
+      base(
+        [],
+        Array.from({ length: 40 }, (_, i) => ({
+          hex: "#f44250",
+          alpha: 1,
+          raw: "#f44250",
+          file: `src/code-theme-${i}.ts`,
+          line: 1,
+          context: "code" as const,
+        })),
+      ),
+      [],
+    );
+    expect(analysis.brand).toBeNull();
+    expect(analysis.brandConfidence).toBe("none");
+  });
+
+  it("accepts a single declared token — one brand colour is a real design system", () => {
+    // Demanding a larger palette would reject the pilot, which declares exactly
+    // one chromatic token and is perfectly well-run. The protection against
+    // nonsense is excluding documentation and refusing to guess from literals,
+    // not insisting everyone have a big palette.
+    const analysis = analyzeDrift(base([token("--brand", "#6609be")]), []);
+    expect(analysis.brandConfidence).toBe("named");
+    expect(analysis.brand?.canonicalHex).toBe("#6609be");
+  });
+
+  it("says NAMED when the team literally named the token", () => {
+    const analysis = analyzeDrift(
+      base([
+        token("--brand-primary", "#6609be"),
+        token("--success", "#12855c"),
+        token("--warning", "#8a5a06"),
+      ]),
+      [],
+    );
+    expect(analysis.brandConfidence).toBe("named");
+    expect(analysis.brand?.canonicalHex).toBe("#6609be");
+    expect(analysis.brandReason).toMatch(/the team named it/i);
+  });
+
+  it("says DECLARED, and admits it is inferred, when no token is named brand", () => {
+    const analysis = analyzeDrift(
+      base(
+        [token("--ink", "#6609be"), token("--leaf", "#12855c"), token("--sun", "#8a5a06")],
+        Array.from({ length: 12 }, (_, i) => ({
+          hex: "#6609be",
+          alpha: 1,
+          raw: "#6609be",
+          file: `src/a${i}.tsx`,
+          line: 1,
+          context: "code" as const,
+        })),
+      ),
+      [],
+    );
+    expect(analysis.brandConfidence).toBe("declared");
+    expect(analysis.brandReason).toMatch(/inferred rather than stated/i);
+  });
+
+  it("ignores colours that only appear in stories, tests and fixtures", () => {
+    const analysis = analyzeDrift(
+      base(
+        [token("--brand", "#6609be"), token("--b", "#12855c"), token("--c", "#8a5a06")],
+        [
+          ...Array.from({ length: 30 }, (_, i) => ({
+            hex: "#ff00ff",
+            alpha: 1,
+            raw: "#ff00ff",
+            file: `src/Button.stories.tsx`,
+            line: i,
+            context: "code" as const,
+          })),
+          ...Array.from({ length: 10 }, (_, i) => ({
+            hex: "#6609be",
+            alpha: 1,
+            raw: "#6609be",
+            file: `src/Real${i}.tsx`,
+            line: 1,
+            context: "code" as const,
+          })),
+        ],
+      ),
+      [],
+    );
+    // The magenta is the single most-used literal, and it is story furniture.
+    expect(analysis.palette.some((c) => c.canonicalHex === "#ff00ff")).toBe(false);
+    expect(analysis.brand?.canonicalHex).toBe("#6609be");
+  });
+
+  it("judges an asset against the WHOLE declared palette, not just the brand", () => {
+    // An icon drawn in the declared success green is not drift because the brand
+    // happens to be purple.
+    const analysis = analyzeDrift(
+      {
+        ...base([
+          token("--brand", "#6609be"),
+          token("--success", "#12855c"),
+          token("--warning", "#8a5a06"),
+        ]),
+        assets: [
+          {
+            file: "public/icons/state/success.svg",
+            kind: "svg" as const,
+            bytes: 400,
+            references: 0,
+            referencedFrom: [],
+            paletteHexes: ["#12855c"],
+          },
+        ],
+      },
+      [],
+    );
+    expect(analysis.findings.filter((f) => f.kind === "legacy_asset_conflict")).toHaveLength(0);
+  });
+});
+
+describe("the two regressions this fix caused, and must not cause again", () => {
+  const tok = (name: string, hex: string) => ({ name, value: hex, resolvedHex: hex, file: "src/theme.css", line: 1 });
+
+  it("judges an IDENTITY asset against the brand, not the whole palette", () => {
+    // The pilot's legacy logo is navy and gold, and BOTH are still declared
+    // tokens because the migration to purple is unfinished. Measured against
+    // "anything we declare", the stale logo looks fine — which is how the
+    // acceptance finding briefly disappeared. Measured against the brand, it is
+    // obviously stale, which is the truth.
+    const analysis = analyzeDrift(
+      {
+        root: "/x",
+        scannedFiles: 20,
+        colors: Array.from({ length: 20 }, (_, i) => ({
+          hex: "#6609be",
+          alpha: 1,
+          raw: "#6609be",
+          file: `src/a${i}.tsx`,
+          line: 1,
+          context: "code" as const,
+        })),
+        declaredTokens: [tok("--brand", "#6609be"), tok("--legacy-navy", "#100c28"), tok("--legacy-gold", "#c8a05c")],
+        assets: [
+          {
+            file: "public/logo/logo.svg",
+            kind: "svg" as const,
+            bytes: 900,
+            references: 0,
+            referencedFrom: [],
+            paletteHexes: ["#100c28", "#c8a05c"],
+          },
+        ],
+      },
+      [],
+    );
+    const found = analysis.findings.filter((f) => f.kind === "legacy_asset_conflict");
+    expect(found).toHaveLength(1);
+  });
+
+  it("never says the BRAND is being migrated away", () => {
+    // A brand's literal count falls as it gets tokenized — uses move from the hex
+    // to var(--brand) — and raw frequency reads that healthy migration as death.
+    // On the real repository this proposed "Colour #6609be is being migrated
+    // away" about the brand itself.
+    const analysis = analyzeDrift(
+      {
+        root: "/x",
+        scannedFiles: 20,
+        colors: [
+          { hex: "#6609be", alpha: 1, raw: "#6609be", file: "src/globals.css", line: 2, context: "code" as const },
+          { hex: "#227ae5", alpha: 1, raw: "#227ae5", file: "src/old.tsx", line: 4, context: "code" as const },
+        ],
+        declaredTokens: [tok("--brand-primary", "#6609be")],
+        assets: [],
+      },
+      [
+        { value: "#6609be", counts: { now: 1, "6mo": 9, "12mo": 22 }, trend: "dying" },
+        { value: "#227ae5", counts: { now: 1, "6mo": 7, "12mo": 15 }, trend: "dying" },
+      ],
+    );
+    const dying = analysis.findings.filter((f) => f.kind === "dying_value_still_present");
+    expect(dying.map((f) => (f.kind === "dying_value_still_present" ? f.hex : ""))).toEqual(["#227ae5"]);
+  });
+});

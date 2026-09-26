@@ -67,12 +67,58 @@ export type Finding =
       message: string;
     };
 
+/**
+ * How much the brand pick can be trusted. This is reported, not hidden, because
+ * every palette finding rests on it — and a confident-sounding rule derived from a
+ * guess is worse than no rule.
+ *
+ *   named        a token literally called brand/primary/accent. The team said it.
+ *   declared     no such name, but a real palette of declared tokens exists and
+ *                one leads on usage.
+ *   none         there is no declared palette to reason from. NOT a licence to
+ *                guess at the most common literal: on a utility-first codebase the
+ *                colours live in class names, and the top literal is as likely to
+ *                be a syntax-highlighting colour as a brand.
+ */
+export type BrandConfidence = "named" | "declared" | "none";
+
 export interface DriftAnalysis {
   palette: PaletteCluster[];
-  brand: PaletteCluster | null; // best-guess primary brand cluster
+  brand: PaletteCluster | null; // null when there is nothing to justify a pick
+  brandConfidence: BrandConfidence;
+  /** Plain-language reason, shown in the report so the conclusion is auditable. */
+  brandReason: string;
   findings: Finding[];
   stats: { scannedFiles: number; distinctColors: number; declaredTokens: number; assets: number };
 }
+
+/**
+ * At least one colour token must be declared in the codebase's own source before
+ * any palette conclusion is drawn.
+ *
+ * One looks permissive, and it is — deliberately. The two things that actually
+ * stop the nonsense are elsewhere: documentation and example files are excluded
+ * from token extraction, and there is no longer a fallback to "the most common
+ * literal" when nothing is declared. On tailwindcss.com those two together take
+ * the declared count from one (`--color-clifford`, from an installation guide
+ * teaching readers how to define a colour) to zero, which is the correct answer.
+ *
+ * Demanding a bigger palette instead would have broken the pilot, which declares
+ * exactly one chromatic token — `--brand` — and is a perfectly good design system.
+ * A team with one brand colour and a set of neutrals is not doing anything wrong.
+ */
+const MIN_DECLARED_FOR_PALETTE = 1;
+
+/**
+ * Paths whose colours are subject matter, not design decisions. A code sample in
+ * the docs, a Storybook story, a test fixture and a changelog screenshot all
+ * contain colours on purpose, and none of them is the team's palette.
+ *
+ * The same principle as the third-party asset exemption: content is not
+ * convention.
+ */
+const ILLUSTRATIVE_PATH =
+  /(?:^|\/)(?:docs?|documentation|examples?|demos?|fixtures?|__fixtures__|stories|storybook|__tests__|tests?|spec|specs|samples?|playground|sandbox|snapshots?|__snapshots__|node_modules|vendor|changelog)(?:\/|$)|\.(?:stories|story|spec|test)\.[jt]sx?$|\.mdx?$/i;
 
 const CLUSTER_EPS = 10; // deltaE: members of one palette family
 const NEAR_DUP_EPS = 5; // deltaE: should-be-identical
@@ -102,9 +148,13 @@ const THIRD_PARTY_ASSET =
 export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[]): DriftAnalysis {
   const trendByHex = new Map(trends.map((t) => [t.value.toLowerCase(), t]));
 
-  // aggregate usage per canonical hex (non-neutral only for palette work)
+  // aggregate usage per canonical hex (non-neutral only for palette work).
+  // Illustrative files are excluded: a colour in a docs example or a Storybook
+  // story is the subject of the page, not a decision the team made about its own
+  // product.
   const usage = new Map<string, ColorUsage[]>();
   for (const c of extraction.colors) {
+    if (ILLUSTRATIVE_PATH.test(c.file)) continue;
     const list = usage.get(c.hex) ?? [];
     list.push(c);
     usage.set(c.hex, list);
@@ -132,12 +182,32 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
     });
   }
 
-  // attach declared tokens to their clusters
-  const declaredColorTokens = extraction.declaredTokens.filter((t) => t.resolvedHex && !isNeutral(t.resolvedHex));
+  // attach declared tokens to their clusters. A token declared inside a docs page
+  // is teaching material — `--color-clifford` in Tailwind's install guide is the
+  // literal example of this — so it is not treated as part of the palette.
+  const declaredColorTokens = extraction.declaredTokens.filter(
+    (t) => t.resolvedHex && !isNeutral(t.resolvedHex) && !ILLUSTRATIVE_PATH.test(t.file),
+  );
   for (const t of declaredColorTokens) {
     const hex = t.resolvedHex ?? "";
     const host = clusters.find((cl) => deltaE(cl.canonicalHex, hex) < CLUSTER_EPS);
-    if (host && !host.declaredAs.includes(t.name)) host.declaredAs.push(t.name);
+    if (host) {
+      if (!host.declaredAs.includes(t.name)) host.declaredAs.push(t.name);
+      continue;
+    }
+    // A declared token IS a palette member, whether or not its hex also appears
+    // as a literal somewhere. Clusters were built from literal usage alone, so a
+    // well-tokenized codebase — one that declares `--brand` once and then uses
+    // `var(--brand)` everywhere — had its palette dropped on the floor. That is
+    // exactly the codebase this product should understand best.
+    clusters.push({
+      canonicalHex: hex,
+      members: [hex],
+      totalUses: usage.get(hex)?.length ?? 0,
+      declaredAs: [t.name],
+      trend: trendByHex.get(hex)?.trend ?? "unknown",
+      sampleEvidence: [{ file: t.file, line: t.line }],
+    });
   }
 
   // brand pick — token-NAME semantics dominate: a token literally named
@@ -159,7 +229,27 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
   const ranked = [...declaredClusters].sort(
     (a, b) => nameScore(b) - nameScore(a) || b.totalUses - a.totalUses,
   );
-  const brand = ranked[0] ?? clusters[0] ?? null;
+
+  // A palette needs more than one member to be a palette. Below the threshold
+  // there is nothing to conform to, and the previous fallback — `clusters[0]`,
+  // the most frequent literal — was a guess dressed as a finding: on a
+  // utility-first codebase the colours live in class names, so the top literal is
+  // as likely to be a syntax-highlighting colour as a brand.
+  const hasPalette = declaredClusters.length >= MIN_DECLARED_FOR_PALETTE;
+  const top = ranked[0];
+  const brand = hasPalette ? (top ?? null) : null;
+  const brandConfidence: BrandConfidence = !brand
+    ? "none"
+    : nameScore(brand) > 0
+      ? "named"
+      : "declared";
+  const brandReason = brand
+    ? brandConfidence === "named"
+      ? `${brand.canonicalHex} is declared as ${brand.declaredAs.join(", ")} — the team named it.`
+      : `${brand.canonicalHex} leads ${declaredClusters.length} declared tokens on usage, but nothing is named brand/primary/accent, so this is inferred rather than stated.`
+    : declaredColorTokens.length === 0
+      ? "No declared colour tokens outside documentation and examples. This codebase most likely expresses colour through utility classes, which this learner cannot read — so no palette conclusions are drawn."
+      : `Only ${declaredColorTokens.length} declared colour token(s) found, which is not a palette. No palette conclusions are drawn.`;
 
   const findings: Finding[] = [];
 
@@ -168,9 +258,6 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
     for (const asset of extraction.assets) {
       const assetChromatic = asset.paletteHexes.filter((h) => !isNeutral(h));
       if (assetChromatic.length === 0) continue;
-      const minDist = Math.min(...assetChromatic.map((h) => deltaE(h, brand.canonicalHex)));
-      if (minDist <= FAR_FROM_PALETTE) continue;
-      const assetTrends = assetChromatic.map((h) => trendByHex.get(h)?.trend ?? "unknown");
 
       // Identity assets (logos, brand marks) are held to a stricter standard:
       // a LOGO in a foreign palette is drift by definition, referenced or not.
@@ -180,6 +267,25 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
       // badges, payment marks and social icons all carry someone else's palette
       // on purpose, so flagging them is pure noise.
       const isThirdPartyMark = THIRD_PARTY_ASSET.test(asset.file);
+
+      // Which baseline depends on what the asset IS.
+      //
+      // A general asset is judged against the whole declared palette: an icon
+      // drawn in the declared success green is not drift because the brand is
+      // purple.
+      //
+      // An IDENTITY asset — a logo, a brand mark — is judged against the brand
+      // alone. Judging it against the whole palette hides the exact case this
+      // was built for: the pilot's legacy logo is navy and gold, and those are
+      // still declared tokens because the migration to purple is unfinished. By
+      // "is it near anything we declare?" the old logo looks fine. By "is it the
+      // brand?" it is obviously stale, which is the truth.
+      const baseline = isIdentityAsset ? [brand] : declaredClusters;
+      const minDist = Math.min(
+        ...assetChromatic.map((h) => Math.min(...baseline.map((d) => deltaE(h, d.canonicalHex)))),
+      );
+      if (minDist <= FAR_FROM_PALETTE) continue;
+      const assetTrends = assetChromatic.map((h) => trendByHex.get(h)?.trend ?? "unknown");
 
       // Colours that are dying or gone in the history are real evidence. "unknown"
       // is NOT: an SVG's colours rarely appear as literals in source, so the trend
@@ -277,6 +383,15 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
     if (t.trend !== "dying") continue;
     const uses = usage.get(t.value.toLowerCase());
     if (!uses || uses.length === 0) continue;
+
+    // Never say this about the brand. This file's own comment records the pilot
+    // lesson — a brand's LITERAL count falls as it gets tokenized, because uses
+    // move from `#6609be` to `var(--brand)`. That is a healthy migration, and raw
+    // frequency reads it as death. The finding fired on the real repository and
+    // proposed "Colour #6609be is being migrated away" about the brand itself,
+    // which is the most confidently wrong thing this learner could say.
+    const isBrandMember = brand?.members.includes(t.value.toLowerCase()) ?? false;
+    if (isBrandMember) continue;
     findings.push({
       kind: "dying_value_still_present",
       severity: "medium",
@@ -306,11 +421,16 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
   return {
     palette: clusters.slice(0, 30),
     brand,
+    brandConfidence,
+    brandReason,
     findings,
     stats: {
       scannedFiles: extraction.scannedFiles,
       distinctColors: usage.size,
-      declaredTokens: extraction.declaredTokens.length,
+      // Count what was actually used, not what was seen: documentation examples
+      // are excluded above, and reporting the raw number would overstate how much
+      // of a design system this codebase really declares.
+      declaredTokens: declaredColorTokens.length,
       assets: extraction.assets.length,
     },
   };

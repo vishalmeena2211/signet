@@ -29,10 +29,30 @@ export function renderMarkdown(repoLabel: string, a: DriftAnalysis, generatedAt:
   p(`| Findings | ${a.findings.length} (${a.findings.filter((f) => f.severity === "high").length} high) |`);
   p();
 
+  // Always state the brand conclusion AND how much it can be trusted — every
+  // palette finding rests on it, so a silent guess would make the whole report
+  // sound more certain than it is.
   if (a.brand) {
-    p(`**Inferred primary brand color:** \`${a.brand.canonicalHex}\`` +
-      (a.brand.declaredAs.length ? ` (declared as ${a.brand.declaredAs.map((d) => `\`${d}\``).join(", ")})` : "") +
-      ` · ${a.brand.totalUses} uses · trend: ${a.brand.trend}`);
+    p(
+      `**Brand colour:** \`${a.brand.canonicalHex}\`` +
+        (a.brand.declaredAs.length
+          ? ` (declared as ${a.brand.declaredAs.map((d) => `\`${d}\``).join(", ")})`
+          : "") +
+        ` · ${a.brand.totalUses} uses · trend: ${a.brand.trend} · confidence: **${a.brandConfidence}**`,
+    );
+    p();
+    p(`> ${a.brandReason}`);
+    p();
+  } else {
+    p(`**Brand colour: could not be determined.**`);
+    p();
+    p(`> ${a.brandReason}`);
+    p();
+    p(
+      `Because of that, no palette conformance findings are reported here. ` +
+        `Asset and colour rules would otherwise be measured against a guess, ` +
+        `and a confident-sounding rule derived from a guess is worse than no rule.`,
+    );
     p();
   }
 
