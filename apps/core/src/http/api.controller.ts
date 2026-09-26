@@ -11,6 +11,9 @@ import {
   IncrementDiffViewSchema,
   LearnRequestSchema,
   ApproveDesignRequestSchema,
+  DispatcherControlRequestSchema,
+  DispatcherStateSchema,
+  RunIdSchema,
 } from "@signet/contracts";
 import type { ConsoleViews } from "../services/console-views.js";
 import type { Signatures } from "../services/signatures.js";
@@ -18,6 +21,10 @@ import type { Controls } from "../services/controls.js";
 import type { RuleStore } from "../services/rule-store.js";
 import type { DesignStore } from "../services/design-store.js";
 import type { DiffReader } from "../services/diff-reader.js";
+import type { OperatorViews } from "../services/operator-views.js";
+import type { OperatorStateStore } from "../services/operator-state.js";
+import type { SystemInfoService } from "../services/system-info.js";
+import type { Dispatcher } from "../services/dispatcher.js";
 import type { Realtime } from "./realtime.gateway.js";
 
 export const TOKENS = {
@@ -27,6 +34,10 @@ export const TOKENS = {
   rules: "signet.rules",
   designs: "signet.designs",
   diffs: "signet.diffs",
+  operator: "signet.operator",
+  operatorState: "signet.operatorState",
+  system: "signet.system",
+  dispatcher: "signet.dispatcherControl",
   realtime: "signet.realtime",
   activeWorkers: "signet.activeWorkers",
 } as const;
@@ -41,6 +52,11 @@ export class ApiController {
     @Inject(TOKENS.designs) private readonly designs: DesignStore,
     @Inject(TOKENS.diffs) private readonly diffs: DiffReader,
     @Inject(TOKENS.realtime) private readonly realtime: Realtime,
+    @Inject(TOKENS.operator) private readonly operator: OperatorViews,
+    @Inject(TOKENS.operatorState) private readonly operatorState: OperatorStateStore,
+    // `system_` because `system` is the route handler's name.
+    @Inject(TOKENS.system) private readonly system_: SystemInfoService,
+    @Inject(TOKENS.dispatcher) private readonly dispatcher: Dispatcher,
     @Inject(TOKENS.activeWorkers) private readonly activeWorkers: () => number,
   ) {}
 
@@ -53,6 +69,72 @@ export class ApiController {
   @Get("features")
   async features() {
     return this.views.featuresBoard();
+  }
+
+  // ── operator visibility: the whole instance, not one feature ──
+
+  @Get("overview")
+  async overview() {
+    return this.operator.overview();
+  }
+
+  @Get("runs")
+  async runs(@Query("outcome") outcome?: string, @Query("incrementId") incrementId?: string, @Query("limit") limit?: string) {
+    const n = Number(limit ?? 100);
+    return this.operator.runs({
+      ...(outcome ? { outcome } : {}),
+      ...(incrementId ? { incrementId } : {}),
+      limit: Number.isFinite(n) ? Math.min(Math.max(n, 1), 500) : 100,
+    });
+  }
+
+  @Get("runs/:id")
+  async run(@Param("id") id: string) {
+    const detail = await this.operator.runDetail(RunIdSchema.parse(id));
+    if (!detail) throw new NotFoundException();
+    return detail;
+  }
+
+  /** What the agent knew when it wrote the code. */
+  @Get("increments/:id/pack")
+  async pack(@Param("id") id: string) {
+    const view = await this.operator.pack(IncrementIdSchema.parse(id));
+    if (!view) throw new NotFoundException();
+    return view;
+  }
+
+  @Get("activity")
+  async activityFeed(@Query("limit") limit?: string) {
+    const n = Number(limit ?? 100);
+    return this.operator.activityFeed(Number.isFinite(n) ? Math.min(Math.max(n, 1), 500) : 100);
+  }
+
+  @Get("system")
+  async system() {
+    return this.system_.info();
+  }
+
+  // ── operational control ──
+
+  @Get("dispatcher")
+  async dispatcherState() {
+    return DispatcherStateSchema.parse(this.dispatcher.state());
+  }
+
+  /**
+   * Hold or release the whole pipeline, and change the worker ceiling. Held
+   * work stays in the outbox, so this is a pause rather than a cancellation.
+   */
+  @Post("dispatcher")
+  async controlDispatcher(@Body() body: unknown) {
+    const req = DispatcherControlRequestSchema.parse(body);
+    if (req.paused !== undefined) this.dispatcher.setPaused(req.paused);
+    if (req.maxWorkers !== undefined) this.dispatcher.setMaxWorkers(req.maxWorkers);
+    const state = this.dispatcher.state();
+    // Remember the decision so a restart does not silently resume.
+    await this.operatorState.save({ paused: state.paused, maxWorkers: state.maxWorkers });
+    this.realtime.broadcast({ kind: "quota_changed" });
+    return DispatcherStateSchema.parse(state);
   }
 
   @Get("features/:id")

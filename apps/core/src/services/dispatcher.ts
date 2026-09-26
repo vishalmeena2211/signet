@@ -43,6 +43,14 @@ export class Dispatcher {
   private active = 0;
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
+  /**
+   * Operator hold. Distinct from `stopped`, which means the process is shutting
+   * down: a paused dispatcher is alive and still finishing its in-flight
+   * workers, it simply claims nothing new. Held work stays in the outbox and
+   * resumes on unpause with no re-queueing.
+   */
+  private paused = false;
+  private maxWorkers: number;
   private readonly controllers = new Map<string, AbortController>();
 
   /** Abort a live worker by runId; returns whether one was signalled. */
@@ -57,6 +65,26 @@ export class Dispatcher {
     return this.active;
   }
 
+  /** What the console shows and controls. */
+  state(): { paused: boolean; maxWorkers: number; activeWorkers: number } {
+    return { paused: this.paused, maxWorkers: this.maxWorkers, activeWorkers: this.active };
+  }
+
+  setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    this.log.info(paused ? "dispatcher.paused" : "dispatcher.resumed", { activeWorkers: this.active });
+    // Resuming should feel immediate rather than waiting out the poll interval.
+    if (!paused) void this.tick();
+  }
+
+  setMaxWorkers(n: number): void {
+    // Lowering the cap never interrupts a worker already running; it just stops
+    // new claims until the count falls below the new ceiling.
+    this.maxWorkers = n;
+    this.log.info("dispatcher.max_workers_changed", { maxWorkers: n, activeWorkers: this.active });
+  }
+
   constructor(
     private readonly uow: UnitOfWork,
     private readonly engine: RunEngine,
@@ -64,7 +92,9 @@ export class Dispatcher {
     private readonly opts: DispatcherOptions,
     private readonly log: Logger,
     private readonly onOutcome: (runId: string, incrementId: string, outcome: RunOutcome) => Promise<void>,
-  ) {}
+  ) {
+    this.maxWorkers = opts.maxConcurrentWorkers;
+  }
 
   start(): void {
     this.stopped = false;
@@ -80,13 +110,13 @@ export class Dispatcher {
 
   /** One poll: claim as many due messages as free worker slots allow. */
   async tick(): Promise<void> {
-    if (this.stopped) return;
+    if (this.stopped || this.paused) return;
 
     // Quota gate: when the shared window is exhausted, nothing dispatches.
     const q = await this.quota.current();
     if (q?.exhausted) return;
 
-    const free = this.opts.maxConcurrentWorkers - this.active;
+    const free = this.maxWorkers - this.active;
     if (free <= 0) return;
 
     const claimed = await this.uow.run(async (tx) => tx.outbox.claimDue(free));

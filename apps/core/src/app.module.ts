@@ -27,7 +27,11 @@ import { rulesGate } from "./domain/gates/rules-gate.js";
 import { conformanceGate } from "./domain/gates/conformance-gate.js";
 import { makeRunOnBase } from "./domain/gates/base-overlay.js";
 import { DesignStore } from "./services/design-store.js";
+import { join } from "node:path";
 import { DiffReader } from "./services/diff-reader.js";
+import { OperatorViews } from "./services/operator-views.js";
+import { OperatorStateStore } from "./services/operator-state.js";
+import { SystemInfoService } from "./services/system-info.js";
 import { checkScope } from "./domain/pipeline/scope-checker.js";
 import { RunEngine } from "./services/run-engine.js";
 import { ClaudeAgentDriver } from "./services/claude-agent-driver.js";
@@ -48,6 +52,14 @@ const UOW = "signet.uow";
 export const LOGGER = "signet.logger";
 const DISPATCHER = "signet.dispatcher";
 
+/**
+ * Left unpinned so a run uses whatever the operator's Claude Code is configured
+ * to use — we drive their subscription, we do not choose their model. Tests pin
+ * a cheap model explicitly; the System screen reports this value as it is, so
+ * "not pinned" shows as exactly that rather than a model we never requested.
+ */
+const AGENT_MODEL: string | null = null;
+
 function buildDispatcher(
   cfg: SignetConfig,
   uow: PrismaUnitOfWork,
@@ -59,7 +71,10 @@ function buildDispatcher(
 ): Dispatcher {
   const worktrees = new WorktreeManager(cfg.targetRepoPath, cfg.workspacesRoot);
   const adapter = new ClaudeAdapter({ binary: cfg.claudeBinary, timeoutMs: 20 * 60_000 }, log);
-  const driver = new ClaudeAgentDriver(adapter, { maxTurns: 60 });
+  const driver = new ClaudeAgentDriver(adapter, {
+    maxTurns: 60,
+    ...(AGENT_MODEL !== null ? { model: AGENT_MODEL } : {}),
+  });
   const targetLabel = cfg.targetRepoPath.split("/").filter(Boolean).pop() ?? "repo";
   const gates = new GateSuite(
     [
@@ -222,6 +237,32 @@ function buildDispatcher(
       inject: [CONFIG],
     },
     {
+      provide: TOKENS.operatorState,
+      // Lives beside the workspaces so one instance's operator decisions travel
+      // with its data directory rather than the repository checkout.
+      useFactory: (cfg: SignetConfig, log: Logger) =>
+        new OperatorStateStore(join(cfg.workspacesRoot, "..", "operator-state.json"), log),
+      inject: [CONFIG, LOGGER],
+    },
+    {
+      provide: TOKENS.system,
+      useFactory: (cfg: SignetConfig, db: PrismaClient) => new SystemInfoService(cfg, db, AGENT_MODEL),
+      inject: [CONFIG, PRISMA],
+    },
+    {
+      provide: TOKENS.operator,
+      useFactory: (db: PrismaClient, views: ConsoleViews, dispatcher: Dispatcher) =>
+        new OperatorViews(db, {
+          quotaState: (n) => views.quotaState(n),
+          activeWorkers: () => dispatcher.activeWorkers(),
+          dispatcherState: () => dispatcher.state(),
+        }),
+      inject: [PRISMA, TOKENS.views, DISPATCHER],
+    },
+    // The controller injects the dispatcher for pause/resume; aliasing keeps the
+    // controller's token vocabulary consistent with its other dependencies.
+    { provide: TOKENS.dispatcher, useExisting: DISPATCHER },
+    {
       provide: DISPATCHER,
       useFactory: buildDispatcher,
       inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime, TOKENS.rules, TOKENS.designs],
@@ -246,13 +287,21 @@ export class AppModule implements OnApplicationBootstrap, OnApplicationShutdown 
     @Inject(UOW) private readonly uow: PrismaUnitOfWork,
     @Inject(LOGGER) private readonly log: Logger,
     @Inject(PRISMA) private readonly prisma: PrismaClient,
+    @Inject(TOKENS.operatorState) private readonly operatorState: OperatorStateStore,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
     const recovered = await recoverOrphanedRuns(this.uow, this.log);
     if (recovered > 0) this.log.warn("boot.orphans_recovered", { count: recovered });
+
+    // Restore the operator's decisions BEFORE starting: a system someone paused
+    // must not resume work just because the process restarted.
+    const saved = await this.operatorState.load();
+    if (saved.maxWorkers !== undefined) this.dispatcher.setMaxWorkers(saved.maxWorkers);
+    if (saved.paused) this.dispatcher.setPaused(true);
+
     this.dispatcher.start();
-    this.log.info("boot.dispatcher_started");
+    this.log.info("boot.dispatcher_started", this.dispatcher.state());
   }
 
   async onApplicationShutdown(): Promise<void> {
