@@ -279,8 +279,10 @@ describe("pipeline control from the Overview", () => {
     render(wrap(<App />));
     const pause = await screen.findByRole("button", { name: "Pause pipeline" });
     fireEvent.click(pause);
-    // States the consequence before doing it.
-    expect(screen.getByText(/nothing new will start/i)).toBeTruthy();
+    // States the consequence before doing it, in both halves: what keeps going and
+    // what stops.
+    expect(screen.getByText(/In-flight runs finish/i)).toBeTruthy();
+    expect(screen.getByText(/nothing new starts/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Pause it" }));
 
     await waitFor(() => expect(posted.find((p) => p.path === "/api/dispatcher")?.body).toEqual({ paused: true }));

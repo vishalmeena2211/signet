@@ -9,8 +9,9 @@ import { useQuery } from "@tanstack/react-query";
 import type { RunSummary } from "@signet/contracts";
 import { api } from "../api.js";
 import { navigate, type Route } from "../router.js";
-import { Badge, Button, Card, Detail, Dot, Row, SectionTitle, Segmented, Stack } from "../ui/primitives.js";
+import { Badge, Button, Card, Detail, Dot, Row, Segmented, Stack } from "../ui/primitives.js";
 import { Drawer, EmptyState, QueryState } from "../ui/feedback.js";
+import { Forensics, Understand } from "../ui/tiers.js";
 import { DataTable, type Column } from "../ui/table.js";
 import {
   CodeBlock,
@@ -254,8 +255,7 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
               </Detail>
             </Row>
 
-            <Stack gap="var(--s2)">
-              <SectionTitle>Phase timeline</SectionTitle>
+            <Understand title="Where the time went">
               <Card padding="var(--s3)">
                 <Stack gap="var(--s2)">
                   {d.phases.map((p, i) => (
@@ -293,11 +293,10 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
                   {d.phases.length === 0 && <span style={{ color: "var(--fg-subtle)" }}>No phases recorded.</span>}
                 </Stack>
               </Card>
-            </Stack>
+            </Understand>
 
             {d.usageByModel.length > 0 && (
-              <Stack gap="var(--s2)">
-                <SectionTitle>Model usage</SectionTitle>
+              <Understand title="Model usage">
                 <Card padding="var(--s3)">
                   <Stack gap="var(--s2)">
                     {d.usageByModel.map((u) => (
@@ -317,12 +316,11 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
                     ))}
                   </Stack>
                 </Card>
-              </Stack>
+              </Understand>
             )}
 
             {d.effects.length > 0 && (
-              <Stack gap="var(--s2)">
-                <SectionTitle>Journalled effects</SectionTitle>
+              <Forensics id={`run.effects.${d.summary.id}`} label="Journalled effects" count={d.effects.length}>
                 <Card padding="var(--s3)">
                   <Stack gap="var(--s1)">
                     {d.effects.map((e) => (
@@ -340,21 +338,24 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
                 <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
                   Each effect is keyed so a replay after a crash cannot perform it twice.
                 </span>
-              </Stack>
+              </Forensics>
             )}
 
-            <Stack gap="var(--s2)">
-              <SectionTitle>Raw state</SectionTitle>
-              <CodeBlock text={prettyJson(d.stateJson)} maxHeight={200} />
-              <Row gap="var(--s5)" wrap>
-                <Detail label="Session" mono>
-                  {d.sessionRef ?? "—"}
-                </Detail>
-                <Detail label="Workspace" mono>
-                  {d.workspacePath ?? "—"}
-                </Detail>
-              </Row>
-            </Stack>
+            {/* Raw state, session ref and workspace path: the things you want at 2am
+                once a year, and clutter on every other visit. */}
+            <Forensics id={`run.raw.${d.summary.id}`} label="Raw state, session and workspace">
+              <Stack gap="var(--s3)">
+                <CodeBlock text={prettyJson(d.stateJson)} maxHeight={200} />
+                <Row gap="var(--s5)" wrap>
+                  <Detail label="Session" mono>
+                    {d.sessionRef ?? "—"}
+                  </Detail>
+                  <Detail label="Workspace" mono>
+                    {d.workspacePath ?? "—"}
+                  </Detail>
+                </Row>
+              </Stack>
+            </Forensics>
 
             <Button onClick={() => navigate({ view: "feature", id: d.summary.featureId })}>
               Open the feature →

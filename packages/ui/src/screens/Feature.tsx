@@ -25,6 +25,7 @@ import {
   TextArea,
 } from "../ui/primitives.js";
 import { ConfirmButton, ErrorNote, QueryState, useToast } from "../ui/feedback.js";
+import { Forensics, RowDivider, Understand } from "../ui/tiers.js";
 import {
   Bytes,
   CodeBlock,
@@ -236,14 +237,18 @@ function IncrementCard({
 
         {escalation && <EscalationBox escalation={escalation} onAnswered={invalidate} />}
 
-        {showDiff && (
-          <Stack gap="var(--s2)">
-            <SectionTitle>
-              {s === "AWAITING_SIGNATURE" ? "What you are about to merge" : "Changes"}
-            </SectionTitle>
-            <DiffView incrementId={inc.id} />
-          </Stack>
-        )}
+        {/* Open when a signature is being asked for — nobody should sign blind — and
+            collapsed once merged, when it becomes history rather than a decision. */}
+        {showDiff &&
+          (s === "AWAITING_SIGNATURE" ? (
+            <Understand title="What you are about to merge">
+              <DiffView incrementId={inc.id} />
+            </Understand>
+          ) : (
+            <Forensics id={`diff.${inc.id}`} label="Changes">
+              <DiffView incrementId={inc.id} />
+            </Forensics>
+          ))}
 
         <ErrorNote error={failure} onDismiss={() => acts.forEach((a) => a.reset())} />
 
@@ -282,16 +287,31 @@ function IncrementCard({
                 Abort
               </ConfirmButton>
             )}
-            <PackButton incrementId={inc.id} />
           </Row>
           {activity && <ActivitySummary activity={activity} />}
         </Row>
 
-        {activity && activity.phases.length > 0 && <PhaseRail activity={activity} />}
-
-        <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-xs)", fontFamily: "var(--mono)" }}>
-          declared surface: {inc.declaredSurface.join(", ") || "—"}
-        </span>
+        {/* Tier three. Real information, wanted rarely: how long each phase took,
+            what the agent was given, and what it was allowed to touch. Collapsed by
+            default and remembered once opened. */}
+        <RowDivider />
+        <Forensics id={`detail.${inc.id}`} label="Run detail, context pack and surface">
+          <Stack gap="var(--s4)">
+            {activity && activity.phases.length > 0 && (
+              <Understand title="Phases">
+                <PhaseRail activity={activity} />
+              </Understand>
+            )}
+            <Understand title="What it knew">
+              <PackPanel incrementId={inc.id} />
+            </Understand>
+            <Understand title="Declared surface">
+              <span style={{ fontFamily: "var(--mono)", fontSize: "var(--fs-sm)", color: "var(--fg-muted)" }}>
+                {inc.declaredSurface.join(", ") || "—"}
+              </span>
+            </Understand>
+          </Stack>
+        </Forensics>
       </Stack>
     </Card>
   );
@@ -326,30 +346,16 @@ function Findings({ verdict }: { verdict: GateVerdictView }) {
   );
 }
 
-/** "What did the agent know" — the pack manifest, on demand. */
-function PackButton({ incrementId }: { incrementId: string }) {
-  const [open, setOpen] = useState(false);
-  const q = useQuery({
-    queryKey: ["pack", incrementId],
-    queryFn: () => api.pack(incrementId),
-    enabled: open,
-  });
+/**
+ * The context pack the agent was given. Lives inside the forensics disclosure, so
+ * it has no toggle of its own — and it only fetches once that disclosure is open,
+ * which is why `enabled` tracks mount rather than a local flag.
+ */
+function PackPanel({ incrementId }: { incrementId: string }) {
+  const q = useQuery({ queryKey: ["pack", incrementId], queryFn: () => api.pack(incrementId) });
 
-  if (!open) {
-    return (
-      <Button variant="quiet" onClick={() => setOpen(true)} title="The context pack the agent was given">
-        What it knew
-      </Button>
-    );
-  }
   return (
     <Stack gap="var(--s2)" style={{ width: "100%" }}>
-      <Row justify="space-between">
-        <strong>Context pack</strong>
-        <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
-          hide
-        </Button>
-      </Row>
       {q.isPending && <span style={{ color: "var(--fg-muted)" }}>Reading the manifest…</span>}
       {q.error && <ErrorNote error={q.error} />}
       {q.data === null && (

@@ -169,11 +169,13 @@ describe("the console mounts", () => {
 
   it("puts the needs-you queue first, with an action on it", async () => {
     render(wrap(<App />));
-    await waitFor(() => expect(screen.getByText("Needs signature 2")).toBeTruthy());
+    // The focal heading is the screen's subject, and the queue sits under it.
+    await waitFor(() => expect(screen.getByRole("heading", { level: 2, name: "Needs you" })).toBeTruthy());
+    // Every waiting item says what it needs and offers the action that resolves it.
+    expect(screen.getByText(/needs signature 2/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /Review & merge/ })).toBeTruthy();
-    // The wait time is shown, because a queue you cannot see ageing is a queue
-    // that grows.
-    expect(screen.getByText(/waiting/)).toBeTruthy();
+    // And how long it has been waiting, because a queue you cannot see ageing grows.
+    expect(screen.getByText(/ago/)).toBeTruthy();
   });
 
   it.each([
