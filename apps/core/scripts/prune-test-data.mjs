@@ -12,7 +12,10 @@
 // guessed at.
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/persistence/generated/client.js";
+// From dist, not src: at runtime the generated client under src/ is TypeScript.
+// The sibling scripts do the same; this one was written against src by mistake
+// and failed the moment it was first run.
+import { PrismaClient } from "../dist/persistence/generated/client.js";
 
 /** Exactly the titles seeded by the test suites. Deliberately not a pattern. */
 const TEST_TITLES = [
