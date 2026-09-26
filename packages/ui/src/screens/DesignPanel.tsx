@@ -114,7 +114,7 @@ function ApprovedDesign({ record, onReopen }: { record: DesignOfRecord; onReopen
 
         <Row justify="space-between" wrap gap="var(--s2)">
           <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-            Where this disagrees with your brief, this wins — and the check
+            Where this disagrees with what you asked for, this wins — and the check
             blocks a merge that does not match it.
           </span>
           {onReopen && (
@@ -204,7 +204,7 @@ function DesignForm({
 
         <Row gap="var(--s3)" wrap align="flex-start">
           <div style={{ flex: "1 1 260px" }}>
-            <Field label="Forbidden colours" hint="Blocked outright — useful when a brief asks for something off-brand.">
+            <Field label="Forbidden colours" hint="Blocked outright — useful when a request asks for something off-brand.">
               <Input value={forbiddenColors} onChange={setForbiddenColors} placeholder="#ff5722" mono />
             </Field>
           </div>

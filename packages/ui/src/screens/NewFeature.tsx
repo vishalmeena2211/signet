@@ -48,7 +48,7 @@ export function NewFeature() {
     title.trim().length === 0
       ? "Give the feature a title."
       : brief.trim().length < 20
-        ? "The brief is what Signet works from — a sentence or two at minimum, with an example if you can."
+        ? "This is what Signet works from — a sentence or two at minimum, with an example if you can."
         : usable.length === 0
           ? "Add at least one step, with a name and the files it may change."
           : null;
@@ -69,8 +69,8 @@ export function NewFeature() {
           </Field>
 
           <Field
-            label="Brief"
-            hint="What to build, with an example if you have one. This is saved as-is the moment you create the feature, and everything Signet builds is judged against it — so it is worth being concrete now rather than in a follow-up."
+            label="What you want built"
+            hint="Describe it, with an example if you have one. This is saved as-is the moment you create the feature, and everything Signet builds is judged against it — so it is worth being concrete now rather than in a follow-up."
           >
             <TextArea
               value={brief}

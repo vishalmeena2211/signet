@@ -37,6 +37,9 @@ const BANNED: { word: RegExp; say: string }[] = [
   { word: /\bdemoted\b/i, say: "set aside" },
   { word: /\bconformance\b/i, say: "design check" },
   { word: /\bquota window\b/i, say: "Claude quota" },
+  // "briefing" is our word for the context pack and must survive, so this is
+  // anchored to the standalone noun.
+  { word: /\bbriefs?\b/i, say: "what you want built / what you asked for" },
 ];
 
 /**

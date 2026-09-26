@@ -54,7 +54,7 @@ const GATE_MEANING: Record<string, string> = {
 
 const TABS = [
   { value: "increments", label: "Steps" },
-  { value: "brief", label: "Brief" },
+  { value: "brief", label: "Files" },
   { value: "runs", label: "Runs" },
 ] as const;
 
@@ -127,7 +127,7 @@ export function Feature({ route }: { route: Extract<Route, { view: "feature" }> 
             </Stack>
           )}
 
-          {tab === "brief" && <BriefTab increments={q.data.increments} />}
+          {tab === "brief" && <FilesTab increments={q.data.increments} />}
           {tab === "runs" && <RunsTab featureId={route.id} increments={q.data.increments} />}
         </Stack>
       )}
@@ -454,7 +454,7 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
   const mut = useMutation({
     mutationFn: () => api.answerEscalation(escalation.id, answer),
     onSuccess: () => {
-      toast.push("Answered — your brief is updated and work continues", "ok");
+      toast.push("Answered — Signet has what it needs, and work continues", "ok");
       onAnswered();
     },
   });
@@ -474,7 +474,7 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
           value={answer}
           onChange={setAnswer}
           rows={3}
-          placeholder="Your answer is added to the brief, and work picks up from there."
+          placeholder="Your answer is added to what you asked for, and work picks up from there."
         />
         <ErrorNote error={mut.error} onDismiss={() => mut.reset()} />
         <Button
@@ -490,7 +490,7 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
   );
 }
 
-function BriefTab({ increments }: { increments: IncrementDetail[] }) {
+function FilesTab({ increments }: { increments: IncrementDetail[] }) {
   return (
     <Stack gap="var(--s3)">
       <SectionTitle>Files each step may change</SectionTitle>
@@ -508,8 +508,8 @@ function BriefTab({ increments }: { increments: IncrementDetail[] }) {
         </Stack>
       </Card>
       <span style={{ color: "var(--fg-muted)", fontSize: "var(--fs-sm)" }}>
-        This is the boundary for each step: a change outside it is caught by the
-        scope checker rather than reviewed on trust.
+        This is the boundary for each step. Anything changed outside it is caught
+        automatically, rather than relying on someone spotting it in review.
       </span>
     </Stack>
   );
