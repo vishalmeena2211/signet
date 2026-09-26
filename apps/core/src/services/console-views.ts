@@ -5,12 +5,15 @@
 import {
   ActivityViewSchema,
   EscalationViewSchema,
+  BriefVersionViewSchema,
   FeatureSummarySchema,
   GateVerdictViewSchema,
   IncrementDetailSchema,
   IncrementStateSchema,
   QuotaStateViewSchema,
+  nonRecoverable,
   type ActivityView,
+  type BriefVersionView,
   type EscalationView,
   type FeatureSummary,
   type GateVerdictView,
@@ -66,25 +69,63 @@ export class ConsoleViews {
     });
   }
 
-  async featureDetail(featureId: string): Promise<{ feature: FeatureSummary; increments: IncrementDetail[] }> {
+  async featureDetail(
+    featureId: string,
+  ): Promise<{ feature: FeatureSummary; increments: IncrementDetail[]; briefs: BriefVersionView[] }> {
     const board = await this.featuresBoard();
     const feature = board.find((f) => f.id === featureId);
-    if (!feature) throw new Error(`feature not found: ${featureId}`);
+    if (!feature) {
+      throw Object.assign(new Error(`feature not found: ${featureId}`), {
+        signet: nonRecoverable("feature.not_found", `no feature with id ${featureId}`),
+      });
+    }
     const rows = await this.db.increment.findMany({
       where: { featureId },
       orderBy: { orderIndex: "asc" },
     });
-    const increments = rows.map((r) =>
-      IncrementDetailSchema.parse({
-        id: r.id,
-        featureId: r.featureId,
-        title: r.title,
-        state: IncrementStateSchema.parse(JSON.parse(r.stateJson)), // signet-policy-allow: raw-json-parse -- immediately schema-validated on this line
-        declaredSurface: r.declaredSurface,
-        repairAttempt: r.repairAttempt,
+    const increments = rows.map((r) => {
+      try {
+        return IncrementDetailSchema.parse({
+          id: r.id,
+          featureId: r.featureId,
+          title: r.title,
+          state: IncrementStateSchema.parse(JSON.parse(r.stateJson)), // signet-policy-allow: raw-json-parse -- immediately schema-validated on this line
+          declaredSurface: r.declaredSurface,
+          repairAttempt: r.repairAttempt,
+          briefVersionId: r.briefVersionId,
+        });
+      } catch (e) {
+        // A stored row that no longer satisfies the schema is OUR problem, not the
+        // caller's. Letting the raw ZodError escape would report it as a 400 and
+        // blame the request for corrupt data — so it is retyped, naming the row so
+        // the fault can actually be found.
+        throw Object.assign(new Error(`stored state for increment ${r.id} is unreadable`), {
+          signet: nonRecoverable(
+            "increment.corrupt_state",
+            `Step ${r.title} has stored state this version cannot read: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`,
+          ),
+        });
+      }
+    });
+
+    // Newest first: the current request is what you want to read, and the earlier
+    // ones are history. Returned in full rather than just the latest, because
+    // "what changed when I answered that question" is the reason to keep versions
+    // at all.
+    const briefRows = await this.db.briefVersion.findMany({
+      where: { featureId },
+      orderBy: { version: "desc" },
+    });
+    const briefs = briefRows.map((b) =>
+      BriefVersionViewSchema.parse({
+        id: b.id,
+        version: b.version,
+        contentMd: b.contentMd,
+        frozenAt: b.frozenAt.toISOString(),
       }),
     );
-    return { feature, increments };
+
+    return { feature, increments, briefs };
   }
 
   async latestVerdicts(incrementId: string): Promise<GateVerdictView[]> {

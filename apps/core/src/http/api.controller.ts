@@ -162,19 +162,19 @@ export class ApiController {
 
   @Get("features/:id")
   async feature(@Param("id") id: string) {
-    try {
-      const detail = await this.views.featureDetail(id);
-      const verdicts: Record<string, unknown> = {};
-      const activity: Record<string, unknown> = {};
-      for (const inc of detail.increments) {
-        verdicts[inc.id] = await this.views.latestVerdicts(inc.id);
-        activity[inc.id] = await this.views.activity(inc.id);
-      }
-      const escalations = await this.views.openEscalations(id);
-      return { ...detail, verdicts, activity, escalations };
-    } catch {
-      throw new NotFoundException();
+    // No try/catch swallowing everything into a 404. A missing feature raises a
+    // typed not_found that the error filter maps to 404 with a reason; anything
+    // else — a parse failure on corrupt state, a database fault — is a real
+    // problem and must say so, rather than claiming the feature does not exist.
+    const detail = await this.views.featureDetail(id);
+    const verdicts: Record<string, unknown> = {};
+    const activity: Record<string, unknown> = {};
+    for (const inc of detail.increments) {
+      verdicts[inc.id] = await this.views.latestVerdicts(inc.id);
+      activity[inc.id] = await this.views.activity(inc.id);
     }
+    const escalations = await this.views.openEscalations(id);
+    return { ...detail, verdicts, activity, escalations };
   }
 
   @Post("features")

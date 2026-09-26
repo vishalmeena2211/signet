@@ -8,6 +8,7 @@
 import { z } from "zod";
 import {
   ActivityViewSchema,
+  BriefVersionViewSchema,
   DesignOfRecordSchema,
   EscalationViewSchema,
   FeatureSummarySchema,
@@ -36,6 +37,7 @@ import {
   type ContextGraph,
   type GithubRepoList,
   type ActivityView,
+  type BriefVersionView,
   type ApproveDesignRequest,
   type CreateFeatureRequest,
   type DesignOfRecord,
@@ -113,6 +115,7 @@ export const api = {
       z.object({
         feature: FeatureSummarySchema,
         increments: z.array(IncrementDetailSchema),
+        briefs: z.array(BriefVersionViewSchema),
         verdicts: z.record(z.string(), z.array(GateVerdictViewSchema)),
         activity: z.record(z.string(), ActivityViewSchema),
         escalations: z.array(EscalationViewSchema),
@@ -120,6 +123,7 @@ export const api = {
     ) as Promise<{
       feature: FeatureSummary;
       increments: IncrementDetail[];
+      briefs: BriefVersionView[];
       verdicts: Record<string, GateVerdictView[]>;
       activity: Record<string, ActivityView>;
       escalations: EscalationView[];

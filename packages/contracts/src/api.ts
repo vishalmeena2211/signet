@@ -16,6 +16,21 @@ export const FeatureSummarySchema = z.object({
 });
 export type FeatureSummary = z.infer<typeof FeatureSummarySchema>;
 
+/**
+ * What the operator asked for, as they wrote it.
+ *
+ * Versioned because answering a question amends it: the answer becomes a new
+ * version rather than editing the old one, so "what was this built against" always
+ * has an answer. Each step records which version it was built from.
+ */
+export const BriefVersionViewSchema = z.object({
+  id: z.string(),
+  version: z.number().int(),
+  contentMd: z.string(),
+  frozenAt: z.iso.datetime(),
+});
+export type BriefVersionView = z.infer<typeof BriefVersionViewSchema>;
+
 export const IncrementDetailSchema = z.object({
   id: IncrementIdSchema,
   featureId: FeatureIdSchema,
@@ -23,6 +38,8 @@ export const IncrementDetailSchema = z.object({
   state: IncrementStateSchema,
   declaredSurface: z.array(z.string()),
   repairAttempt: z.number().int().min(0),
+  /** Which version of the request this step was built from. */
+  briefVersionId: z.string(),
 });
 export type IncrementDetail = z.infer<typeof IncrementDetailSchema>;
 

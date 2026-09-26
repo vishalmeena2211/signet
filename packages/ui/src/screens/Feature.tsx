@@ -8,7 +8,13 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ActivityView, EscalationView, GateVerdictView, IncrementDetail } from "@signet/contracts";
+import type {
+  ActivityView,
+  BriefVersionView,
+  EscalationView,
+  GateVerdictView,
+  IncrementDetail,
+} from "@signet/contracts";
 import { api } from "../api.js";
 import { navigate, type Route } from "../router.js";
 import {
@@ -24,7 +30,7 @@ import {
   Stack,
   TextArea,
 } from "../ui/primitives.js";
-import { ConfirmButton, ErrorNote, QueryState, useToast } from "../ui/feedback.js";
+import { ConfirmButton, EmptyState, ErrorNote, QueryState, useToast } from "../ui/feedback.js";
 import { Forensics, RowDivider, Understand } from "../ui/tiers.js";
 import {
   Bytes,
@@ -54,7 +60,7 @@ const GATE_MEANING: Record<string, string> = {
 
 const TABS = [
   { value: "increments", label: "Steps" },
-  { value: "brief", label: "Files" },
+  { value: "brief", label: "What you asked for" },
   { value: "runs", label: "Runs" },
 ] as const;
 
@@ -127,7 +133,7 @@ export function Feature({ route }: { route: Extract<Route, { view: "feature" }> 
             </Stack>
           )}
 
-          {tab === "brief" && <FilesTab increments={q.data.increments} />}
+          {tab === "brief" && <RequestTab briefs={q.data.briefs} increments={q.data.increments} />}
           {tab === "runs" && <RunsTab featureId={route.id} increments={q.data.increments} />}
         </Stack>
       )}
@@ -490,27 +496,127 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
   );
 }
 
-function FilesTab({ increments }: { increments: IncrementDetail[] }) {
+/**
+ * What you asked for, read back.
+ *
+ * This did not exist: the request was write-only. You typed it once, every check
+ * was judged against it, and no screen in the console could show it to you — the
+ * tab that looked like it did was listing file paths. When a step is blocked, the
+ * first question is "what did I actually ask for?", and the answer was nowhere.
+ *
+ * Versions matter here. Answering a question does not edit the request, it adds a
+ * version — so each step records which one it was built from, and a step built
+ * before you answered was working from different instructions. That is worth
+ * seeing when you are deciding whether a check is being unfair.
+ */
+function RequestTab({
+  briefs,
+  increments,
+}: {
+  briefs: BriefVersionView[];
+  increments: IncrementDetail[];
+}) {
+  const current = briefs[0];
+  const earlier = briefs.slice(1);
+  const versionById = new Map(briefs.map((b) => [b.id, b.version]));
+
+  if (!current) {
+    return (
+      <EmptyState
+        title="Nothing recorded"
+        body="This feature has no saved request, which should not happen — every feature is created with one."
+      />
+    );
+  }
+
   return (
-    <Stack gap="var(--s3)">
-      <SectionTitle>Files each step may change</SectionTitle>
-      <Card>
-        <Stack gap="var(--s3)">
-          {increments.map((inc) => (
-            <Stack key={inc.id} gap="var(--s1)">
-              <Row gap="var(--s2)">
-                <strong>{inc.title}</strong>
-                <StateBadge status={inc.state.status} />
-              </Row>
-              <CodeBlock text={inc.declaredSurface.join("\n") || "(no limit set)"} maxHeight={120} />
-            </Stack>
-          ))}
-        </Stack>
-      </Card>
-      <span style={{ color: "var(--fg-muted)", fontSize: "var(--fs-sm)" }}>
-        This is the boundary for each step. Anything changed outside it is caught
-        automatically, rather than relying on someone spotting it in review.
-      </span>
+    <Stack gap="var(--s5)">
+      <Understand
+        title={briefs.length > 1 ? `Current request · version ${current.version}` : "Your request"}
+        meta={
+          <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
+            saved <RelativeTime iso={current.frozenAt} />
+          </span>
+        }
+      >
+        {/* Rendered as written, whitespace preserved. Not parsed as Markdown: a
+            renderer is a dependency and a fidelity risk, and showing the text
+            exactly as it was typed is the point of this screen. */}
+        <Card>
+          <div
+            style={{
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+              fontSize: "var(--fs-md)",
+              lineHeight: 1.65,
+            }}
+          >
+            {current.contentMd}
+          </div>
+        </Card>
+      </Understand>
+
+      {earlier.length > 0 && (
+        <Forensics
+          id="feature.brief.history"
+          label="Earlier versions"
+          count={earlier.length}
+        >
+          <Stack gap="var(--s3)">
+            <span style={{ color: "var(--fg-muted)", fontSize: "var(--fs-sm)" }}>
+              Each answer you gave to a question was added as a new version rather than
+              editing the old one, so nothing you wrote is ever overwritten.
+            </span>
+            {earlier.map((b) => (
+              <Stack key={b.id} gap="var(--s1)">
+                <Row gap="var(--s2)">
+                  <Badge mono>version {b.version}</Badge>
+                  <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
+                    <RelativeTime iso={b.frozenAt} />
+                  </span>
+                </Row>
+                <Card padding="var(--s3)">
+                  <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", color: "var(--fg-muted)" }}>
+                    {b.contentMd}
+                  </div>
+                </Card>
+              </Stack>
+            ))}
+          </Stack>
+        </Forensics>
+      )}
+
+      <Understand title="Files each step may change">
+        <Card>
+          <Stack gap="var(--s3)">
+            {increments.map((inc) => {
+              const builtFrom = versionById.get(inc.briefVersionId);
+              const stale = builtFrom !== undefined && builtFrom !== current.version;
+              return (
+                <Stack key={inc.id} gap="var(--s1)">
+                  <Row gap="var(--s2)" wrap>
+                    <strong>{inc.title}</strong>
+                    <StateBadge status={inc.state.status} />
+                    {/* A step built before you answered a question was working from
+                        older instructions. Saying so beats letting someone wonder
+                        why it did not follow the latest wording. */}
+                    {stale && (
+                      <span title={`Built from version ${builtFrom}; the current request is version ${current.version}.`}>
+                        <Badge tone="warn">built from version {builtFrom}</Badge>
+                      </span>
+                    )}
+                  </Row>
+                  <CodeBlock text={inc.declaredSurface.join("\n") || "(no limit set)"} maxHeight={120} />
+                </Stack>
+              );
+            })}
+          </Stack>
+        </Card>
+        <span style={{ color: "var(--fg-muted)", fontSize: "var(--fs-sm)" }}>
+          This is the boundary for each step. Anything changed outside it is caught
+          automatically, rather than relying on someone spotting it in review.
+        </span>
+      </Understand>
     </Stack>
   );
 }

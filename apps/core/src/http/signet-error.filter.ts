@@ -44,7 +44,10 @@ const SENTENCE: Record<string, (detail: string) => string> = {
     `the increment changed while you were looking at it (${d}). Reload to see where it got to.`,
   "quota.exhausted": () =>
     "the Claude Code quota window is exhausted. Parked work resumes by itself when the window resets.",
-  "increment.not_found": () => "that increment no longer exists.",
+  "increment.not_found": () => "that step no longer exists.",
+  "feature.not_found": () => "that feature no longer exists.",
+  "increment.corrupt_state": (d) =>
+    `${d} This is a data problem on our side, not something you did.`,
 };
 
 function humanise(err: SignetError): string {
