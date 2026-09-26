@@ -143,12 +143,21 @@ function LearnPanel({ onLearned }: { onLearned: () => void }) {
         <SectionTitle>Learn a repository</SectionTitle>
         <p style={{ color: "var(--fg-muted)" }}>
           Signet reads the source and the git history, then proposes the conventions it can evidence —
-          weighting the direction a convention is moving over how often it appears today.
+          weighting the direction a convention is moving over how often it appears today. Point it at a
+          local path or straight at GitHub.
         </p>
         <Row gap="var(--s2)" wrap align="flex-end">
           <div style={{ flex: "1 1 360px" }}>
-            <Field label="Repository path" hint="An absolute path on this machine. Read-only — nothing is written.">
-              <Input value={repoPath} onChange={setRepoPath} placeholder="/Users/you/code/your-frontend" mono />
+            <Field
+              label="Repository"
+              hint="A local absolute path, or a GitHub repository — https://github.com/owner/repo, git@github.com:owner/repo, or just owner/repo. Read-only either way; nothing is written to it."
+            >
+              <Input
+                value={repoPath}
+                onChange={setRepoPath}
+                placeholder="/Users/you/code/your-frontend  ·  or  tailwindlabs/tailwindcss.com"
+                mono
+              />
             </Field>
           </div>
           <Button
@@ -156,14 +165,31 @@ function LearnPanel({ onLearned }: { onLearned: () => void }) {
             disabled={!repoPath.trim() || learn.isPending}
             onClick={() => learn.mutate()}
           >
-            {learn.isPending ? "Reading…" : "Learn it"}
+            {learn.isPending ? (repoPath.includes("github") || repoPath.includes("/") && !repoPath.startsWith("/") ? "Cloning & reading…" : "Reading…") : "Learn it"}
           </Button>
         </Row>
         {learn.data && (
-          <span style={{ color: "var(--ok)" }}>
-            {learn.data.label}: {learn.data.proposed} new proposal{learn.data.proposed === 1 ? "" : "s"} (
-            {learn.data.skipped} already known).
-          </span>
+          <Stack gap="var(--s1)">
+            <span style={{ color: "var(--ok)" }}>
+              {learn.data.label}: {learn.data.proposed} new proposal{learn.data.proposed === 1 ? "" : "s"} (
+              {learn.data.skipped} already known).
+            </span>
+            {learn.data.source?.kind === "github" && (
+              <Row gap="var(--s2)" wrap style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
+                <Badge mono>{learn.data.source.repo}</Badge>
+                <span>
+                  {learn.data.source.branch} at {learn.data.source.headSha}
+                </span>
+                {/* The trend miner is only as good as its window, so say how far
+                    back the clone actually reaches rather than implying "all". */}
+                <span>
+                  {learn.data.source.commits} commits, history from{" "}
+                  {new Date(learn.data.source.historyFrom).toLocaleDateString()}
+                </span>
+                {learn.data.source.fromCache && <Badge tone="idle">from cache</Badge>}
+              </Row>
+            )}
+          </Stack>
         )}
         <ErrorNote error={learn.error} onDismiss={() => learn.reset()} />
       </Stack>

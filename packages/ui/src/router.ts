@@ -14,6 +14,7 @@ export type Route =
   | { view: "runs"; outcome?: string; selected?: string }
   | { view: "constitution"; status?: string }
   | { view: "activity" }
+  | { view: "graph" }
   | { view: "system" }
   | { view: "new" };
 
@@ -22,6 +23,7 @@ export const NAV: readonly { view: Route["view"]; label: string; hint: string }[
   { view: "work", label: "Work", hint: "Every feature and increment" },
   { view: "runs", label: "Runs", hint: "Every run, with its full anatomy" },
   { view: "constitution", label: "Constitution", hint: "Learned rules awaiting your judgement" },
+  { view: "graph", label: "Graph", hint: "The context graph of everything learned" },
   { view: "activity", label: "Activity", hint: "What the system has been doing" },
   { view: "system", label: "System", hint: "How this instance is wired" },
 ];
@@ -51,6 +53,8 @@ export function href(route: Route): string {
       return route.status && route.status !== "PROPOSED" ? `#/constitution?status=${route.status}` : "#/constitution";
     case "activity":
       return "#/activity";
+    case "graph":
+      return "#/graph";
     case "system":
       return "#/system";
     case "new":
@@ -93,6 +97,8 @@ export function parseRoute(hash: string): Route {
     }
     case "activity":
       return { view: "activity" };
+    case "graph":
+      return { view: "graph" };
     case "system":
       return { view: "system" };
     case "new":

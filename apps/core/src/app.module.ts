@@ -32,6 +32,8 @@ import { DiffReader } from "./services/diff-reader.js";
 import { OperatorViews } from "./services/operator-views.js";
 import { OperatorStateStore } from "./services/operator-state.js";
 import { SystemInfoService } from "./services/system-info.js";
+import { ContextGraphService } from "./services/context-graph.js";
+import { GithubConnector } from "./services/github-connector.js";
 import { checkScope } from "./domain/pipeline/scope-checker.js";
 import { RunEngine } from "./services/run-engine.js";
 import { ClaudeAgentDriver } from "./services/claude-agent-driver.js";
@@ -248,6 +250,16 @@ function buildDispatcher(
       provide: TOKENS.system,
       useFactory: (cfg: SignetConfig, db: PrismaClient) => new SystemInfoService(cfg, db, AGENT_MODEL),
       inject: [CONFIG, PRISMA],
+    },
+    {
+      provide: TOKENS.graph,
+      useFactory: (db: PrismaClient) => new ContextGraphService(db),
+      inject: [PRISMA],
+    },
+    {
+      provide: TOKENS.github,
+      useFactory: (log: Logger) => new GithubConnector(log),
+      inject: [LOGGER],
     },
     {
       provide: TOKENS.operator,

@@ -23,6 +23,7 @@ import {
   RunDetailSchema,
   RunSummarySchema,
   SystemInfoSchema,
+  ContextGraphSchema,
   type ActivityEvent,
   type DispatcherControlRequest,
   type DispatcherState,
@@ -31,6 +32,7 @@ import {
   type RunDetail,
   type RunSummary,
   type SystemInfo,
+  type ContextGraph,
   type ActivityView,
   type ApproveDesignRequest,
   type CreateFeatureRequest,
@@ -175,6 +177,9 @@ export const api = {
 
   system: (): Promise<SystemInfo> => get("/api/system", SystemInfoSchema),
 
+  graph: (repo?: string): Promise<ContextGraph> =>
+    get(`/api/graph${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`, ContextGraphSchema),
+
   dispatcher: (): Promise<DispatcherState> => get("/api/dispatcher", DispatcherStateSchema),
 
   setDispatcher: (req: DispatcherControlRequest): Promise<DispatcherState> =>
@@ -186,11 +191,30 @@ export const api = {
       z.array(RuleCardSchema),
     ),
 
-  learn: (repoPath: string): Promise<{ label: string; proposed: number; skipped: number }> =>
+  /** Accepts a local path or a GitHub reference; the server decides which it is. */
+  learn: (repoPath: string) =>
     send(
       "/api/learn",
       { repoPath },
-      z.object({ label: z.string(), proposed: z.number(), skipped: z.number() }),
+      z.object({
+        label: z.string(),
+        proposed: z.number(),
+        skipped: z.number(),
+        source: z
+          .discriminatedUnion("kind", [
+            z.object({ kind: z.literal("local"), path: z.string() }),
+            z.object({
+              kind: z.literal("github"),
+              repo: z.string(),
+              branch: z.string(),
+              headSha: z.string(),
+              commits: z.number(),
+              historyFrom: z.string(),
+              fromCache: z.boolean(),
+            }),
+          ])
+          .optional(),
+      }),
     ),
 
   confirmRule: async (id: string): Promise<void> => {

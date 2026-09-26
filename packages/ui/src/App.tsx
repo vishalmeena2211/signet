@@ -15,6 +15,7 @@ import { Feature } from "./screens/Feature.js";
 import { Runs } from "./screens/Runs.js";
 import { Constitution } from "./screens/Constitution.js";
 import { Activity } from "./screens/Activity.js";
+import { Graph } from "./screens/Graph.js";
 import { System } from "./screens/System.js";
 import { NewFeature } from "./screens/NewFeature.js";
 
@@ -69,6 +70,8 @@ function Screen({ route }: { route: Route }) {
       return <Constitution route={route} />;
     case "activity":
       return <Activity />;
+    case "graph":
+      return <Graph />;
     case "system":
       return <System />;
     case "new":

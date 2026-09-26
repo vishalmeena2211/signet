@@ -62,7 +62,13 @@ export function AppShell({
       style={{
         display: "grid",
         gridTemplateColumns: `${collapsed ? "var(--sidebar-w-collapsed)" : "var(--sidebar-w)"} 1fr`,
-        height: "100%",
+        // Pin the shell to the viewport and clip it. Without the clip, a tall
+        // screen makes the grid row grow past the viewport and the whole
+        // DOCUMENT scrolls — which drags the sidebar and top bar out of view.
+        // They are meant to be fixed furniture, so only `main` may scroll.
+        // dvh rather than vh so mobile browser chrome does not cause a jump.
+        height: "100dvh",
+        overflow: "hidden",
         transition: "grid-template-columns var(--dur)",
       }}
     >
@@ -74,6 +80,10 @@ export function AppShell({
           display: "flex",
           flexDirection: "column",
           minWidth: 0,
+          // The sidebar is its own scroll container, so a long nav scrolls
+          // inside the rail instead of pushing the page.
+          minHeight: 0,
+          overflow: "hidden",
         }}
       >
         <div
@@ -90,7 +100,7 @@ export function AppShell({
           {!collapsed && <strong style={{ letterSpacing: "0.02em" }}>Signet</strong>}
         </div>
 
-        <Stack gap="1px" style={{ padding: "var(--s2)" }}>
+        <Stack gap="1px" style={{ padding: "var(--s2)", overflowY: "auto", minHeight: 0 }}>
           {NAV.map((item) => {
             const on = active === item.view;
             const count = counts[item.view];
@@ -126,7 +136,16 @@ export function AppShell({
           })}
         </Stack>
 
-        <div style={{ marginTop: "auto", padding: "var(--s2)", borderTop: "1px solid var(--line)" }}>
+        <div
+          style={{
+            marginTop: "auto",
+            padding: "var(--s2)",
+            borderTop: "1px solid var(--line)",
+            // Never let the footer be the thing that gets scrolled away: the
+            // theme and collapse controls stay reachable at any height.
+            flex: "0 0 auto",
+          }}
+        >
           {collapsed ? (
             <Button size="sm" variant="quiet" onClick={() => setCollapsed(false)} title="Expand navigation">
               »
@@ -151,9 +170,13 @@ export function AppShell({
         </div>
       </nav>
 
-      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+      {/* minHeight:0 on both this column and `main` is what actually makes the
+          shell hold still. A flex item defaults to min-height:auto, so `main`
+          refuses to shrink below its content, grows the column, and the page
+          scrolls instead of the content area — taking the sidebar with it. */}
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <TopBar route={route} onOpenPalette={onOpenPalette} overview={overview.data} />
-        <main style={{ overflow: "auto", flex: 1 }}>
+        <main style={{ overflow: "auto", flex: 1, minHeight: 0 }}>
           <div style={{ maxWidth: "var(--content-max)", margin: "0 auto", padding: "var(--s6) var(--s5)" }}>
             {children}
           </div>
@@ -303,6 +326,15 @@ function NavGlyph({ view, on }: { view: Route["view"]; on: boolean }) {
       return (
         <svg {...common} aria-hidden>
           <path d="M1.5 7.5h3L6 4.5l2 5 1.5-2.5h3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "graph":
+      return (
+        <svg {...common} aria-hidden>
+          <circle cx="3" cy="3.5" r="1.8" />
+          <circle cx="11" cy="4" r="1.8" />
+          <circle cx="6.5" cy="11" r="1.8" />
+          <path d="M4.5 4.2l5 0M4 5.2l2 4M9.7 5.4l-2.6 4.3" strokeLinecap="round" />
         </svg>
       );
     case "system":

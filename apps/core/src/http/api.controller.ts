@@ -24,6 +24,8 @@ import type { DiffReader } from "../services/diff-reader.js";
 import type { OperatorViews } from "../services/operator-views.js";
 import type { OperatorStateStore } from "../services/operator-state.js";
 import type { SystemInfoService } from "../services/system-info.js";
+import type { ContextGraphService } from "../services/context-graph.js";
+import { parseGithubRef, type GithubConnector } from "../services/github-connector.js";
 import type { Dispatcher } from "../services/dispatcher.js";
 import type { Realtime } from "./realtime.gateway.js";
 
@@ -37,6 +39,8 @@ export const TOKENS = {
   operator: "signet.operator",
   operatorState: "signet.operatorState",
   system: "signet.system",
+  graph: "signet.graph",
+  github: "signet.github",
   dispatcher: "signet.dispatcherControl",
   realtime: "signet.realtime",
   activeWorkers: "signet.activeWorkers",
@@ -56,6 +60,9 @@ export class ApiController {
     @Inject(TOKENS.operatorState) private readonly operatorState: OperatorStateStore,
     // `system_` because `system` is the route handler's name.
     @Inject(TOKENS.system) private readonly system_: SystemInfoService,
+    // `graph_` because `graph` is the route handler's name.
+    @Inject(TOKENS.graph) private readonly graph_: ContextGraphService,
+    @Inject(TOKENS.github) private readonly github: GithubConnector,
     @Inject(TOKENS.dispatcher) private readonly dispatcher: Dispatcher,
     @Inject(TOKENS.activeWorkers) private readonly activeWorkers: () => number,
   ) {}
@@ -112,6 +119,12 @@ export class ApiController {
   @Get("system")
   async system() {
     return this.system_.info();
+  }
+
+  /** The context graph of everything learned, and what it notices about itself. */
+  @Get("graph")
+  async graph(@Query("repo") repo?: string) {
+    return this.graph_.build(repo ? { repo } : {});
   }
 
   // ── operational control ──
@@ -216,13 +229,44 @@ export class ApiController {
 
   // ── design-system learner + confirmation queue ──
 
+  /**
+   * Learn from a local path OR a GitHub reference — a URL, an ssh remote, or just
+   * owner/repo. A GitHub source is cloned shallowly into a cache first and then
+   * read exactly like a local one, so the learner needs no knowledge of where the
+   * code came from.
+   */
   @Post("learn")
   async learn(@Body() body: unknown) {
     const req = LearnRequestSchema.parse(body);
+    const github = looksLikeGithub(req.repoPath) ? parseGithubRef(req.repoPath) : null;
+
+    if (github) {
+      const cloned = await this.github.fetchRepo(req.repoPath);
+      const label = req.label ?? cloned.label;
+      const res = await this.rules.learn(cloned.path, label);
+      this.realtime.broadcast({ kind: "quota_changed" });
+      return {
+        label,
+        ...res,
+        // Report the history actually available: the trend miner's conclusions are
+        // only as good as the window, and a shallow clone that does not reach back
+        // far enough would otherwise read as "this convention did not exist".
+        source: {
+          kind: "github" as const,
+          repo: `${github.owner}/${github.repo}`,
+          branch: cloned.defaultBranch,
+          headSha: cloned.headSha.slice(0, 8),
+          commits: cloned.commitCount,
+          historyFrom: cloned.oldestCommitDate,
+          fromCache: cloned.fromCache,
+        },
+      };
+    }
+
     const label = req.label ?? req.repoPath.split("/").filter(Boolean).pop() ?? "repo";
     const res = await this.rules.learn(req.repoPath, label);
     this.realtime.broadcast({ kind: "quota_changed" }); // cheap nudge to refresh the queue
-    return { label, ...res };
+    return { label, ...res, source: { kind: "local" as const, path: req.repoPath } };
   }
 
   @Get("rules/queue")
@@ -266,4 +310,15 @@ export class ApiController {
     this.realtime.broadcast({ kind: "increment_changed", incrementId: incId });
     return { merged: true };
   }
+}
+
+/**
+ * A local absolute path is never a GitHub reference; anything else that parses as
+ * one is treated as one. Checked before parsing so `/Users/me/owner/repo` cannot
+ * be mistaken for `owner/repo`.
+ */
+function looksLikeGithub(input: string): boolean {
+  const s = input.trim();
+  if (s.startsWith("/") || s.startsWith("~") || s.startsWith(".")) return false;
+  return /github\.com/.test(s) || /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s);
 }

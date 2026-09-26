@@ -159,6 +159,13 @@ body,
   height: 100%;
 }
 
+/* The app shell is pinned to the viewport and manages its own scrolling, so the
+   document itself must never scroll — otherwise the sidebar and top bar, which
+   are meant to be fixed furniture, scroll away with the content. */
+#root {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);
