@@ -1,18 +1,21 @@
 // The design of record: the approved visual ground truth for one increment.
 //
-// This is the thing the conformance gate judges against, so it has to be
-// approvable from here — and it has to be legible afterwards, because when the
-// gate blocks a merge the first question is always "what did I approve?".
+// This is what the conformance gate judges against, which makes it the product's
+// differentiator — so it has to be approvable from here, and legible afterwards,
+// because when a merge is blocked the first question is always "what did I
+// approve?".
 //
-// The approval is a human signature: once recorded, it beats the brief. The
-// panel says so out loud rather than leaving the user to discover it when an
-// agent ignores a colour the brief asked for.
+// The approval is a signature: once recorded it beats the brief. The panel says
+// so out loud rather than leaving someone to discover it when an agent ignores a
+// colour the brief asked for.
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DesignOfRecord } from "@signet/contracts";
 import { api } from "../api.js";
-import { ErrorNote } from "../components.js";
+import { Badge, Button, Card, Detail, Field, Input, Row, Stack, TextArea } from "../ui/primitives.js";
+import { ErrorNote, useToast } from "../ui/feedback.js";
+import { RelativeTime } from "../ui/format.js";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -25,10 +28,7 @@ function parseList(raw: string): string[] {
 
 export function DesignPanel({ incrementId, editable }: { incrementId: string; editable: boolean }) {
   const qc = useQueryClient();
-  const design = useQuery({
-    queryKey: ["design", incrementId],
-    queryFn: () => api.design(incrementId),
-  });
+  const design = useQuery({ queryKey: ["design", incrementId], queryFn: () => api.design(incrementId) });
   const [editing, setEditing] = useState(false);
 
   if (design.isPending) return null;
@@ -46,76 +46,85 @@ export function DesignPanel({ incrementId, editable }: { incrementId: string; ed
   }
   if (!record && !editing) {
     return (
-      <div style={{ color: "var(--text-dim)", display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
+      <Row gap="var(--s3)" wrap style={{ color: "var(--fg-muted)" }}>
         <span>No design of record — the conformance gate will skip this increment.</span>
-        {editable && <button onClick={() => setEditing(true)}>Set a design of record</button>}
-      </div>
+        {editable && (
+          <Button size="sm" onClick={() => setEditing(true)}>
+            Set a design of record
+          </Button>
+        )}
+      </Row>
     );
   }
-  return <DesignForm incrementId={incrementId} existing={record} onSaved={onSaved} onCancel={() => setEditing(false)} />;
+  return (
+    <DesignForm
+      incrementId={incrementId}
+      existing={record}
+      onSaved={onSaved}
+      onCancel={() => setEditing(false)}
+    />
+  );
 }
 
 function ApprovedDesign({ record, onReopen }: { record: DesignOfRecord; onReopen?: (() => void) | undefined }) {
   const { intent } = record;
   return (
-    <div
-      style={{
-        border: "1px solid var(--accent)",
-        borderRadius: "var(--radius-sm)",
-        padding: "var(--space-3)",
-        display: "grid",
-        gap: "var(--space-2)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-3)" }}>
-        <strong style={{ color: "var(--accent)" }}>Design of record</strong>
-        <span style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)" }}>
-          {record.source === "ingested" ? "from a provided design" : "resolved from the design system"} · approved by{" "}
-          {record.approvedBy}
-        </span>
-      </div>
+    <Card tone="accent" padding="var(--s3)">
+      <Stack gap="var(--s3)">
+        <Row justify="space-between" wrap gap="var(--s3)">
+          <strong style={{ color: "var(--accent)" }}>Design of record</strong>
+          <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
+            {record.source === "ingested" ? "from a provided design" : "resolved from the design system"} · approved by{" "}
+            {record.approvedBy} <RelativeTime iso={record.approvedAt} />
+          </span>
+        </Row>
 
-      {intent.palette.length > 0 && (
-        <Row label="Allowed palette">
-          <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", alignItems: "center" }}>
-            {intent.palette.map((c) => (
-              <Swatch key={c} color={c} />
-            ))}
-            <span style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)" }}>tolerance ΔE {intent.maxDeltaE}</span>
-          </div>
+        <Row gap="var(--s6)" wrap>
+          {intent.palette.length > 0 && (
+            <Detail label={`Allowed palette · ΔE ${intent.maxDeltaE}`}>
+              <Row gap="var(--s2)" wrap>
+                {intent.palette.map((c) => (
+                  <Swatch key={c} color={c} />
+                ))}
+              </Row>
+            </Detail>
+          )}
+          {intent.forbiddenColors.length > 0 && (
+            <Detail label="Forbidden colours">
+              <Row gap="var(--s2)" wrap>
+                {intent.forbiddenColors.map((c) => (
+                  <Swatch key={c} color={c} struck />
+                ))}
+              </Row>
+            </Detail>
+          )}
+          {intent.requiredAssets.length > 0 && (
+            <Detail label="Required assets" mono>
+              {intent.requiredAssets.join(", ")}
+            </Detail>
+          )}
+          {intent.forbiddenAssets.length > 0 && (
+            <Detail label="Forbidden assets" mono>
+              {intent.forbiddenAssets.join(", ")}
+            </Detail>
+          )}
         </Row>
-      )}
-      {intent.forbiddenColors.length > 0 && (
-        <Row label="Forbidden colours">
-          <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-            {intent.forbiddenColors.map((c) => (
-              <Swatch key={c} color={c} struck />
-            ))}
-          </div>
-        </Row>
-      )}
-      {intent.requiredAssets.length > 0 && (
-        <Row label="Required assets">
-          <code>{intent.requiredAssets.join(", ")}</code>
-        </Row>
-      )}
-      {intent.forbiddenAssets.length > 0 && (
-        <Row label="Forbidden assets">
-          <code>{intent.forbiddenAssets.join(", ")}</code>
-        </Row>
-      )}
-      {intent.notes && <Row label="Notes">{intent.notes}</Row>}
 
-      <div style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)" }}>
-        This is a signature: where it conflicts with the brief, the design of record wins, and the
-        conformance gate blocks a merge that diverges from it.
-      </div>
-      {onReopen && (
-        <button onClick={onReopen} style={{ justifySelf: "start" }}>
-          Amend
-        </button>
-      )}
-    </div>
+        {intent.notes && <span style={{ color: "var(--fg-muted)" }}>{intent.notes}</span>}
+
+        <Row justify="space-between" wrap gap="var(--s2)">
+          <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
+            Where this conflicts with the brief, the design of record wins — and the conformance gate
+            blocks a merge that diverges from it.
+          </span>
+          {onReopen && (
+            <Button size="sm" variant="quiet" onClick={onReopen}>
+              amend
+            </Button>
+          )}
+        </Row>
+      </Stack>
+    </Card>
   );
 }
 
@@ -130,6 +139,7 @@ function DesignForm({
   onSaved: () => void;
   onCancel: () => void;
 }) {
+  const toast = useToast();
   const [palette, setPalette] = useState((existing?.intent.palette ?? []).join(", "));
   const [forbiddenColors, setForbiddenColors] = useState((existing?.intent.forbiddenColors ?? []).join(", "));
   const [forbiddenAssets, setForbiddenAssets] = useState((existing?.intent.forbiddenAssets ?? []).join(", "));
@@ -140,13 +150,13 @@ function DesignForm({
   const allColors = [...parseList(palette), ...parseList(forbiddenColors)];
   const badColor = allColors.find((c) => !HEX.test(c));
   const deltaE = Number(maxDeltaE);
-  const invalid =
+  const problem =
     badColor !== undefined
-      ? `"${badColor}" is not a 6-digit hex colour like #6609be.`
+      ? `“${badColor}” is not a 6-digit hex colour like #6609be.`
       : !Number.isFinite(deltaE) || deltaE < 0
-        ? "Tolerance must be a number of ΔE units (8 is a good default)."
-        : parseList(palette).length === 0 && parseList(forbiddenColors).length === 0 && parseList(forbiddenAssets).length === 0
-          ? "Give the gate something to judge: at least one allowed colour, forbidden colour, or forbidden asset."
+        ? "Tolerance is a number of ΔE units — 8 is a good default."
+        : allColors.length === 0 && parseList(forbiddenAssets).length === 0 && parseList(requiredAssets).length === 0
+          ? "Give the gate something to judge: at least one colour or asset rule."
           : null;
 
   const save = useMutation({
@@ -163,135 +173,92 @@ function DesignForm({
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         },
       }),
-    onSuccess: onSaved,
+    onSuccess: () => {
+      toast.push("Design approved — it is now in the agent's context pack and armed as a gate", "ok");
+      onSaved();
+    },
   });
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--accent)",
-        borderRadius: "var(--radius-sm)",
-        padding: "var(--space-3)",
-        display: "grid",
-        gap: "var(--space-3)",
-      }}
-    >
-      <strong style={{ color: "var(--accent)" }}>
-        {existing ? "Amend the design of record" : "Approve a design of record"}
-      </strong>
+    <Card tone="accent" padding="var(--s3)">
+      <Stack gap="var(--s4)">
+        <strong style={{ color: "var(--accent)" }}>
+          {existing ? "Amend the design of record" : "Approve a design of record"}
+        </strong>
 
-      <Field
-        label="Allowed palette"
-        hint="Hex colours the build may use. Anything perceptually further than the tolerance is a divergence."
-        value={palette}
-        onChange={setPalette}
-        placeholder="#6609be, #ffffff"
-      />
-      <Field
-        label="Tolerance (ΔE)"
-        hint="Perceptual distance, CIE76. 8 catches a wrong brand colour without flagging anti-aliasing."
-        value={maxDeltaE}
-        onChange={setMaxDeltaE}
-        placeholder="8"
-      />
-      <Field
-        label="Forbidden colours"
-        hint="Named and blocked outright — useful when a brief asks for something off-brand."
-        value={forbiddenColors}
-        onChange={setForbiddenColors}
-        placeholder="#ff5722"
-      />
-      <Field
-        label="Forbidden assets"
-        hint="Paths that must not be referenced, e.g. a superseded logo."
-        value={forbiddenAssets}
-        onChange={setForbiddenAssets}
-        placeholder="public/logo/logo.svg"
-      />
-      <Field
-        label="Required assets"
-        hint="Paths the change must reference."
-        value={requiredAssets}
-        onChange={setRequiredAssets}
-        placeholder="public/logo/logo-new.png"
-      />
-      <Field label="Notes" hint="Carried into the agent's context pack verbatim." value={notes} onChange={setNotes} placeholder="Brand purple only." />
+        <Row gap="var(--s3)" wrap align="flex-start">
+          <div style={{ flex: "1 1 260px" }}>
+            <Field
+              label="Allowed palette"
+              hint="Hex colours the build may use. Anything perceptually further away than the tolerance is a divergence."
+            >
+              <Input value={palette} onChange={setPalette} placeholder="#6609be, #ffffff" mono />
+            </Field>
+          </div>
+          <div style={{ flex: "0 0 130px" }}>
+            <Field label="Tolerance ΔE" hint="CIE76. 8 catches a wrong brand colour, not anti-aliasing.">
+              <Input value={maxDeltaE} onChange={setMaxDeltaE} placeholder="8" mono />
+            </Field>
+          </div>
+        </Row>
 
-      {invalid && <div style={{ color: "var(--warn)" }}>{invalid}</div>}
-      <ErrorNote error={save.error} onDismiss={() => save.reset()} />
+        <Row gap="var(--s3)" wrap align="flex-start">
+          <div style={{ flex: "1 1 260px" }}>
+            <Field label="Forbidden colours" hint="Blocked outright — useful when a brief asks for something off-brand.">
+              <Input value={forbiddenColors} onChange={setForbiddenColors} placeholder="#ff5722" mono />
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 260px" }}>
+            <Field label="Forbidden assets" hint="Paths that must not be referenced, e.g. a superseded logo.">
+              <Input value={forbiddenAssets} onChange={setForbiddenAssets} placeholder="public/logo/logo.svg" mono />
+            </Field>
+          </div>
+        </Row>
 
-      <div style={{ display: "flex", gap: "var(--space-2)" }}>
-        <button className="primary" disabled={invalid !== null || save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? "Approving…" : "Approve design"}
-        </button>
-        <button onClick={onCancel}>Cancel</button>
-      </div>
-      <div style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)" }}>
-        Approving puts this in the agent's context pack before it writes code, and arms the
-        conformance gate to block a divergent merge.
-      </div>
-    </div>
-  );
-}
+        <Row gap="var(--s3)" wrap align="flex-start">
+          <div style={{ flex: "1 1 260px" }}>
+            <Field label="Required assets" hint="Paths the change must reference.">
+              <Input value={requiredAssets} onChange={setRequiredAssets} placeholder="public/logo/logo-new.png" mono />
+            </Field>
+          </div>
+        </Row>
 
-function Field({
-  label,
-  hint,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  hint: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <label style={{ display: "grid", gap: "var(--space-1)" }}>
-      <span style={{ fontWeight: 600 }}>{label}</span>
-      <span style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)" }}>{hint}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{
-          background: "var(--surface-raised)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-sm)",
-          color: "var(--text)",
-          padding: "var(--space-2)",
-          font: "inherit",
-        }}
-      />
-    </label>
-  );
-}
+        <Field label="Notes" hint="Carried into the agent's context pack verbatim, before it writes any code.">
+          <TextArea value={notes} onChange={setNotes} rows={2} placeholder="Brand purple only." />
+        </Field>
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, auto) 1fr", gap: "var(--space-3)", alignItems: "center" }}>
-      <span style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)" }}>{label}</span>
-      <div>{children}</div>
-    </div>
+        {problem && <span style={{ color: "var(--warn)" }}>{problem}</span>}
+        <ErrorNote error={save.error} onDismiss={() => save.reset()} />
+
+        <Row gap="var(--s2)" wrap>
+          <Button variant="primary" disabled={problem !== null || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? "Approving…" : "Approve design"}
+          </Button>
+          <Button variant="quiet" onClick={onCancel}>
+            cancel
+          </Button>
+          <Badge tone="idle">this is signature-grade: it will block a divergent merge</Badge>
+        </Row>
+      </Stack>
+    </Card>
   );
 }
 
 function Swatch({ color, struck = false }: { color: string; struck?: boolean }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1)" }}>
+    <Row gap="var(--s1)">
       <span
         aria-hidden
         style={{
-          width: 14,
-          height: 14,
+          width: 13,
+          height: 13,
           borderRadius: 3,
           background: color,
-          border: "1px solid var(--border)",
-          display: "inline-block",
+          border: "1px solid var(--line-strong)",
+          flex: "0 0 auto",
         }}
       />
       <code style={{ textDecoration: struck ? "line-through" : "none" }}>{color}</code>
-    </span>
+    </Row>
   );
 }

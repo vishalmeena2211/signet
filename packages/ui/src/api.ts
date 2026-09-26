@@ -16,6 +16,21 @@ import {
   IncrementDiffViewSchema,
   QuotaStateViewSchema,
   RuleCardSchema,
+  ActivityEventSchema,
+  DispatcherStateSchema,
+  OverviewSchema,
+  PackViewSchema,
+  RunDetailSchema,
+  RunSummarySchema,
+  SystemInfoSchema,
+  type ActivityEvent,
+  type DispatcherControlRequest,
+  type DispatcherState,
+  type Overview,
+  type PackView,
+  type RunDetail,
+  type RunSummary,
+  type SystemInfo,
   type ActivityView,
   type ApproveDesignRequest,
   type CreateFeatureRequest,
@@ -132,6 +147,38 @@ export const api = {
   approveDesign: async (incrementId: string, req: ApproveDesignRequest): Promise<void> => {
     await send(`/api/increments/${incrementId}/design`, req, Ack);
   },
+
+  // ── operator visibility ──
+
+  overview: (): Promise<Overview> => get("/api/overview", OverviewSchema),
+
+  runs: (opts: { outcome?: string; incrementId?: string; limit?: number } = {}): Promise<RunSummary[]> => {
+    const p = new URLSearchParams();
+    if (opts.outcome && opts.outcome !== "all") p.set("outcome", opts.outcome);
+    if (opts.incrementId) p.set("incrementId", opts.incrementId);
+    p.set("limit", String(opts.limit ?? 100));
+    return get(`/api/runs?${p.toString()}`, z.array(RunSummarySchema));
+  },
+
+  run: (id: string): Promise<RunDetail> => get(`/api/runs/${id}`, RunDetailSchema),
+
+  /** null rather than throwing: an increment that never ran has no pack, and that is normal. */
+  pack: async (incrementId: string): Promise<PackView | null> => {
+    const res = await fetch(`/api/increments/${incrementId}/pack`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw await explain(res);
+    return PackViewSchema.parse(await res.json());
+  },
+
+  activityFeed: (limit = 100): Promise<ActivityEvent[]> =>
+    get(`/api/activity?limit=${limit}`, z.array(ActivityEventSchema)),
+
+  system: (): Promise<SystemInfo> => get("/api/system", SystemInfoSchema),
+
+  dispatcher: (): Promise<DispatcherState> => get("/api/dispatcher", DispatcherStateSchema),
+
+  setDispatcher: (req: DispatcherControlRequest): Promise<DispatcherState> =>
+    send("/api/dispatcher", req, DispatcherStateSchema),
 
   ruleQueue: (repo?: string): Promise<RuleCard[]> =>
     get(
