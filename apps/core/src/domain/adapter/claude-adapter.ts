@@ -10,7 +10,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   AdapterAvailabilitySchema,
-  SessionRefSchema,
   nonRecoverable,
   recoverable,
   type AdapterAvailability,
@@ -248,7 +247,7 @@ export class ClaudeAdapter {
 }
 
 /** Parse a JSON plan out of an agent's result text (fenced or bare). */
-export function extractJsonBlock(text: string): unknown | null {
+export function extractJsonBlock(text: string): object | null {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
   const candidate = fenced?.[1] ?? text;
   const start = candidate.indexOf("{");

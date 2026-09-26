@@ -7,13 +7,12 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { nodeId } from "@signet/contracts";
 import { PrismaClient } from "../persistence/generated/client.js";
 import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { ContextGraphService } from "./context-graph.js";
 
-const ctx = await setupTestDatabase();
+const ctx = await setupTestDatabase("graph");
 const enabled = ctx !== null;
 const url = ctx?.url ?? "";
 const d = enabled ? describe : describe.skip;

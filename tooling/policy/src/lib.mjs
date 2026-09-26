@@ -8,7 +8,27 @@ import { dirname } from "node:path";
 
 export const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-const IGNORED_DIRS = new Set(["node_modules", "dist", ".git", ".turbo", "coverage", ".next"]);
+// Directories whose contents are not ours to police.
+//
+// "generated" carries its weight: the Prisma client is emitted into
+// apps/core/src/persistence/generated, and it contains `any` and raw JSON.parse
+// by design. Scanning it produced 54 violations in code nobody wrote and nobody
+// can fix.
+//
+// It was also a CACHE CORRECTNESS bug, which is why it went unnoticed. That
+// directory is gitignored, turbo's default cache key is tracked files, and the
+// policy task read it anyway — so the task's result depended on inputs the cache
+// could not see, and a stale pass replayed indefinitely. Not reading untracked
+// files is what makes the cached result trustworthy again.
+const IGNORED_DIRS = new Set([
+  "node_modules",
+  "dist",
+  ".git",
+  ".turbo",
+  "coverage",
+  ".next",
+  "generated",
+]);
 
 /** Recursively list files under `dir` (absolute), filtered by extension list. */
 export async function listFiles(dir, exts) {

@@ -15,7 +15,8 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": ["SIGNET_DATABASE_URL", "SIGNET_E2E"]
     },
     "policy": {
       "outputs": []

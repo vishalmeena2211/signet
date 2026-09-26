@@ -14,7 +14,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { IncrementIdSchema, type IncrementId } from "@signet/contracts";
 import { PrismaClient } from "../persistence/generated/client.js";
 import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
@@ -32,7 +31,7 @@ import { Dispatcher, enqueueRun } from "../services/dispatcher.js";
 import type { Logger } from "../domain/runtime/logger.js";
 import type { RunOutcome } from "../services/run-engine.js";
 
-const ctx = await setupTestDatabase();
+const ctx = await setupTestDatabase("e2e");
 // The e2e suites burn real quota, so they stay opt-in as well as isolated.
 const enabled = process.env["SIGNET_E2E"] === "1" && ctx !== null;
 const url = ctx?.url ?? "";

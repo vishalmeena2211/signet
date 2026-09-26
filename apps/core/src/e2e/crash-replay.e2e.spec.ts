@@ -13,13 +13,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { PrismaPg } from "@prisma/adapter-pg";
 import {
   IncrementIdSchema,
   RunIdSchema,
   SessionRefSchema,
   type IncrementId,
-  type SessionRef,
 } from "@signet/contracts";
 import { PrismaClient } from "../persistence/generated/client.js";
 import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
@@ -31,7 +29,7 @@ import { Dispatcher, enqueueRun, recoverOrphanedRuns } from "../services/dispatc
 import { PackAssemblerV0 } from "../services/pack-assembler.js";
 import type { Logger } from "../domain/runtime/logger.js";
 
-const ctx = await setupTestDatabase();
+const ctx = await setupTestDatabase("crash");
 const enabled = ctx !== null;
 const url = ctx?.url ?? "";
 const d = enabled ? describe : describe.skip;

@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { deltaE, findColors } from "../learner/color.js";
-import type { Rule, RuleCheck } from "@signet/contracts";
+import type { Rule } from "@signet/contracts";
 
 export interface RuleViolation {
   ruleId: string;

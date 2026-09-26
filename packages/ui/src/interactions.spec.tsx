@@ -76,6 +76,7 @@ beforeEach(() => {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input), "http://localhost").pathname;
       if (init?.method === "POST") {
+        // signet-policy-allow: raw-json-parse -- test stub inspecting the request it was just handed
         const body = init.body ? JSON.parse(String(init.body)) : undefined;
         posted.push({ path, body });
         if (path === "/api/dispatcher") {

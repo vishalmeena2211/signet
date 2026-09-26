@@ -18,7 +18,7 @@ import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { seedFeature, seedRun } from "../testing/fixtures.js";
 import { OperatorViews } from "./operator-views.js";
 
-const ctx = await setupTestDatabase();
+const ctx = await setupTestDatabase("gatestory");
 const d = ctx ? describe : describe.skip;
 
 let db: PrismaClient;

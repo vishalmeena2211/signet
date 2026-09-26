@@ -32,18 +32,43 @@ const CORE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const TEST_SUFFIX = "_test";
 
 /**
+ * Migrated once, then cloned per suite. Postgres can create a database FROM a
+ * template in about a hundred milliseconds, which is what makes a database per
+ * suite affordable — running migrations six times would not be.
+ */
+const TEMPLATE_SUITE = "template";
+
+/**
  * The developer's URL with the database name suffixed. Returns null when no URL
  * is configured, so suites can skip rather than fail on a machine with no
  * database running.
+ *
+ * SIGNET_DATABASE_URL must be listed under the `test` task's `env` in turbo.json
+ * or turbo will not pass it through, and every database-backed suite silently
+ * skips. `pnpm check` reported green for a while on that basis — 28 skipped tests
+ * reading as a pass. Listing it also folds it into the cache key, so a run with a
+ * database cannot reuse the result of a run without one.
  */
-export function testDatabaseUrl(): string | null {
+export function testDatabaseUrl(suite?: string): string | null {
   const base = process.env["SIGNET_DATABASE_URL"];
   if (!base) return null;
   const u = new URL(base);
   const name = u.pathname.replace(/^\//, "");
   if (!name) return null;
-  // Already a test database (a nested call, or a CI override): leave it alone.
-  u.pathname = `/${name.endsWith(TEST_SUFFIX) ? name : name + TEST_SUFFIX}`;
+  const root = name.endsWith(TEST_SUFFIX) ? name.slice(0, -TEST_SUFFIX.length) : name;
+
+  // A database PER SUITE. They used to share one, and since teardown truncates
+  // everything, whichever suite finished first wiped the data out from under the
+  // others — vitest runs spec files in parallel. The shared version passed under
+  // `pnpm check` purely by scheduling luck and failed consistently when run
+  // directly, which is the worst way for a test suite to be wrong.
+  //
+  // The suite name goes BEFORE the marker, not after: `signet_gatestory_test`,
+  // never `signet_test_gatestory`. That keeps the guard's rule exactly as strict
+  // as it was — "must END in _test" — instead of loosening it to "must contain
+  // _test", which would also have admitted things like `signet_test_backup`.
+  const name_ = suite ? `${root}_${suite.replace(/[^a-zA-Z0-9]+/g, "_").toLowerCase()}${TEST_SUFFIX}` : `${root}${TEST_SUFFIX}`;
+  u.pathname = `/${name_}`;
   return u.toString();
 }
 
@@ -62,7 +87,7 @@ function assertDisposable(url: string): void {
   }
 }
 
-let prepared: string | null = null;
+let templateReady: string | null = null;
 
 /**
  * Creates the test database if it does not exist and brings its schema up to
@@ -70,40 +95,61 @@ let prepared: string | null = null;
  * the application uses, so the tests run against the real schema rather than a
  * hand-maintained copy that can drift.
  */
+/** CREATE DATABASE, tolerating "already exists" and nothing else. */
+async function createDatabase(adminUrl: string, name: string, template?: string): Promise<void> {
+  // The identifier cannot be parameterised, so it is validated rather than
+  // escaped. It comes from our own suffixing, but validating keeps that true if
+  // the source ever changes.
+  if (!/^[a-zA-Z0-9_]+$/.test(name)) throw new Error(`unsafe database name: ${name}`);
+  if (template && !/^[a-zA-Z0-9_]+$/.test(template)) throw new Error(`unsafe template name: ${template}`);
+
+  const admin = new PrismaClient({ adapter: new PrismaPg({ connectionString: adminUrl }) });
+  try {
+    await admin.$executeRawUnsafe(
+      template ? `CREATE DATABASE "${name}" TEMPLATE "${template}"` : `CREATE DATABASE "${name}"`,
+    );
+  } catch (e) {
+    // 42P04 is "already exists", the normal case on a second run. Anything else
+    // is a real failure and must surface.
+    if (!/already exists|42P04/i.test(String(e))) throw e;
+  } finally {
+    await admin.$disconnect();
+  }
+}
+
+/**
+ * Creates the per-suite database, cloning a migrated template so migrations run
+ * once per process rather than once per suite.
+ */
 export async function prepareTestDatabase(url: string): Promise<void> {
   assertDisposable(url);
-  if (prepared === url) return;
 
   const target = new URL(url);
   const dbName = target.pathname.replace(/^\//, "");
+  // Strip the suite segment back off to find the shared root, so every suite
+  // clones the same template.
+  const withoutMarker = dbName.slice(0, -TEST_SUFFIX.length);
+  const root = withoutMarker.includes("_") ? withoutMarker.slice(0, withoutMarker.lastIndexOf("_")) : withoutMarker;
+  const templateName = `${root}_${TEMPLATE_SUITE}${TEST_SUFFIX}`;
 
-  // Connect to the maintenance database to issue CREATE DATABASE, which cannot
-  // run inside the database it creates.
-  const admin = new URL(url);
-  admin.pathname = "/postgres";
-  const adminClient = new PrismaClient({ adapter: new PrismaPg({ connectionString: admin.toString() }) });
-  try {
-    // Postgres has no CREATE DATABASE IF NOT EXISTS, and the identifier cannot be
-    // parameterised — so the name is validated rather than escaped. It comes from
-    // our own suffixing, but validating keeps that true if the source changes.
-    if (!/^[a-zA-Z0-9_]+$/.test(dbName)) throw new Error(`unsafe database name: ${dbName}`);
-    await adminClient.$executeRawUnsafe(`CREATE DATABASE "${dbName}"`);
-  } catch (e) {
-    // 42P04 is "database already exists", which is the normal case after the
-    // first run. Anything else is a real failure and must surface.
-    const msg = String(e);
-    if (!/already exists|42P04/i.test(msg)) throw e;
-  } finally {
-    await adminClient.$disconnect();
+  const adminUrl = new URL(url);
+  adminUrl.pathname = "/postgres";
+
+  if (templateReady !== templateName) {
+    await createDatabase(adminUrl.toString(), templateName);
+    const templateUrl = new URL(url);
+    templateUrl.pathname = `/${templateName}`;
+    // The real migrations, so suites run against the real schema rather than a
+    // hand-maintained copy that can drift.
+    await pexec("pnpm", ["exec", "prisma", "migrate", "deploy"], {
+      cwd: CORE_DIR,
+      env: { ...process.env, SIGNET_DATABASE_URL: templateUrl.toString() },
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    templateReady = templateName;
   }
 
-  await pexec("pnpm", ["exec", "prisma", "migrate", "deploy"], {
-    cwd: CORE_DIR,
-    env: { ...process.env, SIGNET_DATABASE_URL: url },
-    maxBuffer: 16 * 1024 * 1024,
-  });
-
-  prepared = url;
+  if (dbName !== templateName) await createDatabase(adminUrl.toString(), dbName, templateName);
 }
 
 /** A client on the test database. */
@@ -133,9 +179,17 @@ export async function truncateAll(db: PrismaClient, url: string): Promise<void> 
  * configured. Suites use the null to skip, so `pnpm test` still works on a
  * machine with nothing running.
  */
-export async function setupTestDatabase(): Promise<{ db: PrismaClient; url: string } | null> {
-  const url = testDatabaseUrl();
+export async function setupTestDatabase(
+  /** Unique per spec file. Two suites sharing a name share a database, and a
+   *  truncating teardown then wipes one from under the other. */
+  suite: string,
+): Promise<{ db: PrismaClient; url: string } | null> {
+  const url = testDatabaseUrl(suite);
   if (!url) return null;
   await prepareTestDatabase(url);
-  return { db: testClient(url), url };
+  const db = testClient(url);
+  // Start from empty rather than trusting the last run's teardown: a suite that
+  // crashed mid-way would otherwise leave rows for the next one to trip over.
+  await truncateAll(db, url);
+  return { db, url };
 }

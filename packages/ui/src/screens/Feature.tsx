@@ -25,7 +25,6 @@ import {
   Dot,
   Meter,
   Row,
-  SectionTitle,
   Segmented,
   Stack,
   TextArea,

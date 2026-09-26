@@ -4,7 +4,6 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import {
   IncrementIdSchema,
   RunIdSchema,
@@ -15,7 +14,7 @@ import { PrismaClient } from "./generated/client.js";
 import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { PrismaUnitOfWork } from "./prisma-ports.js";
 
-const ctx = await setupTestDatabase();
+const ctx = await setupTestDatabase("ports");
 const enabled = ctx !== null;
 const url = ctx?.url ?? "";
 

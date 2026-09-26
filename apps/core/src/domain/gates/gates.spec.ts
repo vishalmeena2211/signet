@@ -3,7 +3,7 @@
 // with a genuine base-ref sandbox.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";

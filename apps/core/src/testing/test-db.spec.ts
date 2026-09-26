@@ -21,6 +21,24 @@ describe("test database naming", () => {
     expect(testDatabaseUrl()).toBe("postgresql://signet:signet@127.0.0.1:5765/signet_test");
   });
 
+  it("gives each suite its OWN database, because teardown truncates everything", () => {
+    // Sharing one meant whichever suite finished first wiped the others' data
+    // mid-run. vitest runs spec files in parallel, so this is not a rare race.
+    process.env["SIGNET_DATABASE_URL"] = "postgresql://signet:signet@127.0.0.1:5765/signet";
+    expect(testDatabaseUrl("gatestory")).toBe("postgresql://signet:signet@127.0.0.1:5765/signet_gatestory_test");
+    expect(testDatabaseUrl("crash")).not.toBe(testDatabaseUrl("e2e"));
+  });
+
+  it("puts the suite BEFORE the marker, so the guard stays strict", () => {
+    process.env["SIGNET_DATABASE_URL"] = "postgresql://signet:signet@127.0.0.1:5765/signet";
+    // signet_graph_test, never signet_test_graph. Suffixing the suite would have
+    // forced the guard from "ends in _test" to "contains _test", which also
+    // admits names like signet_test_backup — a real database someone cares about.
+    for (const suite of ["graph", "brief", "ports"]) {
+      expect(testDatabaseUrl(suite)).toMatch(/\/signet_[a-z]+_test$/);
+    }
+  });
+
   it("keeps credentials, host and port intact", () => {
     process.env["SIGNET_DATABASE_URL"] = "postgresql://u:p@db.internal:6543/app?sslmode=require";
     const url = new URL(testDatabaseUrl() as string);
@@ -33,6 +51,7 @@ describe("test database naming", () => {
   it("does not double-suffix an already-disposable database", () => {
     process.env["SIGNET_DATABASE_URL"] = "postgresql://signet:signet@127.0.0.1:5765/ci_test";
     expect(testDatabaseUrl()).toBe("postgresql://signet:signet@127.0.0.1:5765/ci_test");
+    expect(testDatabaseUrl("graph")).toBe("postgresql://signet:signet@127.0.0.1:5765/ci_graph_test");
   });
 
   it("returns null when nothing is configured, so suites skip rather than fail", () => {

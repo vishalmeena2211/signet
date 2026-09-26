@@ -10,12 +10,11 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../persistence/generated/client.js";
 import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { ConsoleViews } from "./console-views.js";
 
-const ctx = await setupTestDatabase();
+const ctx = await setupTestDatabase("brief");
 const enabled = ctx !== null;
 const url = ctx?.url ?? "";
 const d = enabled ? describe : describe.skip;

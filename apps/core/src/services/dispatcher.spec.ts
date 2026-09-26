@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   IncrementIdSchema,
   RunIdSchema,
@@ -243,5 +243,3 @@ describe("completer", () => {
     expect(msg?.payloadJson).toContain('"attempt":1'); // resume, not redo
   });
 });
-
-vi; // keep vitest import used under isolatedModules
