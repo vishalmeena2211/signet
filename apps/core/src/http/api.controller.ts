@@ -13,6 +13,7 @@ import {
   ApproveDesignRequestSchema,
   DispatcherControlRequestSchema,
   DispatcherStateSchema,
+  GithubRepoListSchema,
   RunIdSchema,
 } from "@signet/contracts";
 import type { ConsoleViews } from "../services/console-views.js";
@@ -119,6 +120,15 @@ export class ApiController {
   @Get("system")
   async system() {
     return this.system_.info();
+  }
+
+  /**
+   * The repositories the operator's GitHub login can see, for the picker. Cached
+   * by the client; never fails the field, since typing a path must always work.
+   */
+  @Get("github/repos")
+  async githubRepos() {
+    return GithubRepoListSchema.parse(await this.github.listRepos());
   }
 
   /** The context graph of everything learned, and what it notices about itself. */

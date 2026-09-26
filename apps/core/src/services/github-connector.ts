@@ -111,6 +111,109 @@ export class GithubConnector {
     }
   }
 
+  /**
+   * The repositories this token can see, most recently pushed first.
+   *
+   * Never throws: an operator without `gh` must still be able to type a path or a
+   * URL, so a missing token or a rate limit comes back as an empty list with a
+   * reason rather than an error that blocks the field.
+   */
+  async listRepos(): Promise<{
+    authenticated: boolean;
+    login: string | null;
+    repos: {
+      fullName: string;
+      description: string | null;
+      private: boolean;
+      language: string | null;
+      updatedAt: string;
+      defaultBranch: string;
+    }[];
+    truncated: boolean;
+    reason?: string;
+  }> {
+    const token = await this.token();
+    if (!token) {
+      return {
+        authenticated: false,
+        login: null,
+        repos: [],
+        truncated: false,
+        reason:
+          "No GitHub login found. Run `gh auth login` (or set GITHUB_TOKEN) to pick from your repositories — you can still paste a URL or a local path.",
+      };
+    }
+
+    const headers = {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${token}`,
+      "user-agent": "signet-learner",
+      "x-github-api-version": "2022-11-28",
+    };
+
+    try {
+      const me = await fetch("https://api.github.com/user", { headers });
+      const login = me.ok ? ((await me.json()) as { login?: string }).login ?? null : null;
+
+      // Sorted by push date: the repository you want is nearly always one you
+      // touched recently. One page keeps this to a single request.
+      const res = await fetch(
+        "https://api.github.com/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member",
+        { headers },
+      );
+      if (!res.ok) {
+        const exhausted = res.headers.get("x-ratelimit-remaining") === "0";
+        return {
+          authenticated: true,
+          login,
+          repos: [],
+          truncated: false,
+          reason: exhausted
+            ? "GitHub's rate limit is exhausted, so the list is unavailable for now. You can still paste a URL."
+            : `GitHub returned ${res.status} when listing your repositories. You can still paste a URL.`,
+        };
+      }
+
+      const raw = (await res.json()) as {
+        full_name?: string;
+        description?: string | null;
+        private?: boolean;
+        language?: string | null;
+        pushed_at?: string;
+        updated_at?: string;
+        default_branch?: string;
+      }[];
+
+      const repos = raw
+        .filter((r) => typeof r.full_name === "string")
+        .map((r) => ({
+          fullName: r.full_name as string,
+          description: r.description ?? null,
+          private: r.private ?? false,
+          language: r.language ?? null,
+          updatedAt: r.pushed_at ?? r.updated_at ?? new Date(0).toISOString(),
+          defaultBranch: r.default_branch ?? "main",
+        }));
+
+      return {
+        authenticated: true,
+        login,
+        repos,
+        // A full page means there are probably more; say so rather than implying
+        // the list is everything they own.
+        truncated: raw.length >= 100,
+      };
+    } catch (e) {
+      return {
+        authenticated: true,
+        login: null,
+        repos: [],
+        truncated: false,
+        reason: `Could not reach GitHub: ${firstLine(String(e))}. You can still paste a URL or a local path.`,
+      };
+    }
+  }
+
   /** Ask GitHub for the default branch rather than guessing it. */
   private async defaultBranch(src: GithubSource): Promise<string> {
     const token = await this.token();

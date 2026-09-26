@@ -44,8 +44,10 @@ const analysis: DriftAnalysis = {
 describe("finding → rule", () => {
   const rules = proposalsFrom(analysis);
 
-  it("produces one valid PROPOSED rule per finding", () => {
-    expect(rules).toHaveLength(3);
+  it("produces a valid PROPOSED rule for every finding that can gate", () => {
+    // Not one rule per finding: a finding with no enforceable check is an
+    // observation for the report, not an item for the confirmation queue.
+    expect(rules).toHaveLength(2);
     for (const r of rules) {
       expect(() => RuleSchema.parse(r)).not.toThrow();
       expect(r.status).toBe("PROPOSED");
@@ -65,8 +67,12 @@ describe("finding → rule", () => {
     expect(c?.evidence[0]?.ref).toBe("src/promo.tsx:9");
   });
 
-  it("orphaned asset is advisory — no enforceable check", () => {
-    const o = rules.find((r) => r.sourceFindingKind === "orphaned_asset");
-    expect(o?.check).toBeNull();
+  it("orphaned asset produces NO rule at all — advice is not a gate", () => {
+    // It used to become a rule with a null check: 127 items of triage on one real
+    // repository that could never gate anything, and mostly wrong anyway, since
+    // static reference-counting cannot see a dynamic import or an MDX reference.
+    expect(rules.find((r) => r.sourceFindingKind === "orphaned_asset")).toBeUndefined();
+    // And every rule that DOES reach the queue carries a check it can enforce.
+    for (const r of rules) expect(r.check).not.toBeNull();
   });
 });

@@ -78,11 +78,41 @@ describe("drift analyzer", () => {
     expect(conflicts).toHaveLength(1);
   });
 
-  it("flags the off-palette promo orange with evidence", () => {
+  it("does NOT raise a gating rule for a colour used once", () => {
+    // The promo orange appears a single time with a stable trend. A rule is a
+    // standing law applied to every future change, and one occurrence is an
+    // incident rather than a convention — so it does not belong in the queue.
+    //
+    // The case is not lost: it stays in the drift report, and the CONFORMANCE
+    // gate covers it per-increment against an approved design of record, which
+    // is exactly how this same colour was caught in the live demo. Two
+    // instruments, two jobs.
     const f = analysis.findings.find((x) => x.kind === "off_palette_color" && x.hex === "#ff5722");
+    expect(f).toBeUndefined();
+  });
+
+  it("DOES raise one for a colour used often enough to be a convention", () => {
+    const repeated = analyzeDrift(
+      {
+        ...extraction,
+        colors: [
+          ...extraction.colors,
+          ...Array.from({ length: 5 }, (_, i) => ({
+            hex: "#00a3a3",
+            alpha: 1,
+            raw: "#00a3a3",
+            file: `src/teal${i}.tsx`,
+            line: 2,
+            context: "code" as const,
+          })),
+        ],
+      },
+      trends,
+    );
+    const f = repeated.findings.find((x) => x.kind === "off_palette_color" && x.hex === "#00a3a3");
     expect(f).toBeTruthy();
     if (f?.kind !== "off_palette_color") return;
-    expect(f.evidence[0]).toEqual({ file: "src/promo.tsx", line: 9 });
+    expect(f.uses).toBeGreaterThanOrEqual(4);
   });
 
   it("near-duplicate purples cluster together rather than duplicating findings", () => {
@@ -103,5 +133,95 @@ describe("drift analyzer", () => {
     expect(md).toContain("`#6609be`");
     expect(md).toContain("legacy asset conflict");
     expect(md).toContain("public/logo.svg");
+  });
+});
+
+// Precision. A learner that proposes 355 near-identical rules has not found 355
+// problems, it has produced a queue nobody will read — and the research this
+// product is built on is explicit that rules die above roughly a 10% false
+// positive rate. These pin the two ways that happened on a real repository.
+
+describe("asset drift precision", () => {
+  /** Minimal extraction with one brand colour and whatever assets a test needs. */
+  function withAssets(assets: SourceExtraction["assets"]): SourceExtraction {
+    return {
+      root: "/x",
+      scannedFiles: 10,
+      colors: Array.from({ length: 20 }, (_, i) => ({
+        hex: "#6609be",
+        alpha: 1,
+        raw: "#6609be",
+        file: `src/f${i}.tsx`,
+        line: 1,
+        context: "code" as const,
+      })),
+      declaredTokens: [
+        { name: "--brand", value: "#6609be", resolvedHex: "#6609be", file: "src/globals.css", line: 2 },
+      ],
+      assets,
+    };
+  }
+
+  const offBrand = ["#ff3e00", "#40b3ff"]; // nothing like the purple brand
+  const asset = (file: string, references = 3) => ({
+    file,
+    kind: "svg" as const,
+    bytes: 800,
+    references,
+    referencedFrom: references > 0 ? ["src/Page.tsx"] : [],
+    paletteHexes: offBrand,
+  });
+
+  const noTrendData: ValueTrend[] = [
+    { value: "#6609be", counts: { now: 21, "6mo": 9, "12mo": 2 }, trend: "growing" },
+  ];
+
+  it("does NOT flag a third-party mark, which is off-brand on purpose", () => {
+    // This is the exact shape that produced 355 proposals from one docs site:
+    // a directory of framework logos, each legitimately carrying its own palette.
+    const analysis = analyzeDrift(
+      withAssets([
+        asset("src/docs/img/guides/svelte.react.svg"),
+        asset("src/docs/img/guides/rails.react.svg"),
+        asset("src/docs/img/guides/phoenix.react.svg"),
+        asset("assets/vendor/stripe.svg"),
+        asset("public/social/twitter.svg"),
+      ]),
+      noTrendData,
+    );
+    expect(analysis.findings.filter((f) => f.kind === "legacy_asset_conflict")).toHaveLength(0);
+  });
+
+  it("does NOT treat an unknown trend as evidence against an asset", () => {
+    // An SVG's colours rarely appear as literals in source, so the trend miner
+    // returns "unknown" for almost every asset. Absence of evidence was being
+    // read as evidence of absence, which is what made this fire on everything.
+    const analysis = analyzeDrift(withAssets([asset("public/images/illustration-hero.svg")]), noTrendData);
+    expect(analysis.findings.filter((f) => f.kind === "legacy_asset_conflict")).toHaveLength(0);
+  });
+
+  it("STILL flags an identity asset in a foreign palette — the case this exists for", () => {
+    // The pilot's real finding must survive the precision work.
+    const analysis = analyzeDrift(withAssets([asset("public/logo/logo.svg", 0)]), noTrendData);
+    const found = analysis.findings.filter((f) => f.kind === "legacy_asset_conflict");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.kind === "legacy_asset_conflict" && found[0].asset).toBe("public/logo/logo.svg");
+  });
+
+  it("STILL flags an asset whose colours are observably dying in the history", () => {
+    const dying: ValueTrend[] = [
+      ...noTrendData,
+      { value: "#ff3e00", counts: { now: 1, "6mo": 8, "12mo": 20 }, trend: "dying" },
+      { value: "#40b3ff", counts: { now: 0, "6mo": 3, "12mo": 11 }, trend: "gone" },
+    ];
+    const analysis = analyzeDrift(withAssets([asset("public/images/banner-old.svg")]), dying);
+    expect(analysis.findings.filter((f) => f.kind === "legacy_asset_conflict")).toHaveLength(1);
+  });
+
+  it("does not let a vendor name inside a normal word trigger the exemption", () => {
+    // "reaction" contains "react"; the boundary matters or the exemption becomes
+    // a hole big enough to hide real drift in.
+    const analysis = analyzeDrift(withAssets([asset("public/logo/reaction-logo.svg", 0)]), noTrendData);
+    expect(analysis.findings.filter((f) => f.kind === "legacy_asset_conflict")).toHaveLength(1);
   });
 });

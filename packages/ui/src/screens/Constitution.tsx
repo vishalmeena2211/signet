@@ -17,15 +17,16 @@ import {
   Card,
   Divider,
   Field,
-  Input,
   Row,
-  SectionTitle,
   Segmented,
   Stack,
   TextArea,
   type Tone,
 } from "../ui/primitives.js";
 import { ConfirmButton, EmptyState, ErrorNote, QueryState, useToast } from "../ui/feedback.js";
+import { Combobox } from "../ui/combobox.js";
+import { Forensics } from "../ui/tiers.js";
+import { RelativeTime } from "../ui/format.js";
 
 /**
  * Trend is the novel part of the mining: a convention's direction matters more
@@ -74,7 +75,16 @@ export function Constitution({ route }: { route: Extract<Route, { view: "constit
 
   return (
     <Stack gap="var(--s5)">
-      <LearnPanel onLearned={invalidate} />
+      {/* Learning a repository is occasional; reviewing the queue is why you are
+          here. So the panel folds away unless the queue is empty, in which case
+          it IS the next step. */}
+      <Forensics
+        id="constitution.learn"
+        label="Learn a repository"
+        defaultOpen={(queue.data ?? []).length === 0}
+      >
+        <LearnPanel onLearned={invalidate} />
+      </Forensics>
 
       <Stack gap="var(--s3)">
         <Row justify="space-between" wrap gap="var(--s3)">
@@ -129,6 +139,16 @@ export function Constitution({ route }: { route: Extract<Route, { view: "constit
 function LearnPanel({ onLearned }: { onLearned: () => void }) {
   const [repoPath, setRepoPath] = useState("");
   const toast = useToast();
+
+  // Only fetched when the panel is open, so the queue does not cost a GitHub
+  // request on every visit.
+  const repos = useQuery({
+    queryKey: ["github", "repos"],
+    queryFn: api.githubRepos,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
   const learn = useMutation({
     mutationFn: () => api.learn(repoPath),
     onSuccess: (r) => {
@@ -137,37 +157,63 @@ function LearnPanel({ onLearned }: { onLearned: () => void }) {
     },
   });
 
+  const options = (repos.data?.repos ?? []).map((r) => ({
+    value: r.fullName,
+    label: r.fullName,
+    ...(r.description ? { hint: r.description } : {}),
+    meta: (
+      <Row gap="var(--s2)" style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-xs)" }}>
+        {r.private && <Badge tone="idle">private</Badge>}
+        {r.language && <span>{r.language}</span>}
+        <RelativeTime iso={r.updatedAt} />
+      </Row>
+    ),
+  }));
+
+  const isGithub = repoPath.includes("github.com") || (repoPath.includes("/") && !repoPath.startsWith("/"));
+
   return (
     <Card>
       <Stack gap="var(--s3)">
-        <SectionTitle>Learn a repository</SectionTitle>
         <p style={{ color: "var(--fg-muted)" }}>
           Signet reads the source and the git history, then proposes the conventions it can evidence —
-          weighting the direction a convention is moving over how often it appears today. Point it at a
-          local path or straight at GitHub.
+          weighting the direction a convention is moving over how often it appears today.
         </p>
         <Row gap="var(--s2)" wrap align="flex-end">
-          <div style={{ flex: "1 1 360px" }}>
+          <div style={{ flex: "1 1 380px", minWidth: 0 }}>
             <Field
               label="Repository"
-              hint="A local absolute path, or a GitHub repository — https://github.com/owner/repo, git@github.com:owner/repo, or just owner/repo. Read-only either way; nothing is written to it."
+              hint={
+                repos.data?.authenticated
+                  ? `Search your GitHub repositories${repos.data.login ? ` as ${repos.data.login}` : ""}, paste any URL, or give a local absolute path. Read-only either way.`
+                  : "A local absolute path, or a GitHub repository — a URL, or owner/repo. Read-only either way."
+              }
             >
-              <Input
+              <Combobox
                 value={repoPath}
                 onChange={setRepoPath}
-                placeholder="/Users/you/code/your-frontend  ·  or  tailwindlabs/tailwindcss.com"
+                options={options}
+                loading={repos.isPending}
                 mono
+                placeholder="Search your repositories, or paste a path or URL"
+                {...(repos.data?.reason ? { emptyNote: repos.data.reason } : {})}
+                onSubmit={() => {
+                  if (repoPath.trim() && !learn.isPending) learn.mutate();
+                }}
               />
             </Field>
           </div>
-          <Button
-            variant="primary"
-            disabled={!repoPath.trim() || learn.isPending}
-            onClick={() => learn.mutate()}
-          >
-            {learn.isPending ? (repoPath.includes("github") || repoPath.includes("/") && !repoPath.startsWith("/") ? "Cloning & reading…" : "Reading…") : "Learn it"}
+          <Button variant="primary" disabled={!repoPath.trim() || learn.isPending} onClick={() => learn.mutate()}>
+            {learn.isPending ? (isGithub ? "Cloning & reading…" : "Reading…") : "Learn it"}
           </Button>
         </Row>
+
+        {repos.data?.truncated && (
+          <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
+            Showing your 100 most recently pushed repositories. Paste a URL for anything older.
+          </span>
+        )}
+
         {learn.data && (
           <Stack gap="var(--s1)">
             <span style={{ color: "var(--ok)" }}>
@@ -180,8 +226,6 @@ function LearnPanel({ onLearned }: { onLearned: () => void }) {
                 <span>
                   {learn.data.source.branch} at {learn.data.source.headSha}
                 </span>
-                {/* The trend miner is only as good as its window, so say how far
-                    back the clone actually reaches rather than implying "all". */}
                 <span>
                   {learn.data.source.commits} commits, history from{" "}
                   {new Date(learn.data.source.historyFrom).toLocaleDateString()}

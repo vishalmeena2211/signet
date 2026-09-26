@@ -79,16 +79,19 @@ export function findingToRule(f: Finding, brandHexes: string[]): Rule | null {
       );
     }
     case "orphaned_asset": {
-      // Advisory only — no reliable enforceable check (deletion is a human call).
-      return rule(
-        `Asset ${f.asset} is unreferenced — consider removing it.`,
-        "asset",
-        [{ ref: f.asset, kind: "asset" }],
-        0.3,
-        "unknown",
-        null,
-        f.kind,
-      );
+      // NOT a rule. This finding has no enforceable check — deleting a file is a
+      // human call — so confirming it could never gate anything. On a real
+      // repository that meant 127 items of triage that can never pay anyone back.
+      //
+      // It is also frequently wrong: static reference-counting cannot see an image
+      // pulled in by a dynamic import, referenced from MDX, or named at runtime,
+      // so on any modern framework most "unreferenced" assets are referenced fine.
+      //
+      // It stays in the drift report, where an observation belongs. The
+      // confirmation queue is for things that will gate — this codebase's own
+      // principle is that a statement which cannot compile to a check is advice,
+      // and mixing advice into the queue is what stops the queue being read.
+      return null;
     }
     default:
       return null;

@@ -78,6 +78,27 @@ const CLUSTER_EPS = 10; // deltaE: members of one palette family
 const NEAR_DUP_EPS = 5; // deltaE: should-be-identical
 const FAR_FROM_PALETTE = 25; // deltaE: clearly foreign
 
+/**
+ * A colour used fewer times than this is a one-off, not a convention, and a rule
+ * about it would gate on a single line someone wrote once. Conventions are things
+ * a codebase does repeatedly — that is what makes them worth enforcing.
+ */
+const OFF_PALETTE_MIN_USES = 4;
+
+/**
+ * Assets that carry someone else's palette on purpose, and must never be reported
+ * as drift. Framework and vendor marks, partner and payment badges, social icons,
+ * flags, avatars, and anything living in a directory that announces it is
+ * third-party. Run against the whole path, so `src/docs/img/guides/svelte.svg`
+ * matches on the framework name and `assets/vendor/x.svg` matches on the folder.
+ *
+ * Getting this wrong is expensive in one direction only: a missed drift is one
+ * rule you have to notice yourself, while a false one is a proposal you must
+ * reject — and a queue full of rejections is a queue that stops being read.
+ */
+const THIRD_PARTY_ASSET =
+  /(?:^|[/_.-])(?:vendor|vendors|third[_-]?party|external|partners?|brands?logos|social|flags?|avatars?|integrations?|guides?|frameworks?)(?:[/_.-]|$)|(?:^|[/_.-])(?:react|vue|svelte|angular|solid|qwik|astro|remix|nextjs|next|nuxt|rails|laravel|django|flask|phoenix|django|spring|dotnet|node|deno|bun|vite|webpack|rollup|esbuild|github|gitlab|bitbucket|google|apple|microsoft|amazon|aws|azure|gcp|slack|discord|twitter|x|facebook|meta|linkedin|youtube|figma|stripe|paypal|visa|mastercard|amex|npm|yarn|pnpm|docker|kubernetes|postgres|postgresql|mysql|mongodb|redis|typescript|javascript|python|ruby|golang|rust|php|java|swift|kotlin)(?:[_.-]|$)/i;
+
 export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[]): DriftAnalysis {
   const trendByHex = new Map(trends.map((t) => [t.value.toLowerCase(), t]));
 
@@ -150,13 +171,26 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
       const minDist = Math.min(...assetChromatic.map((h) => deltaE(h, brand.canonicalHex)));
       if (minDist <= FAR_FROM_PALETTE) continue;
       const assetTrends = assetChromatic.map((h) => trendByHex.get(h)?.trend ?? "unknown");
+
       // Identity assets (logos, brand marks) are held to a stricter standard:
       // a LOGO in a foreign palette is drift by definition, referenced or not.
       const isIdentityAsset = /logo|brand/i.test(asset.file);
-      const suspicious =
-        isIdentityAsset ||
-        asset.references === 0 ||
+
+      // A third-party mark is SUPPOSED to be off-brand. Framework logos, partner
+      // badges, payment marks and social icons all carry someone else's palette
+      // on purpose, so flagging them is pure noise.
+      const isThirdPartyMark = THIRD_PARTY_ASSET.test(asset.file);
+
+      // Colours that are dying or gone in the history are real evidence. "unknown"
+      // is NOT: an SVG's colours rarely appear as literals in source, so the trend
+      // miner returns unknown for almost every asset. Treating that as evidence
+      // meant every vendor logo on a documentation site became a proposal — 355 of
+      // them on one repository, which is a queue nobody will ever review.
+      const trendsAgainstIt =
+        assetTrends.some((t) => t === "dying" || t === "gone") &&
         assetTrends.every((t) => t === "dying" || t === "gone" || t === "unknown");
+
+      const suspicious = !isThirdPartyMark && (isIdentityAsset || trendsAgainstIt);
       if (!suspicious) continue;
       findings.push({
         kind: "legacy_asset_conflict",
@@ -187,6 +221,19 @@ export function analyzeDrift(extraction: SourceExtraction, trends: ValueTrend[])
         .map((d) => ({ d, dist: deltaE(cl.canonicalHex, d.canonicalHex) }))
         .sort((a, b) => a.dist - b.dist)[0];
       if (!nearest || nearest.dist <= FAR_FROM_PALETTE) continue;
+
+      // Positive evidence, or no proposal. Same principle as the asset case: an
+      // unknown trend means the history told us nothing, not that the colour is
+      // wrong. On a repository whose palette IS its subject matter — a docs site,
+      // a component gallery — every colour is "off-palette" against whichever
+      // token happened to rank first, and 140 such proposals bury the real ones.
+      //
+      // So a colour must EITHER be observably on the way out, OR be used enough
+      // to be a convention rather than a one-off.
+      const trendIsEvidence = cl.trend === "dying" || cl.trend === "gone";
+      const usedLikeAConvention = cl.totalUses >= OFF_PALETTE_MIN_USES;
+      if (!trendIsEvidence && !usedLikeAConvention) continue;
+
       findings.push({
         kind: "off_palette_color",
         severity: "medium",

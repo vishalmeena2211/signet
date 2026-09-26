@@ -24,6 +24,7 @@ import {
   RunSummarySchema,
   SystemInfoSchema,
   ContextGraphSchema,
+  GithubRepoListSchema,
   type ActivityEvent,
   type DispatcherControlRequest,
   type DispatcherState,
@@ -33,6 +34,7 @@ import {
   type RunSummary,
   type SystemInfo,
   type ContextGraph,
+  type GithubRepoList,
   type ActivityView,
   type ApproveDesignRequest,
   type CreateFeatureRequest,
@@ -176,6 +178,8 @@ export const api = {
     get(`/api/activity?limit=${limit}`, z.array(ActivityEventSchema)),
 
   system: (): Promise<SystemInfo> => get("/api/system", SystemInfoSchema),
+
+  githubRepos: (): Promise<GithubRepoList> => get("/api/github/repos", GithubRepoListSchema),
 
   graph: (repo?: string): Promise<ContextGraph> =>
     get(`/api/graph${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`, ContextGraphSchema),

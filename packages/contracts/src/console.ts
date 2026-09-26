@@ -214,6 +214,31 @@ export const SystemInfoSchema = z.object({
 });
 export type SystemInfo = z.infer<typeof SystemInfoSchema>;
 
+// ── GitHub repository picker ──
+
+export const GithubRepoSchema = z.object({
+  fullName: z.string(), // owner/repo
+  description: z.string().nullable(),
+  private: z.boolean(),
+  language: z.string().nullable(),
+  updatedAt: z.iso.datetime(),
+  defaultBranch: z.string(),
+});
+export type GithubRepo = z.infer<typeof GithubRepoSchema>;
+
+export const GithubRepoListSchema = z.object({
+  /** False when no token was found — the list is empty but typing still works. */
+  authenticated: z.boolean(),
+  /** Who the token belongs to, so it is obvious which account is being listed. */
+  login: z.string().nullable(),
+  repos: z.array(GithubRepoSchema),
+  /** True when the account has more than we fetched, so the console can say so. */
+  truncated: z.boolean(),
+  /** Why the list is empty, when it is. */
+  reason: z.string().optional(),
+});
+export type GithubRepoList = z.infer<typeof GithubRepoListSchema>;
+
 // ── operational control ──
 
 export const DispatcherControlRequestSchema = z.object({
