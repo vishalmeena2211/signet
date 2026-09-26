@@ -22,6 +22,7 @@ import {
   type SessionRef,
 } from "@signet/contracts";
 import { PrismaClient } from "../persistence/generated/client.js";
+import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { PrismaQuotaStore, PrismaUnitOfWork } from "../persistence/prisma-ports.js";
 import { WorktreeManager } from "../domain/runtime/worktree-manager.js";
 import { checkScope } from "../domain/pipeline/scope-checker.js";
@@ -30,8 +31,9 @@ import { Dispatcher, enqueueRun, recoverOrphanedRuns } from "../services/dispatc
 import { PackAssemblerV0 } from "../services/pack-assembler.js";
 import type { Logger } from "../domain/runtime/logger.js";
 
-const url = process.env["SIGNET_DATABASE_URL"];
-const enabled = typeof url === "string" && url.length > 0;
+const ctx = await setupTestDatabase();
+const enabled = ctx !== null;
+const url = ctx?.url ?? "";
 const d = enabled ? describe : describe.skip;
 const pexec = promisify(execFile);
 
@@ -58,7 +60,7 @@ async function git(args: string[], cwd: string) {
 
 beforeAll(async () => {
   if (!enabled) return;
-  client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  client = ctx!.db;
   uow = new PrismaUnitOfWork(client);
   repo = await mkdtemp(join(tmpdir(), "signet-crash-repo-"));
   workspaces = await mkdtemp(join(tmpdir(), "signet-crash-ws-"));
@@ -90,8 +92,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!enabled) return;
-  await client.$disconnect();
+  // Id-free and unconditional: a teardown that deletes remembered rows can
+  // miss one, and missing one is how 22 test features ended up on the board.
+  await truncateAll(client, url);
   for (const p of [repo, workspaces, packs]) await rm(p, { recursive: true, force: true }).catch(() => {});
+  await client.$disconnect();
 });
 
 function buildEngine(driver: AgentDriver) {

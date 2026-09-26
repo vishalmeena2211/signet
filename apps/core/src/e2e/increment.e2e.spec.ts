@@ -17,6 +17,7 @@ import { promisify } from "node:util";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { IncrementIdSchema, type IncrementId } from "@signet/contracts";
 import { PrismaClient } from "../persistence/generated/client.js";
+import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { PrismaUnitOfWork, PrismaQuotaStore } from "../persistence/prisma-ports.js";
 import { WorktreeManager } from "../domain/runtime/worktree-manager.js";
 import { ClaudeAdapter } from "../domain/adapter/claude-adapter.js";
@@ -31,8 +32,10 @@ import { Dispatcher, enqueueRun } from "../services/dispatcher.js";
 import type { Logger } from "../domain/runtime/logger.js";
 import type { RunOutcome } from "../services/run-engine.js";
 
-const url = process.env["SIGNET_DATABASE_URL"];
-const enabled = process.env["SIGNET_E2E"] === "1" && typeof url === "string" && url.length > 0;
+const ctx = await setupTestDatabase();
+// The e2e suites burn real quota, so they stay opt-in as well as isolated.
+const enabled = process.env["SIGNET_E2E"] === "1" && ctx !== null;
+const url = ctx?.url ?? "";
 const d = enabled ? describe : describe.skip;
 
 const pexec = promisify(execFile);
@@ -199,7 +202,7 @@ async function runIncrementToSignature(incrementId: IncrementId): Promise<{ outc
 
 beforeAll(async () => {
   if (!enabled) return;
-  client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  client = ctx!.db;
   uow = new PrismaUnitOfWork(client);
   repo = await makeFixtureRepo();
   workspaces = await mkdtemp(join(tmpdir(), "signet-e2e-ws-"));
@@ -208,10 +211,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!enabled) return;
-  await client.$disconnect();
+  // Id-free and unconditional: a teardown that deletes remembered rows can
+  // miss one, and missing one is how 22 test features ended up on the board.
+  await truncateAll(client, url);
   await rm(repo, { recursive: true, force: true }).catch(() => {});
   await rm(workspaces, { recursive: true, force: true }).catch(() => {});
   await rm(packs, { recursive: true, force: true }).catch(() => {});
+  await client.$disconnect();
 });
 
 d("PHASE 0 E2E (LIVE — real worker, live DB)", () => {

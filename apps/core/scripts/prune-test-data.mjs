@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-// Removes the features that the automated tests create, and nothing else.
+// Removes the features that the automated tests USED to create, and nothing else.
+//
+// Kept for cleaning up databases polluted before the tests were isolated. New runs
+// cannot add to this mess: suites now use a separate `_test` database and tear down
+// by truncating it. If this script finds anything, it is history.
 //
 // The e2e and crash-replay suites seed features against the live development
 // database, so after a few runs the board is dominated by rows titled "itest

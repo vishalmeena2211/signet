@@ -10,10 +10,12 @@ import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { nodeId } from "@signet/contracts";
 import { PrismaClient } from "../persistence/generated/client.js";
+import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { ContextGraphService } from "./context-graph.js";
 
-const url = process.env["SIGNET_DATABASE_URL"];
-const enabled = typeof url === "string" && url.length > 0;
+const ctx = await setupTestDatabase();
+const enabled = ctx !== null;
+const url = ctx?.url ?? "";
 const d = enabled ? describe : describe.skip;
 
 const REPO = "cg-spec-repo";
@@ -53,18 +55,15 @@ async function rule(opts: {
 
 beforeAll(async () => {
   if (!enabled) return;
-  db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  db = ctx!.db;
   graph = new ContextGraphService(db);
 });
 
 afterAll(async () => {
   if (!enabled) return;
-  await db.ruleEvidence.deleteMany({ where: { ruleId: { in: made.rules } } });
-  await db.rule.deleteMany({ where: { id: { in: made.rules } } });
-  await db.designRecord.deleteMany({ where: { incrementId: { in: made.increments } } });
-  await db.increment.deleteMany({ where: { id: { in: made.increments } } });
-  await db.briefVersion.deleteMany({ where: { featureId: { in: made.features } } });
-  await db.feature.deleteMany({ where: { id: { in: made.features } } });
+  // Id-free and unconditional: a teardown that deletes remembered rows can
+  // miss one, and missing one is how 22 test features ended up on the board.
+  await truncateAll(db, url);
   await db.$disconnect();
 });
 

@@ -12,10 +12,12 @@ import {
   type RunId,
 } from "@signet/contracts";
 import { PrismaClient } from "./generated/client.js";
+import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { PrismaUnitOfWork } from "./prisma-ports.js";
 
-const url = process.env["SIGNET_DATABASE_URL"];
-const enabled = typeof url === "string" && url.length > 0;
+const ctx = await setupTestDatabase();
+const enabled = ctx !== null;
+const url = ctx?.url ?? "";
 
 const d = enabled ? describe : describe.skip;
 
@@ -27,7 +29,7 @@ let RUN: RunId;
 
 beforeAll(async () => {
   if (!enabled) return;
-  client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  client = ctx!.db;
   uow = new PrismaUnitOfWork(client);
   FEATURE = randomUUID();
   INC = IncrementIdSchema.parse(randomUUID());
@@ -52,6 +54,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!enabled) return;
+  // Id-free and unconditional: a teardown that deletes remembered rows can
+  // miss one, and missing one is how 22 test features ended up on the board.
+  await truncateAll(client, url);
   await client.$disconnect();
 });
 

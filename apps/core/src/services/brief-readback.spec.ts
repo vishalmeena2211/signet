@@ -12,10 +12,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../persistence/generated/client.js";
+import { setupTestDatabase, truncateAll } from "../testing/test-db.js";
 import { ConsoleViews } from "./console-views.js";
 
-const url = process.env["SIGNET_DATABASE_URL"];
-const enabled = typeof url === "string" && url.length > 0;
+const ctx = await setupTestDatabase();
+const enabled = ctx !== null;
+const url = ctx?.url ?? "";
 const d = enabled ? describe : describe.skip;
 
 let db: PrismaClient;
@@ -28,7 +30,7 @@ const stepNew = randomUUID();
 
 beforeAll(async () => {
   if (!enabled) return;
-  db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  db = ctx!.db;
   views = new ConsoleViews(db);
 
   await db.feature.create({ data: { id: featureId, title: "brief-readback spec", stage: "IMPLEMENTING" } });
@@ -60,9 +62,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!enabled) return;
-  await db.increment.deleteMany({ where: { featureId } });
-  await db.briefVersion.deleteMany({ where: { featureId } });
-  await db.feature.deleteMany({ where: { id: featureId } });
+  // Id-free and unconditional: a teardown that deletes remembered rows can
+  // miss one, and missing one is how 22 test features ended up on the board.
+  await truncateAll(db, url);
   await db.$disconnect();
 });
 
