@@ -244,10 +244,12 @@ export class OperatorViews {
       take: opts.limit,
     });
 
-    const failedGates = await this.failedGatesByRun(rows.map((r) => r.id));
+    const stories = await this.gateStoryByRun(rows.map((r) => r.id));
 
-    return rows.map((r) =>
-      RunSummarySchema.parse({
+    return rows.map((r) => {
+      const story = stories.get(r.id);
+      const maxAttempt = r.phases.reduce((m, p) => Math.max(m, p.attempt), 1);
+      return RunSummarySchema.parse({
         id: r.id,
         incrementId: r.increment.id,
         incrementTitle: r.increment.title,
@@ -258,7 +260,11 @@ export class OperatorViews {
         finishedAt: r.finishedAt?.toISOString() ?? null,
         durationMs: r.finishedAt ? r.finishedAt.getTime() - r.startedAt.getTime() : null,
         phaseCount: r.phases.length,
-        maxAttempt: r.phases.reduce((m, p) => Math.max(m, p.attempt), 1),
+        maxAttempt,
+        gateRounds: story?.rounds ?? 0,
+        // A repair shows up as either an extra phase attempt or an extra gate
+        // round; take whichever is larger so neither path under-reports.
+        repairs: Math.max(maxAttempt - 1, (story?.rounds ?? 1) - 1),
         inputTokens: r.usage.reduce((s, u) => s + u.inputTokens, 0),
         outputTokens: r.usage.reduce((s, u) => s + u.outputTokens, 0),
         // Unpriced models must not be summed as zero: if every entry is
@@ -266,22 +272,64 @@ export class OperatorViews {
         costUsd: r.usage.every((u) => u.costUsd === null)
           ? null
           : r.usage.reduce((s, u) => s + Number(u.costUsd ?? 0), 0),
-        gatesFailed: failedGates.get(r.id) ?? [],
-      }),
-    );
+        gatesFailed: story?.failed ?? [],
+        gatesRepaired: story?.repaired ?? [],
+      });
+    });
   }
 
-  private async failedGatesByRun(runIds: string[]): Promise<Map<string, string[]>> {
-    if (runIds.length === 0) return new Map();
+  /**
+   * The gate story per run: how many rounds ran, what still failed at the end,
+   * and what failed earlier but was repaired.
+   *
+   * Rounds are derived by counting verdicts per gate name — the suite records
+   * exactly one verdict per gate per round, so the highest per-gate count IS the
+   * round count. This matters because a repair loop re-runs the gates inside a
+   * single phase attempt, so the RunPhase rows show attempt=1 even when two
+   * rounds happened: reading repairs from phase attempts under-reports them.
+   *
+   * Separating "failed finally" from "failed then passed" matters just as much. A
+   * conformance failure that the agent then fixed is the gate working, and listing
+   * it beside a genuine blocker in the same column makes every successful repair
+   * look like a defect.
+   */
+  private async gateStoryByRun(
+    runIds: string[],
+  ): Promise<Map<string, { rounds: number; failed: string[]; repaired: string[] }>> {
+    const map = new Map<string, { rounds: number; failed: string[]; repaired: string[] }>();
+    if (runIds.length === 0) return map;
+
     const verdicts = await this.db.gateVerdict.findMany({
-      where: { runId: { in: runIds }, outcome: "fail" },
-      select: { runId: true, gate: true },
+      where: { runId: { in: runIds } },
+      select: { runId: true, gate: true, outcome: true, recordedAt: true },
+      orderBy: { recordedAt: "asc" },
     });
-    const map = new Map<string, string[]>();
+
+    const byRun = new Map<string, typeof verdicts>();
     for (const v of verdicts) {
-      const list = map.get(v.runId) ?? [];
-      if (!list.includes(v.gate)) list.push(v.gate);
-      map.set(v.runId, list);
+      const list = byRun.get(v.runId) ?? [];
+      list.push(v);
+      byRun.set(v.runId, list);
+    }
+
+    for (const [runId, list] of byRun) {
+      const perGate = new Map<string, { outcomes: string[] }>();
+      for (const v of list) {
+        const e = perGate.get(v.gate) ?? { outcomes: [] };
+        e.outcomes.push(v.outcome);
+        perGate.set(v.gate, e);
+      }
+      const rounds = Math.max(1, ...[...perGate.values()].map((e) => e.outcomes.length));
+
+      const failed: string[] = [];
+      const repaired: string[] = [];
+      for (const [gate, e] of perGate) {
+        const last = e.outcomes[e.outcomes.length - 1];
+        const everFailed = e.outcomes.includes("fail");
+        if (last === "fail") failed.push(gate);
+        else if (everFailed) repaired.push(gate);
+      }
+      map.set(runId, { rounds, failed, repaired });
     }
     return map;
   }
@@ -298,7 +346,8 @@ export class OperatorViews {
     });
     if (!run) return null;
 
-    const failed = await this.failedGatesByRun([run.id]);
+    const story = (await this.gateStoryByRun([run.id])).get(run.id);
+    const maxAttempt = run.phases.reduce((m, p) => Math.max(m, p.attempt), 1);
     const byModel = new Map<string, { calls: number; input: number; cached: number; output: number; cost: number | null }>();
     for (const u of run.usage) {
       const cur = byModel.get(u.model) ?? { calls: 0, input: 0, cached: 0, output: 0, cost: null };
@@ -322,13 +371,16 @@ export class OperatorViews {
         finishedAt: run.finishedAt?.toISOString() ?? null,
         durationMs: run.finishedAt ? run.finishedAt.getTime() - run.startedAt.getTime() : null,
         phaseCount: run.phases.length,
-        maxAttempt: run.phases.reduce((m, p) => Math.max(m, p.attempt), 1),
+        maxAttempt,
+        gateRounds: story?.rounds ?? 0,
+        repairs: Math.max(maxAttempt - 1, (story?.rounds ?? 1) - 1),
         inputTokens: run.usage.reduce((s, u) => s + u.inputTokens, 0),
         outputTokens: run.usage.reduce((s, u) => s + u.outputTokens, 0),
         costUsd: run.usage.every((u) => u.costUsd === null)
           ? null
           : run.usage.reduce((s, u) => s + Number(u.costUsd ?? 0), 0),
-        gatesFailed: failed.get(run.id) ?? [],
+        gatesFailed: story?.failed ?? [],
+        gatesRepaired: story?.repaired ?? [],
       }),
       phases: run.phases.map((p) =>
         RunPhaseViewSchema.parse({

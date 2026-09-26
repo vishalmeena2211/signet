@@ -533,10 +533,19 @@ function RunsTab({ featureId, increments }: { featureId: string; increments: Inc
                   {r.outcome}
                 </Badge>
                 <span>{r.incrementTitle}</span>
-                {r.maxAttempt > 1 && <Badge tone="warn">{r.maxAttempt - 1} repairs</Badge>}
+                {r.repairs > 0 && (
+                  <Badge tone="warn">
+                    {r.repairs} repair{r.repairs === 1 ? "" : "s"}
+                  </Badge>
+                )}
                 {r.gatesFailed.map((g) => (
                   <Badge key={g} tone="err" mono>
-                    {g}
+                    {g} blocked
+                  </Badge>
+                ))}
+                {r.gatesRepaired.map((g) => (
+                  <Badge key={g} tone="ok" mono>
+                    {g} ✓ repaired
                   </Badge>
                 ))}
               </Row>

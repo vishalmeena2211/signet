@@ -69,16 +69,28 @@ export function Runs({ route }: { route: Extract<Route, { view: "runs" }> }) {
     {
       key: "gates",
       header: "Gates",
-      width: "150px",
+      width: "190px",
       render: (r) =>
-        r.gatesFailed.length === 0 ? (
-          <span style={{ color: "var(--fg-subtle)" }}>—</span>
+        r.gatesFailed.length === 0 && r.gatesRepaired.length === 0 ? (
+          <span style={{ color: "var(--fg-subtle)" }}>clean</span>
         ) : (
           <Row gap="var(--s1)" wrap>
             {r.gatesFailed.map((g) => (
-              <Badge key={g} tone="err" mono>
-                {g}
-              </Badge>
+              <span key={g} title={`${g} was still failing in the final round — this is what blocked`}>
+                <Badge tone="err" mono>
+                  {g}
+                </Badge>
+              </span>
+            ))}
+            {/* A gate that failed and was then fixed is the gate doing its job.
+                Showing it in the same red as a blocker would make every
+                successful repair read as a defect. */}
+            {r.gatesRepaired.map((g) => (
+              <span key={g} title={`${g} failed, the agent was given the findings, and it passed on a later round`}>
+                <Badge tone="ok" mono>
+                  {g} ✓ repaired
+                </Badge>
+              </span>
             ))}
           </Row>
         ),
@@ -88,12 +100,14 @@ export function Runs({ route }: { route: Extract<Route, { view: "runs" }> }) {
       header: "Repairs",
       width: "90px",
       align: "right",
-      sort: (a, b) => a.maxAttempt - b.maxAttempt,
+      sort: (a, b) => a.repairs - b.repairs,
       render: (r) =>
-        r.maxAttempt > 1 ? (
-          <Badge tone="warn" mono>
-            {r.maxAttempt - 1}
-          </Badge>
+        r.repairs > 0 ? (
+          <span title={`The gate suite ran ${r.gateRounds} times`}>
+            <Badge tone="warn" mono>
+              {r.repairs}
+            </Badge>
+          </span>
         ) : (
           <span style={{ color: "var(--fg-subtle)" }}>0</span>
         ),
@@ -228,7 +242,9 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
                 <RelativeTime iso={d.summary.startedAt} />
               </Detail>
               <Detail label="Repairs">
-                <span className="num">{Math.max(0, d.summary.maxAttempt - 1)}</span>
+                <span className="num" title={`The gate suite ran ${d.summary.gateRounds} time(s)`}>
+                  {d.summary.repairs}
+                </span>
               </Detail>
               <Detail label="Cost">
                 <Money usd={d.summary.costUsd} />

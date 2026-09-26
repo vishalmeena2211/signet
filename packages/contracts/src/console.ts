@@ -87,12 +87,26 @@ export const RunSummarySchema = z.object({
   finishedAt: z.iso.datetime().nullable(),
   durationMs: z.number().int().nullable(),
   phaseCount: z.number().int(),
-  /** Highest attempt number seen across phases: the repair count, observed not reported. */
+  /** Highest attempt number seen across phases. */
   maxAttempt: z.number().int(),
+  /**
+   * How many times the gate suite ran. Two rounds means one repair happened,
+   * and this is observed from the verdict history rather than self-reported —
+   * a repair inside a single phase attempt is invisible to `maxAttempt`.
+   */
+  gateRounds: z.number().int(),
+  repairs: z.number().int(),
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
   costUsd: z.number().nullable(),
+  /** Gates still failing in the FINAL round — the ones that actually blocked. */
   gatesFailed: z.array(z.string()),
+  /**
+   * Gates that failed in an earlier round and passed by the last one. This is the
+   * gate doing its job, not the gate complaining, and conflating the two makes a
+   * successful repair look like a failure.
+   */
+  gatesRepaired: z.array(z.string()),
 });
 export type RunSummary = z.infer<typeof RunSummarySchema>;
 

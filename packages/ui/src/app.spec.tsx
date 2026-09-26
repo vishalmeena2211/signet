@@ -63,10 +63,13 @@ const RUNS = [
     durationMs: 62_218,
     phaseCount: 7,
     maxAttempt: 1,
+    gateRounds: 1,
+    repairs: 0,
     inputTokens: 2458,
     outputTokens: 5346,
     costUsd: 0.4357,
     gatesFailed: [],
+    gatesRepaired: [],
   },
 ];
 
