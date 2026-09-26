@@ -19,13 +19,13 @@ export type Route =
   | { view: "new" };
 
 export const NAV: readonly { view: Route["view"]; label: string; hint: string }[] = [
-  { view: "overview", label: "Overview", hint: "Health, what needs you, what is running" },
-  { view: "work", label: "Work", hint: "Every feature and increment" },
-  { view: "runs", label: "Runs", hint: "Every run, with its full anatomy" },
-  { view: "constitution", label: "Constitution", hint: "Learned rules awaiting your judgement" },
-  { view: "graph", label: "Graph", hint: "The context graph of everything learned" },
+  { view: "overview", label: "Overview", hint: "What needs you, and what is running" },
+  { view: "work", label: "Work", hint: "Everything being built" },
+  { view: "runs", label: "Runs", hint: "Every attempt, and how it went" },
+  { view: "constitution", label: "Rules", hint: "What Signet learned from your code" },
+  { view: "graph", label: "Graph", hint: "How everything Signet learned connects" },
   { view: "activity", label: "Activity", hint: "What the system has been doing" },
-  { view: "system", label: "System", hint: "How this instance is wired" },
+  { view: "system", label: "System", hint: "How this copy of Signet is set up" },
 ];
 
 /** Route → hash, the only place URLs are constructed. */

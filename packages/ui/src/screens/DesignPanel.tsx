@@ -47,10 +47,10 @@ export function DesignPanel({ incrementId, editable }: { incrementId: string; ed
   if (!record && !editing) {
     return (
       <Row gap="var(--s3)" wrap style={{ color: "var(--fg-muted)" }}>
-        <span>No design of record — the conformance gate will skip this increment.</span>
+        <span>No approved design yet, so nothing checks the look of this step.</span>
         {editable && (
           <Button size="sm" onClick={() => setEditing(true)}>
-            Set a design of record
+            Set an approved design
           </Button>
         )}
       </Row>
@@ -72,7 +72,7 @@ function ApprovedDesign({ record, onReopen }: { record: DesignOfRecord; onReopen
     <Card tone="accent" padding="var(--s3)">
       <Stack gap="var(--s3)">
         <Row justify="space-between" wrap gap="var(--s3)">
-          <strong style={{ color: "var(--accent)" }}>Design of record</strong>
+          <strong style={{ color: "var(--accent)" }}>Approved design</strong>
           <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
             {record.source === "ingested" ? "from a provided design" : "resolved from the design system"} · approved by{" "}
             {record.approvedBy} <RelativeTime iso={record.approvedAt} />
@@ -114,8 +114,8 @@ function ApprovedDesign({ record, onReopen }: { record: DesignOfRecord; onReopen
 
         <Row justify="space-between" wrap gap="var(--s2)">
           <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-            Where this conflicts with the brief, the design of record wins — and the conformance gate
-            blocks a merge that diverges from it.
+            Where this disagrees with your brief, this wins — and the check
+            blocks a merge that does not match it.
           </span>
           {onReopen && (
             <Button size="sm" variant="quiet" onClick={onReopen}>
@@ -174,7 +174,7 @@ function DesignForm({
         },
       }),
     onSuccess: () => {
-      toast.push("Design approved — it is now in the agent's context pack and armed as a gate", "ok");
+      toast.push("Design approved — Signet will build to it, and check against it", "ok");
       onSaved();
     },
   });
@@ -183,7 +183,7 @@ function DesignForm({
     <Card tone="accent" padding="var(--s3)">
       <Stack gap="var(--s4)">
         <strong style={{ color: "var(--accent)" }}>
-          {existing ? "Amend the design of record" : "Approve a design of record"}
+          {existing ? "Change the approved design" : "Approve a design"}
         </strong>
 
         <Row gap="var(--s3)" wrap align="flex-start">
@@ -223,7 +223,7 @@ function DesignForm({
           </div>
         </Row>
 
-        <Field label="Notes" hint="Carried into the agent's context pack verbatim, before it writes any code.">
+        <Field label="Notes" hint="Passed to Signet word for word, before it writes any code.">
           <TextArea value={notes} onChange={setNotes} rows={2} placeholder="Brand purple only." />
         </Field>
 
@@ -237,7 +237,7 @@ function DesignForm({
           <Button variant="quiet" onClick={onCancel}>
             cancel
           </Button>
-          <Badge tone="idle">this is signature-grade: it will block a divergent merge</Badge>
+          <Badge tone="idle">this blocks a merge that does not match</Badge>
         </Row>
       </Stack>
     </Card>

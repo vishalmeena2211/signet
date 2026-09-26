@@ -31,6 +31,7 @@ import {
   CodeBlock,
   Duration,
   GateBadge,
+  CHECK_NAME,
   Id,
   INCREMENT_STATE,
   LiveDuration,
@@ -44,15 +45,15 @@ import { DiffView } from "./DiffView.js";
 
 /** Why a gate blocking matters, in the operator's language. */
 const GATE_MEANING: Record<string, string> = {
-  typecheck: "it does not typecheck",
-  lint: "it breaks lint",
-  tests: "the tests do not pass, or do not fail without the change",
-  rules: "it breaks a confirmed rule from your constitution",
-  conformance: "it diverges from the approved design of record",
+  typecheck: "the types do not line up",
+  lint: "it breaks your lint rules",
+  tests: "the tests do not pass, or would pass without the change too",
+  rules: "it breaks a rule you accepted",
+  conformance: "it does not match the approved design",
 };
 
 const TABS = [
-  { value: "increments", label: "Increments" },
+  { value: "increments", label: "Steps" },
   { value: "brief", label: "Brief" },
   { value: "runs", label: "Runs" },
 ] as const;
@@ -85,7 +86,7 @@ export function Feature({ route }: { route: Extract<Route, { view: "feature" }> 
                 </Row>
                 <Row gap="var(--s3)" style={{ color: "var(--fg-muted)", fontSize: "var(--fs-sm)" }}>
                   <span className="num">
-                    {q.data.feature.incrementsMerged}/{q.data.feature.incrementsTotal} merged
+                    {q.data.feature.incrementsMerged}/{q.data.feature.incrementsTotal} steps done
                   </span>
                   <div style={{ width: 90 }}>
                     <Meter
@@ -194,7 +195,7 @@ function IncrementCard({
             </Row>
             <span style={{ color: "var(--fg-muted)" }}>{meta?.help}</span>
           </Stack>
-          <Id value={inc.id} label="increment" />
+          <Id value={inc.id} label="step" />
         </Row>
 
         {inc.state.status === "FAILED" && (
@@ -258,17 +259,17 @@ function IncrementCard({
           <Row gap="var(--s2)" wrap>
             {s === "CONTEXT_READY" && (
               <Button variant="primary" disabled={busy} onClick={() => approve.mutate(inc.id)}>
-                {approve.isPending ? "Starting…" : "Approve & start · signature 1"}
+                {approve.isPending ? "Starting…" : "Approve and start"}
               </Button>
             )}
             {s === "AWAITING_SIGNATURE" && (
               <ConfirmButton
-                question="This merges the branch into the base branch."
+                question="This lands the change on your main branch."
                 confirmLabel="Merge it"
                 disabled={busy}
                 onConfirm={() => merge.mutate(inc.id)}
               >
-                Merge · signature 2
+                Merge
               </ConfirmButton>
             )}
             {s === "FAILED" && (
@@ -279,7 +280,7 @@ function IncrementCard({
             {(s === "RUNNING" || s === "VERIFYING") && (
               <ConfirmButton
                 variant="danger"
-                question="The worker is stopped; the worktree is kept."
+                question="Signet stops working on this. Nothing it wrote is thrown away."
                 confirmLabel="Abort it"
                 disabled={busy}
                 onConfirm={() => abort.mutate(inc.id)}
@@ -295,19 +296,19 @@ function IncrementCard({
             what the agent was given, and what it was allowed to touch. Collapsed by
             default and remembered once opened. */}
         <RowDivider />
-        <Forensics id={`detail.${inc.id}`} label="Run detail, context pack and surface">
+        <Forensics id={`detail.${inc.id}`} label="Timings, briefing and file limits">
           <Stack gap="var(--s4)">
             {activity && activity.phases.length > 0 && (
               <Understand title="Phases">
                 <PhaseRail activity={activity} />
               </Understand>
             )}
-            <Understand title="What it knew">
+            <Understand title="What it was given">
               <PackPanel incrementId={inc.id} />
             </Understand>
-            <Understand title="Declared surface">
+            <Understand title="Files it may change">
               <span style={{ fontFamily: "var(--mono)", fontSize: "var(--fs-sm)", color: "var(--fg-muted)" }}>
-                {inc.declaredSurface.join(", ") || "—"}
+                {inc.declaredSurface.join(", ") || "anything"}
               </span>
             </Understand>
           </Stack>
@@ -334,7 +335,7 @@ function Findings({ verdict }: { verdict: GateVerdictView }) {
               flex: "0 0 auto",
             }}
           >
-            {verdict.gate}/{f.dimension}
+            {CHECK_NAME[verdict.gate] ?? verdict.gate} · {f.dimension}
           </span>
           <span style={{ minWidth: 0 }}>
             {f.message}
@@ -360,7 +361,7 @@ function PackPanel({ incrementId }: { incrementId: string }) {
       {q.error && <ErrorNote error={q.error} />}
       {q.data === null && (
         <span style={{ color: "var(--fg-muted)" }}>
-          No pack yet — this increment has not run, so nothing has been assembled for it.
+          Nothing yet — this step has not run, so there is no briefing to show.
         </span>
       )}
       {q.data && (
@@ -453,7 +454,7 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
   const mut = useMutation({
     mutationFn: () => api.answerEscalation(escalation.id, answer),
     onSuccess: () => {
-      toast.push("Answered — the brief is amended and the increment resumes", "ok");
+      toast.push("Answered — your brief is updated and work continues", "ok");
       onAnswered();
     },
   });
@@ -463,7 +464,7 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
       <Stack gap="var(--s2)">
         <Row gap="var(--s2)">
           <Dot tone="warn" />
-          <strong style={{ color: "var(--warn)" }}>The agent stopped to ask rather than guess</strong>
+          <strong style={{ color: "var(--warn)" }}>Signet stopped to ask rather than guess</strong>
           <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
             <RelativeTime iso={escalation.raisedAt} />
           </span>
@@ -473,7 +474,7 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
           value={answer}
           onChange={setAnswer}
           rows={3}
-          placeholder="Your answer becomes a new frozen version of the brief, and the increment resumes from there."
+          placeholder="Your answer is added to the brief, and work picks up from there."
         />
         <ErrorNote error={mut.error} onDismiss={() => mut.reset()} />
         <Button
@@ -492,7 +493,7 @@ function EscalationBox({ escalation, onAnswered }: { escalation: EscalationView;
 function BriefTab({ increments }: { increments: IncrementDetail[] }) {
   return (
     <Stack gap="var(--s3)">
-      <SectionTitle>Declared surface per increment</SectionTitle>
+      <SectionTitle>Files each step may change</SectionTitle>
       <Card>
         <Stack gap="var(--s3)">
           {increments.map((inc) => (
@@ -501,20 +502,20 @@ function BriefTab({ increments }: { increments: IncrementDetail[] }) {
                 <strong>{inc.title}</strong>
                 <StateBadge status={inc.state.status} />
               </Row>
-              <CodeBlock text={inc.declaredSurface.join("\n") || "(no surface declared)"} maxHeight={120} />
+              <CodeBlock text={inc.declaredSurface.join("\n") || "(no limit set)"} maxHeight={120} />
             </Stack>
           ))}
         </Stack>
       </Card>
       <span style={{ color: "var(--fg-muted)", fontSize: "var(--fs-sm)" }}>
-        The declared surface is the contract for the increment: a change outside it is caught by the
+        This is the boundary for each step: a change outside it is caught by the
         scope checker rather than reviewed on trust.
       </span>
     </Stack>
   );
 }
 
-/** Every run of every increment in this feature, for the "what has it tried" question. */
+/** Every run of every step in this feature — the "what has it tried" question. */
 function RunsTab({ featureId, increments }: { featureId: string; increments: IncrementDetail[] }) {
   const q = useQuery({
     queryKey: ["runs", "feature", featureId],
@@ -541,17 +542,17 @@ function RunsTab({ featureId, increments }: { featureId: string; increments: Inc
                 <span>{r.incrementTitle}</span>
                 {r.repairs > 0 && (
                   <Badge tone="warn">
-                    {r.repairs} repair{r.repairs === 1 ? "" : "s"}
+                    {r.repairs} retr{r.repairs === 1 ? "y" : "ies"}
                   </Badge>
                 )}
                 {r.gatesFailed.map((g) => (
                   <Badge key={g} tone="err" mono>
-                    {g} blocked
+                    {CHECK_NAME[g] ?? g} blocked
                   </Badge>
                 ))}
                 {r.gatesRepaired.map((g) => (
                   <Badge key={g} tone="ok" mono>
-                    {g} ✓ repaired
+                    {CHECK_NAME[g] ?? g} ✓ fixed
                   </Badge>
                 ))}
               </Row>

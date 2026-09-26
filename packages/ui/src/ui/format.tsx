@@ -175,28 +175,34 @@ export function CodeBlock({ text, maxHeight = 320 }: { text: string; maxHeight?:
 }
 
 // ── shared status vocabularies ──
-// Every screen shows increment state, run outcome and gate outcome, so their
+// Every screen shows step state, run outcome and check outcome, so their
 // wording and tone are defined once. Divergent labels for the same state across
 // screens is the fastest way to make a console feel untrustworthy.
 
+/**
+ * What a step is doing, in words an operator would use. The database values are
+ * shouty constants; these are sentences. Help text explains the state rather than
+ * restating it — "Parked" tells you nothing, "waiting for your Claude quota to
+ * reset" tells you whether to care.
+ */
 export const INCREMENT_STATE: Record<string, { label: string; tone: Tone; help: string }> = {
-  PLANNED: { label: "Planned", tone: "idle", help: "Decomposed but no context pack yet." },
-  CONTEXT_READY: { label: "Ready", tone: "accent", help: "Waiting for signature 1 to start the run." },
-  RUNNING: { label: "Running", tone: "run", help: "An agent is working in its own worktree." },
-  VERIFYING: { label: "Verifying", tone: "run", help: "The gates are judging the result." },
-  AWAITING_SIGNATURE: { label: "Awaiting merge", tone: "warn", help: "Every gate passed; waiting for signature 2." },
-  MERGED: { label: "Merged", tone: "ok", help: "Landed on the base branch." },
-  ESCALATED: { label: "Question", tone: "warn", help: "The agent stopped to ask rather than guess." },
-  PARKED: { label: "Parked", tone: "idle", help: "Held by the quota window; resumes on its own." },
-  FAILED: { label: "Failed", tone: "err", help: "Repair attempts were exhausted." },
+  PLANNED: { label: "Planned", tone: "idle", help: "Written down, not started." },
+  CONTEXT_READY: { label: "Ready to start", tone: "accent", help: "Waiting for you to approve it." },
+  RUNNING: { label: "Working", tone: "run", help: "Signet is writing the code, in its own copy of the repo." },
+  VERIFYING: { label: "Checking", tone: "run", help: "Running the tests and checks." },
+  AWAITING_SIGNATURE: { label: "Ready to merge", tone: "warn", help: "Every check passed. Waiting for you to merge it." },
+  MERGED: { label: "Merged", tone: "ok", help: "Landed on your main branch." },
+  ESCALATED: { label: "Asking you", tone: "warn", help: "Signet stopped to ask rather than guess." },
+  PARKED: { label: "Waiting", tone: "idle", help: "Your Claude quota ran out. This resumes on its own when it resets." },
+  FAILED: { label: "Failed", tone: "err", help: "Signet tried to fix it and could not." },
 };
 
 export const RUN_OUTCOME: Record<string, { label: string; tone: Tone }> = {
-  running: { label: "Running", tone: "run" },
+  running: { label: "Working", tone: "run" },
   succeeded: { label: "Succeeded", tone: "ok" },
   failed: { label: "Failed", tone: "err" },
   aborted: { label: "Aborted", tone: "idle" },
-  created: { label: "Queued", tone: "idle" },
+  created: { label: "Waiting to start", tone: "idle" },
 };
 
 export const GATE_OUTCOME: Record<string, Tone> = {
@@ -217,10 +223,23 @@ export function StateBadge({ status }: { status: string }) {
   );
 }
 
+/**
+ * What each check is called on screen. The internal names are accurate and
+ * unhelpful: "conformance" means nothing to anyone who has not read the design
+ * document, while "design" says exactly what it looks at.
+ */
+export const CHECK_NAME: Record<string, string> = {
+  typecheck: "types",
+  lint: "lint",
+  tests: "tests",
+  rules: "your rules",
+  conformance: "design",
+};
+
 export function GateBadge({ gate, outcome, count }: { gate: string; outcome: string; count?: number }) {
   return (
     <Badge tone={GATE_OUTCOME[outcome] ?? "neutral"} mono>
-      {gate} {outcome}
+      {CHECK_NAME[gate] ?? gate} {outcome}
       {count !== undefined && count > 0 ? ` ${count}` : ""}
     </Badge>
   );

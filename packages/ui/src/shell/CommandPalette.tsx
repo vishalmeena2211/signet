@@ -38,7 +38,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       void qc.invalidateQueries({ queryKey: ["dispatcher"] });
       void qc.invalidateQueries({ queryKey: ["overview"] });
     },
-    onError: (e) => toast.push(`Could not change the dispatcher: ${String(e)}`, "err"),
+    onError: (e) => toast.push(`Could not change the pipeline: ${String(e)}`, "err"),
   });
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       {
         id: "action:new",
         label: "New feature",
-        hint: "Describe it once; the increments follow",
+        hint: "Describe it once, break it into steps",
         group: "Actions",
         run: () => navigate({ view: "new" }),
       },
@@ -87,8 +87,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       },
       {
         id: "action:learn",
-        label: "Learn a repository",
-        hint: "Mine its conventions into rule proposals",
+        label: "Learn from a repository",
+        hint: "Find the conventions in its code",
         group: "Actions",
         run: () => navigate({ view: "constitution" }),
       },

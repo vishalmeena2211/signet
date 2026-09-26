@@ -160,7 +160,7 @@ describe("the console mounts", () => {
   it("renders the shell with navigation and live system status", async () => {
     render(wrap(<App />));
     // Navigation is always present: this is the thing the old console lacked.
-    for (const label of ["Overview", "Work", "Runs", "Constitution", "Activity", "System"]) {
+    for (const label of ["Overview", "Work", "Runs", "Rules", "Activity", "System"]) {
       expect(screen.getByRole("link", { name: new RegExp(label) })).toBeTruthy();
     }
     // "Needs you" appears as both a stat and a section heading, so target the heading.
@@ -173,7 +173,7 @@ describe("the console mounts", () => {
     await waitFor(() => expect(screen.getByRole("heading", { level: 2, name: "Needs you" })).toBeTruthy());
     // Every waiting item says what it needs and offers the action that resolves it.
     expect(screen.getByText(/needs signature 2/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Review & merge/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Review and merge/ })).toBeTruthy();
     // And how long it has been waiting, because a queue you cannot see ageing grows.
     expect(screen.getByText(/ago/)).toBeTruthy();
   });

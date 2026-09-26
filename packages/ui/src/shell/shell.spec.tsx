@@ -137,9 +137,9 @@ describe("shell navigation", () => {
 
   it("shows live counts beside the sections that have them", async () => {
     render(wrap(<AppShell route={{ view: "overview" }} onOpenPalette={() => {}}>x</AppShell>));
-    // 5 increments total on Work, 2 queued rules on Constitution.
+    // 5 steps total on Work, 2 suggested rules.
     await waitFor(() => expect(screen.getByRole("link", { name: /Work 5/ })).toBeTruthy());
-    expect(screen.getByRole("link", { name: /Constitution 2/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Rules 2/ })).toBeTruthy();
   });
 });
 

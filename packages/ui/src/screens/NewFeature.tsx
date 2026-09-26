@@ -12,7 +12,7 @@ import { navigate } from "../router.js";
 import { Badge, Button, Card, Field, Input, Row, SectionTitle, Stack, TextArea } from "../ui/primitives.js";
 import { ErrorNote, useToast } from "../ui/feedback.js";
 
-interface DraftIncrement {
+interface DraftStep {
   title: string;
   surface: string;
 }
@@ -20,7 +20,7 @@ interface DraftIncrement {
 export function NewFeature() {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
-  const [incs, setIncs] = useState<DraftIncrement[]>([{ title: "", surface: "" }]);
+  const [incs, setIncs] = useState<DraftStep[]>([{ title: "", surface: "" }]);
   const toast = useToast();
 
   const usable = incs.filter((i) => i.title.trim() && i.surface.trim());
@@ -38,7 +38,7 @@ export function NewFeature() {
         })),
       }),
     onSuccess: (r) => {
-      toast.push("Feature created — approve an increment to start", "ok");
+      toast.push("Feature created — approve a step to start", "ok");
       navigate({ view: "feature", id: r.featureId });
     },
   });
@@ -48,9 +48,9 @@ export function NewFeature() {
     title.trim().length === 0
       ? "Give the feature a title."
       : brief.trim().length < 20
-        ? "The brief is what the agent works from — a sentence or two at minimum, with an example if you can."
+        ? "The brief is what Signet works from — a sentence or two at minimum, with an example if you can."
         : usable.length === 0
-          ? "Add at least one increment with both a title and a surface."
+          ? "Add at least one step, with a name and the files it may change."
           : null;
 
   return (
@@ -70,7 +70,7 @@ export function NewFeature() {
 
           <Field
             label="Brief"
-            hint="What to build, with an example if you have one. This is frozen as a version the moment the feature is created, and every run is judged against it — so it is worth being concrete here rather than in a follow-up."
+            hint="What to build, with an example if you have one. This is saved as-is the moment you create the feature, and everything Signet builds is judged against it — so it is worth being concrete now rather than in a follow-up."
           >
             <TextArea
               value={brief}
@@ -90,16 +90,16 @@ export function NewFeature() {
           <SectionTitle
             action={
               <Button size="sm" onClick={() => setIncs([...incs, { title: "", surface: "" }])}>
-                + increment
+                + step
               </Button>
             }
           >
-            Increments
+            Steps
           </SectionTitle>
           <p style={{ color: "var(--fg-muted)" }}>
-            Each increment is one PR-sized unit with its own run, gates and signatures. The surface is
-            the list of files it may touch — anything outside it is caught by the scope checker instead
-            of being reviewed on trust.
+            Break the work into steps. Each one is a single pull request that Signet builds, checks and
+            asks you to merge. Listing the files a step may change keeps it honest — anything outside
+            that list is caught automatically instead of being reviewed on trust.
           </p>
 
           <Stack gap="var(--s2)">
@@ -109,7 +109,7 @@ export function NewFeature() {
                 <div style={{ flex: "1 1 200px" }}>
                   <Input
                     value={inc.title}
-                    placeholder="What this increment does"
+                    placeholder="What this step does"
                     onChange={(v) => setIncs(incs.map((x, j) => (j === i ? { ...x, title: v } : x)))}
                   />
                 </div>
@@ -125,7 +125,7 @@ export function NewFeature() {
                   variant="quiet"
                   disabled={incs.length === 1}
                   onClick={() => setIncs(incs.filter((_, j) => j !== i))}
-                  title={incs.length === 1 ? "A feature needs at least one increment" : "Remove"}
+                  title={incs.length === 1 ? "A feature needs at least one step" : "Remove"}
                 >
                   ✕
                 </Button>
@@ -145,7 +145,7 @@ export function NewFeature() {
           <span style={{ color: "var(--fg-muted)" }}>{problem}</span>
         ) : (
           <Badge tone="ok">
-            {usable.length} increment{usable.length === 1 ? "" : "s"} ready
+            {usable.length} step{usable.length === 1 ? "" : "s"} ready
           </Badge>
         )}
       </Row>

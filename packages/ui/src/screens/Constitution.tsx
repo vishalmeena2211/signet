@@ -51,9 +51,9 @@ const KIND: Record<string, string> = {
 };
 
 const STATUSES = [
-  { value: "PROPOSED", label: "Proposed" },
-  { value: "CONFIRMED", label: "Confirmed" },
-  { value: "DEMOTED", label: "Demoted" },
+  { value: "PROPOSED", label: "Suggested" },
+  { value: "CONFIRMED", label: "Accepted" },
+  { value: "DEMOTED", label: "Set aside" },
 ] as const;
 
 export function Constitution({ route }: { route: Extract<Route, { view: "constitution" }> }) {
@@ -95,12 +95,12 @@ export function Constitution({ route }: { route: Extract<Route, { view: "constit
           />
           {status === "PROPOSED" && rules.length > 0 && (
             <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-              Nothing gates until you confirm it.
+              Nothing is enforced until you accept it.
             </span>
           )}
           {status === "CONFIRMED" && rules.length > 0 && (
             <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-              These run as the rules gate, warning on added lines only.
+              These warn you when new code breaks them.
             </span>
           )}
         </Row>
@@ -110,17 +110,17 @@ export function Constitution({ route }: { route: Extract<Route, { view: "constit
             <EmptyState
               title={
                 status === "PROPOSED"
-                  ? "No proposals waiting"
+                  ? "Nothing to review"
                   : status === "CONFIRMED"
-                    ? "No confirmed rules yet"
-                    : "Nothing has been demoted"
+                    ? "No rules accepted yet"
+                    : "Nothing has been set aside"
               }
               body={
                 status === "PROPOSED"
-                  ? "Learn a repository above and Signet will propose the conventions it finds, with the evidence for each."
+                  ? "Point Signet at a repository above and it will suggest the conventions it finds, with the evidence for each."
                   : status === "CONFIRMED"
-                    ? "Confirm a proposal and it starts warning on new code that breaks it."
-                    : "A confirmed rule is demoted automatically after three false positives, so one bad rule cannot erode trust in the rest."
+                    ? "Accept a suggestion and it starts warning you when new code breaks it."
+                    : "A rule turns itself off after three false alarms, so one bad rule cannot spoil the rest."
               }
             />
           ) : (
@@ -250,7 +250,7 @@ function RuleRow({ rule, onDone }: { rule: RuleCard; onDone: () => void }) {
   const confirm = useMutation({
     mutationFn: () => api.confirmRule(rule.id),
     onSuccess: () => {
-      toast.push("Confirmed — it will warn on new code that breaks it", "ok");
+      toast.push("Accepted — it will warn you when new code breaks it", "ok");
       onDone();
     },
   });
@@ -294,8 +294,8 @@ function RuleRow({ rule, onDone }: { rule: RuleCard; onDone: () => void }) {
 
         {rule.status === "DEMOTED" && (
           <span style={{ color: "var(--warn)", fontSize: "var(--fs-sm)" }}>
-            Demoted automatically after {rule.fpCount} false positives. Re-confirm only if it is still
-            right — a rule that cries wolf costs more than it catches.
+            Set aside after {rule.fpCount} false alarms. Accept it again only if it is still right — a
+            rule that cries wolf costs more than it catches.
           </span>
         )}
 
@@ -339,19 +339,19 @@ function RuleRow({ rule, onDone }: { rule: RuleCard; onDone: () => void }) {
             ) : (
               <>
                 <Button variant="primary" disabled={busy} onClick={() => confirm.mutate()}>
-                  {confirm.isPending ? "Confirming…" : rule.status === "DEMOTED" ? "Re-confirm" : "Confirm"}
+                  {confirm.isPending ? "Accepting…" : rule.status === "DEMOTED" ? "Accept again" : "Accept"}
                 </Button>
                 <Button disabled={busy} onClick={() => setEditing(true)}>
                   Edit wording
                 </Button>
                 <ConfirmButton
                   variant="danger"
-                  question="It will not be proposed again."
-                  confirmLabel="Reject it"
+                  question="Signet will not suggest it again."
+                  confirmLabel="Discard it"
                   disabled={busy}
                   onConfirm={() => reject.mutate()}
                 >
-                  Reject
+                  Discard
                 </ConfirmButton>
               </>
             )}

@@ -25,7 +25,7 @@ const SEVERITY: Record<ActivityEvent["severity"], Tone> = {
 const FILTERS = [
   { value: "all", label: "Everything" },
   { value: "problems", label: "Problems" },
-  { value: "gates", label: "Gates" },
+  { value: "gates", label: "Checks" },
   { value: "runs", label: "Runs" },
 ] as const;
 
@@ -80,7 +80,7 @@ export function Activity() {
       <Row justify="space-between" wrap gap="var(--s3)">
         <Segmented options={FILTERS.map((f) => ({ ...f, count: counts[f.value] }))} value={filter} onChange={setFilter} />
         <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-          rebuilt from the run journal, so it survives a restart
+          rebuilt from the record, so it survives a restart
         </span>
       </Row>
 
@@ -89,7 +89,7 @@ export function Activity() {
           <EmptyState
             title={filter === "all" ? "Nothing has happened yet" : "Nothing matches this filter"}
             {...(filter === "all"
-              ? { body: "Approve an increment and its phases will appear here as they run." }
+              ? { body: "Approve a step and you will see it work here, stage by stage." }
               : {})}
           />
         ) : (

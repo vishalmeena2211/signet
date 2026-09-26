@@ -281,7 +281,7 @@ describe("pipeline control from the Overview", () => {
     fireEvent.click(pause);
     // States the consequence before doing it, in both halves: what keeps going and
     // what stops.
-    expect(screen.getByText(/In-flight runs finish/i)).toBeTruthy();
+    expect(screen.getByText(/Work already running finishes/i)).toBeTruthy();
     expect(screen.getByText(/nothing new starts/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Pause it" }));
 
@@ -292,7 +292,7 @@ describe("pipeline control from the Overview", () => {
 
   it("changes the worker ceiling without a confirmation, because it is reversible", async () => {
     render(wrap(<App />));
-    const lower = await screen.findByTitle(/Lower the worker ceiling/);
+    const lower = await screen.findByTitle(/Run fewer at once/);
     fireEvent.click(lower);
     await waitFor(() => expect(posted.find((p) => p.path === "/api/dispatcher")?.body).toEqual({ maxWorkers: 1 }));
   });
@@ -300,7 +300,7 @@ describe("pipeline control from the Overview", () => {
   it("will not lower the ceiling below one worker", async () => {
     dispatcherState = { paused: false, maxWorkers: 1, activeWorkers: 0 };
     render(wrap(<App />));
-    const lower = await screen.findByTitle(/Lower the worker ceiling/);
+    const lower = await screen.findByTitle(/Run fewer at once/);
     expect((lower as HTMLButtonElement).disabled).toBe(true);
   });
 });

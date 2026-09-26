@@ -14,7 +14,7 @@ export function DiffView({ incrementId }: { incrementId: string }) {
   const diff = useQuery({ queryKey: ["diff", incrementId], queryFn: () => api.diff(incrementId) });
   const [showPatch, setShowPatch] = useState(false);
 
-  if (diff.isPending) return <span style={{ color: "var(--fg-muted)" }}>Reading the worktree…</span>;
+  if (diff.isPending) return <span style={{ color: "var(--fg-muted)" }}>Reading the changes…</span>;
   if (diff.error) return <ErrorNote error={diff.error} onRetry={() => void diff.refetch()} />;
   const d = diff.data;
   if (!d) return null;
@@ -26,7 +26,7 @@ export function DiffView({ incrementId }: { incrementId: string }) {
     return (
       <Card tone="warn" padding="var(--s3)">
         <span style={{ color: "var(--warn)" }}>
-          The worktree has no changes against the base — nothing was written.
+          Nothing was changed.
         </span>
       </Card>
     );

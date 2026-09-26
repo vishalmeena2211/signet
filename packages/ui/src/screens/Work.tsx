@@ -84,14 +84,14 @@ export function Work({ route }: { route: Extract<Route, { view: "work" }> }) {
     },
     {
       key: "progress",
-      header: "Increments",
+      header: "Steps",
       width: "150px",
       sort: (a, b) =>
         a.incrementsMerged / Math.max(a.incrementsTotal, 1) - b.incrementsMerged / Math.max(b.incrementsTotal, 1),
       render: (f) => (
         <Stack gap="var(--s1)">
           <span className="num" style={{ fontSize: "var(--fs-sm)" }}>
-            {f.incrementsMerged}/{f.incrementsTotal} merged
+            {f.incrementsMerged}/{f.incrementsTotal} done
           </span>
           <Meter
             value={f.incrementsMerged}
@@ -142,7 +142,7 @@ export function Work({ route }: { route: Extract<Route, { view: "work" }> }) {
             (q.data ?? []).length === 0 ? (
               <EmptyState
                 title="No features yet"
-                body="A feature is a brief plus the increments it decomposes into. Create one and Signet takes it from there."
+                body="Describe what you want built and break it into steps. Signet takes it from there."
                 action={
                   <Button variant="primary" onClick={() => navigate({ view: "new" })}>
                     New feature

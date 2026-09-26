@@ -71,15 +71,15 @@ export function System() {
                   <Detail label="Repository" mono>
                     {q.data.config.targetRepoPath}
                   </Detail>
-                  <Detail label="Base ref" mono>
+                  <Detail label="Main branch" mono>
                     {q.data.config.baseRef}
                   </Detail>
                 </Row>
                 <Row gap="var(--s6)" wrap>
-                  <Detail label="Worktrees" mono>
+                  <Detail label="Working copies" mono>
                     {q.data.config.workspacesRoot}
                   </Detail>
-                  <Detail label="Context packs" mono>
+                  <Detail label="Briefings" mono>
                     {q.data.config.packsRoot}
                   </Detail>
                 </Row>
@@ -108,10 +108,10 @@ export function System() {
                     <Badge tone="ok">your subscription login</Badge>
                   </span>
                 </Detail>
-                <Detail label="Worker ceiling">
+                <Detail label="Most at once">
                   <span className="num">{q.data.config.maxConcurrentWorkers}</span>
                 </Detail>
-                <Detail label="Repair attempts">
+                <Detail label="Retries before giving up">
                   <span className="num">{q.data.config.maxRepairIterations}</span>
                 </Detail>
               </Row>

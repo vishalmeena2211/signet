@@ -18,11 +18,11 @@ import { layered, layout } from "./graph-layout.js";
 /** One colour per node kind, from the token layer so both themes work. */
 const KIND: Record<string, { tone: Tone; label: string; help: string }> = {
   repo: { tone: "neutral", label: "Repository", help: "A repository Signet has learned from." },
-  file: { tone: "idle", label: "File", help: "A file that carries evidence for a rule." },
+  file: { tone: "idle", label: "File", help: "Where the evidence for a rule was found." },
   convention: { tone: "accent", label: "Convention", help: "A colour, token or asset the codebase uses." },
-  rule: { tone: "ok", label: "Rule", help: "A statement about a convention, which may gate." },
-  increment: { tone: "run", label: "Increment", help: "A unit of work." },
-  design: { tone: "warn", label: "Design", help: "An approved design of record." },
+  rule: { tone: "ok", label: "Rule", help: "Something Signet learned about your code." },
+  increment: { tone: "run", label: "Step", help: "One piece of a feature." },
+  design: { tone: "warn", label: "Design", help: "A design you approved." },
 };
 
 const EDGE_STYLE: Record<string, { stroke: string; dash?: string }> = {
@@ -59,7 +59,7 @@ function Empty() {
   return (
     <EmptyState
       title="Nothing learned yet"
-      body="The graph is built from mined conventions, the rules about them, and the designs you have approved. Learn a repository and it fills in."
+      body="This fills in once Signet has learned from a repository — the conventions it found, the rules about them, and the designs you approved."
       action={<Button variant="primary" onClick={() => navigate({ view: "constitution" })}>Learn a repository</Button>}
     />
   );
@@ -298,8 +298,8 @@ function Loaded({ graph }: { graph: ContextGraph }) {
               {positioned.mode === "radial"
                 ? "too many nodes for a force layout — arranged by kind instead; hide a kind or raise the minimum to get it back"
                 : positioned.mode === "layered"
-                  ? "left to right: evidence → rule → convention → design → work · size = how connected"
-                  : "size = how connected · click a node to inspect it"}
+                  ? "left to right: evidence → rule → convention → design → work · bigger = more connected"
+                  : "bigger = more connected · click anything for detail"}
             </span>
           </Row>
         </Card>
@@ -545,11 +545,11 @@ function NodeInspector({
         )}
 
         {node.kind === "rule" && (
-          <Button onClick={() => navigate({ view: "constitution" })}>Open the constitution →</Button>
+          <Button onClick={() => navigate({ view: "constitution" })}>Open your rules →</Button>
         )}
         {node.kind === "increment" && (
           <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-            Find this increment under Work to act on it.
+            Open it under Work to act on it.
           </span>
         )}
       </Stack>

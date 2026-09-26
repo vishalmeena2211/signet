@@ -24,8 +24,8 @@ import { Decide, FocalMetric, Forensics, MetricStrip, RowDivider, Understand } f
 import { LiveDuration, Money, RelativeTime, TokenCount } from "../ui/format.js";
 
 const REASON: Record<AttentionItem["reason"], { label: string; tone: Tone; cta: string }> = {
-  awaiting_approval: { label: "Start it", tone: "accent", cta: "Review & start" },
-  awaiting_merge: { label: "Merge it", tone: "warn", cta: "Review & merge" },
+  awaiting_approval: { label: "Start it", tone: "accent", cta: "Review and start" },
+  awaiting_merge: { label: "Merge it", tone: "warn", cta: "Review and merge" },
   question_raised: { label: "Answer it", tone: "warn", cta: "Answer" },
   failed: { label: "Failed", tone: "err", cta: "Inspect" },
 };
@@ -69,7 +69,7 @@ function Loaded({ data }: { data: Awaited<ReturnType<typeof api.overview>> }) {
         {attention.length === 0 ? (
           <EmptyState
             title="Nothing is waiting on you"
-            body="Every increment is running, merged, or parked until the quota window resets."
+            body="Everything is either building, merged, or waiting for your Claude quota to reset."
           />
         ) : (
           /* Hairline rows in one surface, not a card each — a stack of equal boxes is
@@ -236,7 +236,7 @@ function HeldBanner({
       void qc.invalidateQueries({ queryKey: ["overview"] });
       void qc.invalidateQueries({ queryKey: ["dispatcher"] });
     },
-    onError: (e) => toast.push(`Could not change the dispatcher: ${String(e)}`, "err"),
+    onError: (e) => toast.push(`Could not change the pipeline: ${String(e)}`, "err"),
   });
 
   return (
@@ -248,10 +248,10 @@ function HeldBanner({
             <span>{dispatcher.paused ? "The pipeline is paused" : "The quota window is exhausted"}</span>
             <span style={{ color: "var(--fg-muted)", fontSize: "var(--fs-sm)" }}>
               {dispatcher.paused
-                ? "Nothing new will start. In-flight runs finish normally, and this survives a restart."
+                ? "Nothing new will start. Work already running finishes normally, and this stays paused even if Signet restarts."
                 : quota.resetsAt
-                  ? `Work is parked and resumes by itself when the window resets ${new Date(quota.resetsAt).toLocaleTimeString()}.`
-                  : "Work is parked and resumes by itself when the window resets."}
+                  ? `Work is waiting and resumes by itself when your quota resets ${new Date(quota.resetsAt).toLocaleTimeString()}.`
+                  : "Work is waiting and resumes by itself when your quota resets."}
             </span>
           </Stack>
         </Row>
@@ -283,7 +283,7 @@ function PipelineLine({
       void qc.invalidateQueries({ queryKey: ["overview"] });
       void qc.invalidateQueries({ queryKey: ["dispatcher"] });
     },
-    onError: (e) => toast.push(`Could not change the dispatcher: ${String(e)}`, "err"),
+    onError: (e) => toast.push(`Could not change the pipeline: ${String(e)}`, "err"),
   });
 
   return (
@@ -299,7 +299,7 @@ function PipelineLine({
           Pipeline running
         </Row>
         <span className="num">
-          {dispatcher.activeWorkers}/{dispatcher.maxWorkers} workers
+          {dispatcher.activeWorkers}/{dispatcher.maxWorkers} running at once
         </span>
       </Row>
       <Row gap="var(--s2)">
@@ -308,7 +308,7 @@ function PipelineLine({
           variant="quiet"
           disabled={mut.isPending || dispatcher.maxWorkers <= 1}
           onClick={() => mut.mutate({ maxWorkers: dispatcher.maxWorkers - 1 })}
-          title="Lower the worker ceiling. Running workers are never interrupted."
+          title="Run fewer at once. Anything already running is never interrupted."
         >
           −
         </Button>
@@ -317,13 +317,13 @@ function PipelineLine({
           variant="quiet"
           disabled={mut.isPending || dispatcher.maxWorkers >= 16}
           onClick={() => mut.mutate({ maxWorkers: dispatcher.maxWorkers + 1 })}
-          title="Raise the worker ceiling"
+          title="Run more at once"
         >
           +
         </Button>
         <ConfirmButton
           variant="danger"
-          question="In-flight runs finish; nothing new starts."
+          question="Work already running finishes; nothing new starts."
           confirmLabel="Pause it"
           disabled={mut.isPending}
           onConfirm={() => mut.mutate({ paused: true })}

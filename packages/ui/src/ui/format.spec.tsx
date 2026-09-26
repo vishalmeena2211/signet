@@ -77,11 +77,11 @@ describe("Money", () => {
 });
 
 describe("status vocabularies", () => {
-  it("translates increment states into words with the reason attached", () => {
+  it("translates step states into words with the reason attached", () => {
     render(<StateBadge status="AWAITING_SIGNATURE" />);
-    expect(screen.getByText("Awaiting merge")).toBeTruthy();
+    expect(screen.getByText("Ready to merge")).toBeTruthy();
     // The help text is what makes a state self-explanatory to a new operator.
-    expect(screen.getByTitle(/waiting for signature 2/i)).toBeTruthy();
+    expect(screen.getByTitle(/waiting for you to merge it/i)).toBeTruthy();
   });
 
   it("falls back to the raw status rather than hiding an unknown state", () => {
@@ -91,7 +91,7 @@ describe("status vocabularies", () => {
 
   it("shows a gate's finding count only when it has findings and passed", () => {
     const { container: withCount } = render(<GateBadge gate="rules" outcome="warn" count={3} />);
-    expect(withCount.textContent).toContain("rules warn 3");
+    expect(withCount.textContent).toContain("your rules warn 3");
     const { container: noCount } = render(<GateBadge gate="tests" outcome="pass" count={0} />);
     expect(noCount.textContent).toBe("tests pass");
   });

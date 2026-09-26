@@ -21,6 +21,7 @@ import {
   Money,
   RelativeTime,
   RUN_OUTCOME,
+  CHECK_NAME,
   TokenCount,
 } from "../ui/format.js";
 
@@ -69,17 +70,17 @@ export function Runs({ route }: { route: Extract<Route, { view: "runs" }> }) {
     },
     {
       key: "gates",
-      header: "Gates",
+      header: "Checks",
       width: "190px",
       render: (r) =>
         r.gatesFailed.length === 0 && r.gatesRepaired.length === 0 ? (
-          <span style={{ color: "var(--fg-subtle)" }}>clean</span>
+          <span style={{ color: "var(--fg-subtle)" }}>all passed</span>
         ) : (
           <Row gap="var(--s1)" wrap>
             {r.gatesFailed.map((g) => (
-              <span key={g} title={`${g} was still failing in the final round — this is what blocked`}>
+              <span key={g} title={`The ${g} check was still failing at the end — this is what blocked the merge`}>
                 <Badge tone="err" mono>
-                  {g}
+                  {CHECK_NAME[g] ?? g}
                 </Badge>
               </span>
             ))}
@@ -87,9 +88,9 @@ export function Runs({ route }: { route: Extract<Route, { view: "runs" }> }) {
                 Showing it in the same red as a blocker would make every
                 successful repair read as a defect. */}
             {r.gatesRepaired.map((g) => (
-              <span key={g} title={`${g} failed, the agent was given the findings, and it passed on a later round`}>
+              <span key={g} title={`The ${g} check failed, Signet was told why, and it passed on a later try`}>
                 <Badge tone="ok" mono>
-                  {g} ✓ repaired
+                  {CHECK_NAME[g] ?? g} ✓ fixed
                 </Badge>
               </span>
             ))}
@@ -98,13 +99,13 @@ export function Runs({ route }: { route: Extract<Route, { view: "runs" }> }) {
     },
     {
       key: "repair",
-      header: "Repairs",
+      header: "Retries",
       width: "90px",
       align: "right",
       sort: (a, b) => a.repairs - b.repairs,
       render: (r) =>
         r.repairs > 0 ? (
-          <span title={`The gate suite ran ${r.gateRounds} times`}>
+          <span title={`The checks ran ${r.gateRounds} times`}>
             <Badge tone="warn" mono>
               {r.repairs}
             </Badge>
@@ -164,7 +165,7 @@ export function Runs({ route }: { route: Extract<Route, { view: "runs" }> }) {
           onChange={(v) => navigate({ view: "runs", outcome: v })}
         />
         <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-          {q.data ? `${q.data.length} run${q.data.length === 1 ? "" : "s"}` : ""} · newest first · click a row to inspect
+          {q.data ? `${q.data.length} run${q.data.length === 1 ? "" : "s"}` : ""} · newest first · click a row for detail
         </span>
       </Row>
 
@@ -181,7 +182,7 @@ export function Runs({ route }: { route: Extract<Route, { view: "runs" }> }) {
               title={outcome === "all" ? "No runs yet" : `No ${outcome} runs`}
               body={
                 outcome === "all"
-                  ? "A run is one attempt at one increment. Approve an increment to start the first."
+                  ? "A run is one attempt at one step. Approve a step to start the first."
                   : "Try a different outcome filter."
               }
             />
@@ -242,8 +243,8 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
               <Detail label="Started">
                 <RelativeTime iso={d.summary.startedAt} />
               </Detail>
-              <Detail label="Repairs">
-                <span className="num" title={`The gate suite ran ${d.summary.gateRounds} time(s)`}>
+              <Detail label="Retries">
+                <span className="num" title={`The checks ran ${d.summary.gateRounds} time(s)`}>
                   {d.summary.repairs}
                 </span>
               </Detail>
@@ -320,7 +321,7 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
             )}
 
             {d.effects.length > 0 && (
-              <Forensics id={`run.effects.${d.summary.id}`} label="Journalled effects" count={d.effects.length}>
+              <Forensics id={`run.effects.${d.summary.id}`} label="Recorded actions" count={d.effects.length}>
                 <Card padding="var(--s3)">
                   <Stack gap="var(--s1)">
                     {d.effects.map((e) => (
@@ -336,21 +337,21 @@ function RunInspector({ runId, onClose }: { runId: string | null; onClose: () =>
                   </Stack>
                 </Card>
                 <span style={{ color: "var(--fg-subtle)", fontSize: "var(--fs-sm)" }}>
-                  Each effect is keyed so a replay after a crash cannot perform it twice.
+                  Each action is recorded so a restart after a crash cannot do it twice.
                 </span>
               </Forensics>
             )}
 
             {/* Raw state, session ref and workspace path: the things you want at 2am
                 once a year, and clutter on every other visit. */}
-            <Forensics id={`run.raw.${d.summary.id}`} label="Raw state, session and workspace">
+            <Forensics id={`run.raw.${d.summary.id}`} label="Technical detail">
               <Stack gap="var(--s3)">
                 <CodeBlock text={prettyJson(d.stateJson)} maxHeight={200} />
                 <Row gap="var(--s5)" wrap>
                   <Detail label="Session" mono>
                     {d.sessionRef ?? "—"}
                   </Detail>
-                  <Detail label="Workspace" mono>
+                  <Detail label="Working copy" mono>
                     {d.workspacePath ?? "—"}
                   </Detail>
                 </Row>
