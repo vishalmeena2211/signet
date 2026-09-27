@@ -47,6 +47,8 @@ const FEATURES = [
     stage: "IMPLEMENTING",
     incrementsTotal: 1,
     incrementsMerged: 0,
+    stepStates: ["AWAITING_SIGNATURE"],
+    repoLabel: null,
   },
 ];
 

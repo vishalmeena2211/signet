@@ -41,7 +41,7 @@ export class ConsoleViews {
   async featuresBoard(): Promise<FeatureSummary[]> {
     const features = await this.db.feature.findMany({
       orderBy: { updatedAt: "desc" },
-      include: { increments: { select: { status: true } } },
+      include: { increments: { select: { status: true, orderIndex: true } } },
     });
     return features.map((f) => {
       const total = f.increments.length;
@@ -65,6 +65,12 @@ export class ConsoleViews {
         stage: deriveStage(f.stage, total, merged),
         incrementsTotal: total,
         incrementsMerged: merged,
+        // In declared order, so the strip the board draws matches the order the steps
+        // actually run in rather than whatever the database felt like returning.
+        stepStates: [...f.increments]
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+          .map((i) => i.status),
+        repoLabel: f.repoLabel,
       });
     });
   }

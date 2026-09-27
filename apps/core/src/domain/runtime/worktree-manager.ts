@@ -74,6 +74,8 @@ export class WorktreeManager {
       try {
         // -B: (re)create branch at baseRef even if it exists from a torn run
         await this.git(["worktree", "add", "-B", branch, path, baseRef], repoPath);
+        // A worktree holds TRACKED files only, so dependencies are absent.
+        await this.provideDependencies(repoPath, path);
       } catch (e) {
         await rm(lockPath, { force: true });
         return {
@@ -83,6 +85,71 @@ export class WorktreeManager {
       }
     }
     return { ok: true, value: { path, branch, lockPath, repoPath } };
+  }
+
+  /**
+   * Makes the target repo's installed dependencies available inside the worktree.
+   *
+   * Why this has to exist: `git worktree add` gives you the TRACKED files, and
+   * node_modules is gitignored in every JavaScript project ever written. So a fresh
+   * worktree has no tsc, no vitest, no eslint — and every gate exits 127, "command not
+   * found". Signet looked like it worked for weeks because the demo repo runs
+   * `node run-tests.mjs`, which needs nothing installed. The first run against a real
+   * package escalated after burning three repairs trying to fix correct tests against an
+   * error that had nothing to do with them.
+   *
+   * Three strategies, best first:
+   *
+   *   1. A COPY-ON-WRITE CLONE (`cp -c` on APFS, `--reflink` on btrfs/xfs). Effectively
+   *      instant and genuinely isolated: the worktree gets its own view, and a write
+   *      inside it cannot reach the target repo. This is the one we want.
+   *   2. A SYMLINK, when the filesystem cannot clone. Also instant, but SHARED — a write
+   *      into node_modules would reach the real repo. node_modules is gitignored, so such
+   *      a change would never show up in the diff a human signs, which is exactly why it
+   *      is the fallback and not the default.
+   *   3. Nothing, if neither works. The gates will then skip or fail loudly rather than
+   *      silently passing, which is the right way round.
+   *
+   * Deliberately NOT running an install: it needs network, takes minutes per increment,
+   * and would make every run depend on a registry being reachable. Signet uses what the
+   * developer already installed.
+   */
+  private async provideDependencies(repoPath: string, worktreePath: string): Promise<void> {
+    // Only what a toolchain actually needs to execute. Kept short on purpose: each entry
+    // is a directory being shared or cloned, and guessing wrongly is worse than omitting.
+    const candidates = ["node_modules"];
+
+    for (const dir of candidates) {
+      const source = join(repoPath, dir);
+      const target = join(worktreePath, dir);
+      const hasSource = await access(source)
+        .then(() => true)
+        .catch(() => false);
+      if (!hasSource) continue;
+
+      // Already there (a resumed worktree): leave it alone.
+      const hasTarget = await access(target)
+        .then(() => true)
+        .catch(() => false);
+      if (hasTarget) continue;
+
+      // 1) copy-on-write clone: isolated and instant where the filesystem supports it.
+      const cloned = await exec("cp", ["-Rc", source, target])
+        .then(() => true)
+        .catch(() => false);
+      if (cloned) continue;
+
+      const reflinked = await exec("cp", ["-R", "--reflink=always", source, target])
+        .then(() => true)
+        .catch(() => false);
+      if (reflinked) continue;
+
+      // 2) symlink: shared, and the caller should know that.
+      await exec("ln", ["-sfn", source, target]).catch(() => {
+        // 3) neither worked. Left absent on purpose: a gate that cannot find its tools
+        // fails loudly, which is far better than one that quietly reports success.
+      });
+    }
   }
 
   /** Commit everything in the worktree with a deterministic message; returns commit sha or null when clean. */

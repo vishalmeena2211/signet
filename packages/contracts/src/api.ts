@@ -13,6 +13,21 @@ export const FeatureSummarySchema = z.object({
   stage: z.enum(["INTAKE", "DESIGN", "DECOMPOSED", "IMPLEMENTING", "DONE"]),
   incrementsTotal: z.number().int().min(0),
   incrementsMerged: z.number().int().min(0),
+  /**
+   * Every step's status, in order.
+   *
+   * A count cannot distinguish the shapes that matter. "1/3 done" is the same sentence
+   * for a feature with one step running and two queued, one step failed and two queued,
+   * and one step waiting on your signature — three situations calling for three different
+   * reactions. With the states in order the board can draw them, and the difference is
+   * visible without reading a word.
+   */
+  stepStates: z.array(z.string()),
+  /**
+   * Which repo it builds into, for display. Null means the configured one — worth
+   * surfacing now that a feature can target its own.
+   */
+  repoLabel: z.string().nullable(),
 });
 export type FeatureSummary = z.infer<typeof FeatureSummarySchema>;
 

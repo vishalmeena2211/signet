@@ -23,7 +23,6 @@ import {
   Card,
   Divider,
   Dot,
-  Meter,
   Row,
   Segmented,
   Stack,
@@ -33,6 +32,8 @@ import { ConfirmButton, EmptyState, ErrorNote, QueryState, useToast } from "../u
 import { Forensics, RowDivider, Understand } from "../ui/tiers.js";
 import { Journey } from "../ui/journey.js";
 import { LiveRun } from "../ui/live-run.js";
+import { RunPipeline } from "../ui/run-pipeline.js";
+import { StepStrip } from "../ui/step-strip.js";
 import {
   Bytes,
   CodeBlock,
@@ -95,13 +96,14 @@ export function Feature({ route }: { route: Extract<Route, { view: "feature" }> 
                   <span className="num">
                     {q.data.feature.incrementsMerged}/{q.data.feature.incrementsTotal} steps done
                   </span>
-                  <div style={{ width: 90 }}>
-                    <Meter
-                      value={q.data.feature.incrementsMerged}
-                      max={q.data.feature.incrementsTotal}
-                      tone={q.data.feature.incrementsMerged === q.data.feature.incrementsTotal ? "ok" : "accent"}
-                    />
+                  <div style={{ width: 120 }}>
+                    <StepStrip states={q.data.feature.stepStates} size="page" />
                   </div>
+                  {q.data.feature.repoLabel && (
+                    <span style={{ fontFamily: "var(--mono)", fontSize: "var(--fs-xs)" }}>
+                      {q.data.feature.repoLabel}
+                    </span>
+                  )}
                   <Id value={q.data.feature.id} label="feature" />
                 </Row>
               </Stack>
@@ -216,6 +218,18 @@ function IncrementCard({
             already recorded during a run and only shown after it ended, which made a
             healthy slow run indistinguishable from a wedged one. */}
         {(s === "RUNNING" || s === "VERIFYING") && runId && <LiveRun runId={runId} verdicts={verdicts} />}
+
+        {/* The pipeline, drawn. Disclosed rather than always open: the rail above answers
+            "where is this", and the diagram answers "what actually happened", which is a
+            different and less frequent question. Shown for any step that has started,
+            including failed ones — a failure is exactly when the shape is worth seeing. */}
+        {s !== "CONTEXT_READY" && s !== "PLANNED" && (
+          <Forensics id={`pipeline.${inc.id}`} label="See the pipeline">
+            <div style={{ padding: "var(--s3)" }}>
+              <RunPipeline incrementId={inc.id} incrementStatus={s} verdicts={verdicts} />
+            </div>
+          </Forensics>
+        )}
 
         {inc.state.status === "FAILED" && (
           <div

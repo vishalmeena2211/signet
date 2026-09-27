@@ -213,3 +213,58 @@ describe("gate suite", () => {
     expect(res.verdicts[0]?.findings[0]?.dimension).toBe("gate_crashed");
   });
 });
+
+describe("an environment failure is not the agent's fault", () => {
+  const gate = testsGate({ runOnBase: makeRunOnBase() });
+
+  it("reports a missing test runner as environmental, not as a test failure", async () => {
+    // From the first run against a real package: a git worktree holds tracked files only,
+    // so node_modules was absent, `vitest run` exited 127, and the run spent three repairs
+    // and a restart rewriting tests that were already correct.
+    const empty = await mkdtemp(join(tmpdir(), "signet-noenv-"));
+    await writeFile(
+      join(empty, "package.json"),
+      JSON.stringify({ name: "x", scripts: { test: "definitely-not-installed --run" } }),
+    );
+    const v = await gate.run({
+      workspacePath: empty,
+      baseRef: "main",
+      changedFiles: ["src/thing.ts"],
+      runId: RUN,
+    });
+    expect(v.outcome).toBe("fail");
+    expect(v.findings[0]?.dimension).toBe("environment");
+    expect(v.findings[0]?.message).toMatch(/127|command not found/i);
+    await rm(empty, { recursive: true, force: true });
+  });
+
+  it("surfaces it as NON-recoverable, so the repair budget is not spent on it", async () => {
+    // The dimension is the signal. A recoverable error drives the repair loop; this must
+    // escalate on the first round, because no code change can install a missing binary.
+    const suite = new GateSuite(
+      [
+        {
+          name: "tests",
+          async run() {
+            return {
+              gate: "tests" as const,
+              outcome: "fail" as const,
+              findings: [{ dimension: "environment", message: "exited 127 (command not found)" }],
+            };
+          },
+        },
+      ],
+      async () => {},
+      nullLogger,
+    );
+    const res = await suite.runAll({
+      workspacePath: repo,
+      baseRef: "main",
+      changedFiles: ["a.ts"],
+      runId: RUN,
+    });
+    expect(res.passed).toBe(false);
+    expect(res.error?.kind).toBe("non_recoverable");
+    expect(res.error?.code).toBe("gates.environment");
+  });
+});

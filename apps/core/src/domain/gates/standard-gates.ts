@@ -87,6 +87,25 @@ export function testsGate(deps: TestsGateDeps): Gate {
       // 1) full suite on the changed workspace must pass
       const onChanged = await runCommand(runner.cmd, runner.args, ctx.workspacePath, TIMEOUT);
       if (onChanged.code !== 0) {
+        // 127 is "command not found". That is the ENVIRONMENT, not the code, and no
+        // amount of rewriting tests will fix it — the first real run spent three repairs
+        // and a restart discovering that. The dimension is what tells the run machine to
+        // escalate at once instead of repairing.
+        if (onChanged.code === 127) {
+          return {
+            gate: "tests",
+            outcome: "fail",
+            findings: [
+              {
+                dimension: "environment",
+                message:
+                  `\`${runner.cmd} ${runner.args.join(" ")}\` exited 127 (command not found) in the ` +
+                  `workspace. The test runner is not installed there, so nothing was verified. ` +
+                  `This is not something the agent can fix by changing code.`,
+              },
+            ],
+          };
+        }
         const lines = topLines(onChanged.stdout + onChanged.stderr, /(fail|✗|×|error)/i, 8);
         return {
           gate: "tests",

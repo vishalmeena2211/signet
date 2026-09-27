@@ -10,9 +10,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { FeatureSummary } from "@signet/contracts";
 import { api } from "../api.js";
 import { navigate, type Route } from "../router.js";
-import { Badge, Button, Input, Meter, Row, Segmented, Stack } from "../ui/primitives.js";
+import { Badge, Button, Input, Row, Segmented, Stack } from "../ui/primitives.js";
 import { EmptyState, QueryState } from "../ui/feedback.js";
 import { DataTable, type Column } from "../ui/table.js";
+import { StepStrip } from "../ui/step-strip.js";
 import { Id } from "../ui/format.js";
 
 const STAGE: Record<string, { label: string; tone: "idle" | "accent" | "run" | "ok" }> = {
@@ -85,7 +86,7 @@ export function Work({ route }: { route: Extract<Route, { view: "work" }> }) {
     {
       key: "progress",
       header: "Steps",
-      width: "150px",
+      width: "160px",
       sort: (a, b) =>
         a.incrementsMerged / Math.max(a.incrementsTotal, 1) - b.incrementsMerged / Math.max(b.incrementsTotal, 1),
       render: (f) => (
@@ -93,12 +94,30 @@ export function Work({ route }: { route: Extract<Route, { view: "work" }> }) {
           <span className="num" style={{ fontSize: "var(--fs-sm)" }}>
             {f.incrementsMerged}/{f.incrementsTotal} done
           </span>
-          <Meter
-            value={f.incrementsMerged}
-            max={f.incrementsTotal}
-            tone={f.incrementsMerged === f.incrementsTotal ? "ok" : "accent"}
-          />
+          {/* A strip rather than a bar. A bar paints "failed" and "not started" the same
+              because both are simply absent progress, which is the one distinction that
+              actually changes what you do next. */}
+          <StepStrip states={f.stepStates} />
         </Stack>
+      ),
+    },
+    {
+      key: "repo",
+      header: "Repo",
+      width: "170px",
+      sort: (a, b) => (a.repoLabel ?? "").localeCompare(b.repoLabel ?? ""),
+      render: (f) => (
+        <span
+          style={{
+            color: f.repoLabel ? "var(--fg-muted)" : "var(--fg-subtle)",
+            fontFamily: "var(--mono)",
+            fontSize: "var(--fs-xs)",
+          }}
+        >
+          {/* Worth a column now that features can target different repos: without it the
+              board cannot tell you which codebase a row is about. */}
+          {f.repoLabel ?? "default"}
+        </span>
       ),
     },
     {

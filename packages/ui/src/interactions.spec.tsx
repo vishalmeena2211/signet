@@ -31,6 +31,8 @@ const FEATURES = [
     stage: "IMPLEMENTING",
     incrementsTotal: 1,
     incrementsMerged: 0,
+    stepStates: ["RUNNING"],
+    repoLabel: null,
   },
   {
     id: "196a877b-a07f-4107-8824-7374b81ce5e9",
@@ -39,6 +41,8 @@ const FEATURES = [
     stage: "DONE",
     incrementsTotal: 2,
     incrementsMerged: 2,
+    stepStates: ["MERGED", "MERGED"],
+    repoLabel: "~/code/checkout",
   },
 ];
 

@@ -6,6 +6,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  nonRecoverable,
   recoverable,
   type GateVerdictView,
   type RunId,
@@ -72,6 +73,24 @@ export class GateSuite {
     const repairFeedback = failed
       .flatMap((v) => v.findings.slice(0, 5).map((f) => `[${v.gate}] ${f.dimension}: ${f.message}${f.location ? ` (${f.location})` : ""}`))
       .join("\n");
+    // An ENVIRONMENT failure is not repairable by definition: the tools are missing, so
+    // the agent could rewrite the code perfectly and the gate would still fail. Returning
+    // it as non-recoverable escalates immediately instead of spending the repair budget
+    // on something no code change can affect.
+    const environmental = failed.filter((v) => v.findings.some((f) => f.dimension === "environment"));
+    if (environmental.length > 0) {
+      return {
+        passed: false,
+        verdicts,
+        repairFeedback,
+        error: nonRecoverable(
+          "gates.environment",
+          environmental[0]?.findings.find((f) => f.dimension === "environment")?.message ??
+            `${environmental.map((v) => v.gate).join(", ")} could not run`,
+        ),
+      };
+    }
+
     return {
       passed: false,
       verdicts,

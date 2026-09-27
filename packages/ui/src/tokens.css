@@ -46,8 +46,12 @@
   --warn-quiet: rgb(245 184 73 / 14%);
   --err: #f87171;
   --err-quiet: rgb(248 113 113 / 14%);
-  --run: #61a8ff;
-  --run-quiet: rgb(97 168 255 / 14%);
+  /* Was its own blue. Aliased to the accent because "running" and "primary" were
+     saying the same thing in two hues — five saturated colours on one screen is what
+     makes a console look assembled rather than designed. Kept as a token so components
+     still express MEANING rather than picking a colour. */
+  --run: var(--accent);
+  --run-quiet: var(--accent-quiet);
   --idle: #6b7484;
   --idle-quiet: rgb(107 116 132 / 14%);
 
@@ -69,22 +73,30 @@
   --r-full: 999px;
 
   /* ── elevation. Subtle: a console is not a card game. ── */
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 30%);
-  --shadow-2: 0 4px 12px rgb(0 0 0 / 35%);
-  --shadow-3: 0 16px 48px rgb(0 0 0 / 50%);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 22%);
+  --shadow-2: 0 2px 8px rgb(0 0 0 / 26%);
+  --shadow-3: 0 12px 32px rgb(0 0 0 / 38%);
 
   /* ── type ── */
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs: 13px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
-  --lh-tight: 1.3;
-  --lh: 1.5;
+  /* Counted before changing: --fs-sm was used 98 times out of ~151 total, and every
+     other size a handful. The console was effectively ONE size, which is the real reason
+     it read as flat — there was no hierarchy to see, only a wall of 12px.
+     
+     So the sizes are not reduced, they are SEPARATED. Each step is now a visible jump
+     rather than a 1px difference nobody can perceive (12/13/14 were indistinguishable in
+     practice, so they were three tokens doing one job). And the de facto body size moves
+     up: 12px is too small for a surface somebody leaves open all day. */
+  --fs-xs: 11px;   /* labels, ids, units — genuinely secondary */
+  --fs-sm: 13px;   /* the workhorse: table cells, secondary lines */
+  --fs: 14px;      /* body */
+  --fs-md: 16px;   /* a card's subject */
+  --fs-lg: 19px;   /* section headings */
+  --fs-xl: 24px;   /* one per screen */
+  --fs-2xl: 30px;  /* the focal metric, and nothing else */
+  --lh-tight: 1.25;
+  --lh: 1.55;
 
   /* ── layout constants the shell and screens agree on ── */
   --sidebar-w: 216px;
@@ -127,8 +139,8 @@
   --warn-quiet: rgb(138 90 6 / 12%);
   --err: #c92f2f;
   --err-quiet: rgb(201 47 47 / 10%);
-  --run: #1f6feb;
-  --run-quiet: rgb(31 111 235 / 10%);
+  --run: var(--accent);
+  --run-quiet: var(--accent-quiet);
   --idle: #7b8494;
   --idle-quiet: rgb(123 132 148 / 12%);
 
