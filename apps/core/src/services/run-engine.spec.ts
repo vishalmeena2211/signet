@@ -285,6 +285,14 @@ beforeEach(() => {
   cleanupIds = [];
 });
 
+/**
+ * These three exhaust the retry budget, which means 3 repairs plus a fresh restart, and
+ * every one of those is a REAL `git worktree add` and `git worktree remove`. They sit at
+ * roughly ten seconds each, so they get an explicit timeout rather than a global raise —
+ * lifting the default everywhere would hide a genuine hang somewhere else.
+ */
+const BUDGET_TEST_TIMEOUT = 30_000;
+
 describe("run engine — full loop", () => {
   it("happy path: all phases complete in order, usage recorded, run SUCCEEDED", async () => {
     const h = makeHarness({ agentImplement: writingImplement("v1"), gateResults: [{ passed: true }] });
@@ -363,7 +371,7 @@ describe("run engine — full loop", () => {
     expect(outcome.outcome).toBe("escalated");
     if (outcome.outcome !== "escalated") return;
     expect(outcome.question).toMatch(/repair budget/);
-  });
+  }, BUDGET_TEST_TIMEOUT);
 
   it("PERSISTS the repair counter, so the budget can actually run out", async () => {
     // The assertion that was missing. The test above only checked that escalation
@@ -380,7 +388,7 @@ describe("run engine — full loop", () => {
     const row = await h.increments.get(INC);
     expect(row?.repairAttempt).toBe(3); // maxRepairIterations
     expect(row?.freshRestarts).toBe(1); // maxFreshRestarts
-  });
+  }, BUDGET_TEST_TIMEOUT);
 
   it("stops after a bounded number of gate rounds", async () => {
     // Counted rather than inferred. An unbounded loop is not a slow failure, it is an
@@ -397,7 +405,7 @@ describe("run engine — full loop", () => {
     // 3 repairs + 1 fresh restart, each with its own gate round, plus the first.
     expect(rounds).toBeLessThanOrEqual(12);
     expect(rounds).toBeGreaterThan(1);
-  });
+  }, BUDGET_TEST_TIMEOUT);
 });
 
 afterAll(async () => {

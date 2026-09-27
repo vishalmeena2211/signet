@@ -58,6 +58,18 @@ export class Signatures {
     return { runId };
   }
 
+  /**
+   * The branch a repo currently has checked out, or the literal "HEAD" when detached.
+   *
+   * `--abbrev-ref HEAD` is the one that answers "what branch am I on" rather than "what
+   * commit is this", and it yields "HEAD" for a detached checkout — which is a case worth
+   * naming separately, because "on branch HEAD" would be a confusing thing to be told.
+   */
+  private async currentBranch(repoPath: string): Promise<string> {
+    const { stdout } = await pexec("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoPath });
+    return stdout.trim();
+  }
+
   /** Signature #2 — merge the increment's branch into the base. */
   async merge(incrementId: string): Promise<void> {
     const incId = IncrementIdSchema.parse(incrementId);
@@ -73,6 +85,35 @@ export class Signatures {
     }
     const branch = `signet/inc-${incId}`;
     const repoPath = (await this.repoForIncrement?.(incId)) ?? this.targetRepoPath;
+
+    // Refuse unless the repo is actually ON the base branch.
+    //
+    // `git merge` merges into whatever is checked out. There is no checkout in this path,
+    // so a repo sitting on some other branch would receive the work THERE — silently, and
+    // with a real commit, because the increment's branch was cut from the base and applies
+    // cleanly either way. You would press a button labelled "merge into your main branch"
+    // and land it somewhere else.
+    //
+    // Refusing rather than checking out the base ourselves: a checkout can fail, can move
+    // somebody's working state, and can stash. Signet should not relocate a developer's
+    // HEAD as a side effect of a merge — it should say what is wrong and let them decide.
+    const head = await this.currentBranch(repoPath);
+    if (head !== this.baseRef) {
+      throw Object.assign(
+        new Error(`${repoPath} is on ${head}, not ${this.baseRef}`),
+        {
+          signet: conflict(
+            "merge.wrong_branch",
+            head === "HEAD"
+              ? `That repository has a detached HEAD, so there is no branch to merge into. ` +
+                `Check out ${this.baseRef} and try again.`
+              : `That repository is on "${head}", not "${this.baseRef}". Merging now would land ` +
+                `this work on "${head}" instead. Check out "${this.baseRef}" and try again.`,
+          ),
+        },
+      );
+    }
+
     await pexec(
       "git",
       [
