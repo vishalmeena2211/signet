@@ -24,6 +24,7 @@ import { ConfirmButton, EmptyState, ErrorNote, QueryState, useToast } from "../u
 import { Decide, Forensics, RowDivider, Understand } from "../ui/tiers.js";
 import { RelativeTime } from "../ui/format.js";
 import { Combobox } from "../ui/combobox.js";
+import { WorkflowCanvas, type CanvasStep } from "../ui/workflow-canvas.js";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -150,6 +151,14 @@ export function Automations() {
                           {o.error ? (
                             <span style={{ color: "var(--err)" }}>
                               {o.recipeName}: {o.error}
+                            </span>
+                          ) : o.nothingNeeded ? (
+                            /* A maintenance recipe finding nothing is the system working.
+                               Shown plainly, and never as an error — conflating the two is
+                               what made the first real automated run look broken against a
+                               perfectly clean repo. */
+                            <span>
+                              {o.recipeName}: nothing needed — {o.nothingNeeded}
                             </span>
                           ) : (
                             <>
@@ -476,6 +485,25 @@ function Workflows({
               </Row>
             )}
 
+            {/* The shape, while you are still making it. Seeing the chain end at "waits
+                for you to merge" before saving is the point — it answers "what will this
+                actually do to my repo" without reading anything. */}
+            {picked.length > 0 && (
+              <WorkflowCanvas
+                trigger={trigger()}
+                triggerLabel={describeTrigger(trigger())}
+                height={200 + picked.length * 116}
+                steps={picked.map((id): CanvasStep => {
+                  const r = recipes.find((x) => x.id === id);
+                  return {
+                    recipeId: id,
+                    recipeName: r?.name ?? "unknown recipe",
+                    ...(r?.goalMd ? { detail: r.goalMd.split("\n")[0]?.slice(0, 70) ?? "" } : {}),
+                  };
+                })}
+              />
+            )}
+
             <Row gap="var(--s3)" wrap>
               <Button variant="primary" disabled={problem !== null || save.isPending} onClick={() => save.mutate()}>
                 {save.isPending ? "Saving…" : "Save workflow"}
@@ -544,6 +572,28 @@ function Workflows({
                   </ConfirmButton>
                 </Row>
               </Row>
+              <div style={{ padding: "0 var(--s3) var(--s3)" }}>
+                <Forensics id={`workflow.${w.id}`} label="See the flow" count={w.steps.length}>
+                  <WorkflowCanvas
+                    trigger={w.trigger}
+                    triggerLabel={describeTrigger(w.trigger)}
+                    height={200 + w.steps.length * 116}
+                    steps={w.steps.map((st): CanvasStep => {
+                      const r = recipes.find((x) => x.id === st.recipeId);
+                      return {
+                        recipeId: st.recipeId,
+                        recipeName: st.recipeName,
+                        ...(r?.goalMd ? { detail: r.goalMd.split("\n")[0]?.slice(0, 70) ?? "" } : {}),
+                        // Drawn on the node, because a workflow built on a template will
+                        // skip every time and the diagram should say so.
+                        ...((r?.placeholders.length ?? 0) > 0
+                          ? { blockedReason: `Has blanks (${r?.placeholders.join(", ")}) — this will skip` }
+                          : {}),
+                      };
+                    })}
+                  />
+                </Forensics>
+              </div>
             </div>
           ))}
         </Card>

@@ -4,7 +4,7 @@
 // The route switch is exhaustive over the union, so adding a route without a
 // screen is a compile error rather than a blank page.
 
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { parseRoute, type Route } from "./router.js";
 import { AppShell } from "./shell/AppShell.js";
 import { CommandPalette } from "./shell/CommandPalette.js";
@@ -18,7 +18,15 @@ import { Activity } from "./screens/Activity.js";
 import { Graph } from "./screens/Graph.js";
 import { System } from "./screens/System.js";
 import { NewFeature } from "./screens/NewFeature.js";
-import { Automations } from "./screens/Automations.js";
+
+/**
+ * Loaded on demand, because it is the only screen that pulls in React Flow — about
+ * 200kB, which is 45% of the whole bundle for one screen most sessions never open.
+ * Everything else stays in the initial load; this arrives when you navigate to it.
+ */
+const Automations = lazy(() =>
+  import("./screens/Automations.js").then((m) => ({ default: m.Automations })),
+);
 
 export function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute(location.hash));
@@ -76,7 +84,13 @@ function Screen({ route }: { route: Route }) {
     case "system":
       return <System />;
     case "automations":
-      return <Automations />;
+      return (
+        // A plain line rather than a skeleton: the chunk is small enough that a
+        // skeleton would flash and be more distracting than a word.
+        <Suspense fallback={<div style={{ color: "var(--fg-muted)" }}>Loading…</div>}>
+          <Automations />
+        </Suspense>
+      );
     case "new":
       return <NewFeature />;
     default:

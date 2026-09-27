@@ -315,3 +315,30 @@ describe("when a schedule is due", () => {
     expect(isDue(weekly, new Date("2026-09-21T09:00:00"), new Date("2026-09-28T09:30:00"))).toBe(true);
   });
 });
+
+d("a recipe that finds nothing to do", () => {
+  it("succeeds and says so, rather than reporting a failure", async () => {
+    // Exactly what happened on the first real automated run, and the reason it read as
+    // broken: a clean repo gave the correct answer and the engine called it a failure.
+    const workflowId = await seedWorkflow();
+    const { deps, calls } = spyDeps({
+      propose: async () => ({
+        ok: true as const,
+        title: "Nothing to do",
+        briefMd: "u",
+        increments: [],
+        noWorkNeeded: "Every module already has a sibling test file.",
+      }),
+    });
+    const res = await makeEngine(deps).run(workflowId, { triggeredBy: "schedule" });
+    expect("runId" in res).toBe(true);
+    if (!("runId" in res)) return;
+
+    const row = await db.workflowRun.findUniqueOrThrow({ where: { id: res.runId } });
+    expect(row.status).toBe("succeeded");
+    expect(row.outcomeJson).toContain("already has a sibling test");
+    // And it created nothing: a feature with no steps is not a thing.
+    expect(calls.created).toBe(0);
+    expect(calls.approved).toEqual([]);
+  });
+});

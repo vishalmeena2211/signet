@@ -140,6 +140,12 @@ export const WorkflowStepOutcomeSchema = z.object({
   /** How many steps were proposed and queued — the work now waiting for a human. */
   stepsQueued: z.number().int(),
   error: z.string().nullable(),
+  /**
+   * Why nothing needed doing. Distinct from `error` on purpose: a maintenance recipe that
+   * correctly finds nothing is the system working, and the first real automated run
+   * reported it as a failure because the two were conflated.
+   */
+  nothingNeeded: z.string().nullable().default(null),
 });
 export type WorkflowStepOutcome = z.infer<typeof WorkflowStepOutcomeSchema>;
 

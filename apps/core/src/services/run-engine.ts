@@ -385,23 +385,21 @@ export class RunEngine {
   }
 
   private async bumpRepair(incrementId: IncrementId, attempt: number): Promise<void> {
+    // Was: read the row, assign `row.repairAttempt = attempt`, then call transition().
+    // That mutated a local object and wrote only the state, so the counter never moved
+    // and the repair budget never ran out — an unbounded loop that spent 49 gate rounds
+    // on one step before anybody noticed. The port now has an operation that actually
+    // writes it.
     await this.uow.run(async (tx) => {
-      const row = await tx.increments.get(incrementId);
-      if (row) {
-        // repairAttempt is authoritative on the increment row; engine mirrors it.
-        row.repairAttempt = attempt;
-        await tx.increments.transition(incrementId, row.state.status, row.state);
-      }
+      await tx.increments.setBudget(incrementId, { repairAttempt: attempt });
     });
   }
 
   private async bumpRestart(incrementId: IncrementId): Promise<void> {
+    // Same bug as bumpRepair: `row.freshRestarts += 1` on a local object went nowhere.
     await this.uow.run(async (tx) => {
       const row = await tx.increments.get(incrementId);
-      if (row) {
-        row.freshRestarts += 1;
-        await tx.increments.transition(incrementId, row.state.status, row.state);
-      }
+      if (row) await tx.increments.setBudget(incrementId, { freshRestarts: row.freshRestarts + 1 });
     });
   }
 

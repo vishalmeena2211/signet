@@ -187,10 +187,25 @@ export const FeatureProposalSchema = z.object({
    */
   understanding: z.string().min(1),
   /**
-   * Capped, because a "breakdown" of thirty steps is not a plan a human can sign,
-   * and the whole point of this screen is producing something signable.
+   * Capped above, because a "breakdown" of thirty steps is not a plan a human can sign.
+   *
+   * NOT floored at one. An empty list is a legitimate and often CORRECT answer: a
+   * maintenance recipe like "add tests to any module missing them" should return nothing
+   * when every module already has tests. Requiring at least one step forces the agent to
+   * either invent work or fail — and it failed, on the first real automated run, with
+   * "steps Too small: expected array to have >=1 items" against a repo where the honest
+   * answer was that there was nothing to do.
+   *
+   * For an automation that fires unattended every night, "must find something" is the
+   * worst possible bias to build into a contract.
    */
-  steps: z.array(ProposedStepSchema).min(1).max(12),
+  steps: z.array(ProposedStepSchema).max(12),
+  /**
+   * Why nothing needs doing, when steps is empty. Required in that case so "no work" is
+   * always an explained conclusion rather than an empty result that could equally be a
+   * malfunction.
+   */
+  noWorkNeeded: z.string().nullable().default(null),
   /**
    * What the proposer was unsure about. Carried rather than hidden: a plan that
    * hides its doubts is indistinguishable from a confident one, and the user is the
@@ -199,6 +214,16 @@ export const FeatureProposalSchema = z.object({
   uncertainties: z.array(z.string()),
 });
 export type FeatureProposal = z.infer<typeof FeatureProposalSchema>;
+
+/**
+ * A proposal with no steps must say why. Without this, an empty proposal and a broken one
+ * look identical, and an automation that quietly does nothing is the hardest kind of
+ * failure to notice.
+ */
+export const ValidatedFeatureProposalSchema = FeatureProposalSchema.refine(
+  (p) => p.steps.length > 0 || (p.noWorkNeeded !== null && p.noWorkNeeded.trim().length > 0),
+  { message: "a proposal with no steps must explain why nothing needs doing", path: ["noWorkNeeded"] },
+);
 
 export const FeatureProposalResponseSchema = z.object({
   proposal: FeatureProposalSchema,

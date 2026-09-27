@@ -23,6 +23,20 @@ export interface IncrementRepo {
   /** Transition with legality check against ALLOWED_INCREMENT_TRANSITIONS; throws conflict error on illegal move. */
   transition(id: IncrementId, from: IncrementStatus, to: IncrementState): Promise<void>;
   listByStatus(status: IncrementStatus): Promise<IncrementRow[]>;
+  /**
+   * Persists the retry budget.
+   *
+   * This did not exist, and its absence caused an unbounded repair loop. The engine
+   * "bumped" the counter by mutating the row object it had just read and then calling
+   * transition(), which writes state and nothing else — so every repair read 0, wrote
+   * nothing, and `repairAttempt < maxRepairIterations` was true forever. One step burned
+   * 49 gate rounds and 57 agent spawns before it was stopped by hand.
+   *
+   * The lesson is in the shape, not the typo: the interface had no way to express the
+   * write, so the calling code faked it. An operation the port cannot perform should fail
+   * to compile, not silently do nothing.
+   */
+  setBudget(id: IncrementId, budget: { repairAttempt?: number; freshRestarts?: number }): Promise<void>;
 }
 
 export interface IncrementRow {

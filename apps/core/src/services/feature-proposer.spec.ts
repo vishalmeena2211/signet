@@ -40,6 +40,7 @@ function proposalWithSurface(surface: string[]): FeatureProposal {
     understanding: "u",
     steps: [{ title: "step one", rationale: "r", declaredSurface: surface, acceptanceMd: "a" }],
     uncertainties: [],
+    noWorkNeeded: null,
   };
 }
 
@@ -143,6 +144,7 @@ describe("surfaces are checked against files that actually exist", () => {
         title: "t",
         understanding: "u",
         uncertainties: [],
+        noWorkNeeded: null,
         steps: [
           { title: "good step", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "a" },
           { title: "bad step", rationale: "r", declaredSurface: ["nope/**"], acceptanceMd: "a" },
@@ -271,6 +273,7 @@ describe("turning an approved proposal into a feature", () => {
       title: "Discounts",
       understanding: "Add discount support.",
       uncertainties: [],
+      noWorkNeeded: null,
       steps: [{ title: "s", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "rejects >100" }],
     });
     expect(req.increments[0]?.acceptanceMd).toBe("rejects >100");
@@ -281,9 +284,76 @@ describe("turning an approved proposal into a feature", () => {
       title: "Discounts",
       understanding: "Add discount support.",
       uncertainties: ["whether discounts stack"],
+      noWorkNeeded: null,
       steps: [{ title: "s", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "a" }],
     });
     expect(req.briefMd).toContain("Add discount support.");
     expect(req.briefMd).toContain("whether discounts stack");
+  });
+});
+
+describe("a proposal may say there is nothing to do", () => {
+  it("accepts an empty plan when it explains why", async () => {
+    // The bug this closes, from the first real automated run: the recipe was "add tests to
+    // any module missing them", every module already had tests, and the honest answer was
+    // an empty list. The schema required at least one step, so the run FAILED with
+    // "steps Too small: expected array to have >=1 items" against a clean repo.
+    //
+    // For something that fires unattended every night, "must find something" is the worst
+    // possible bias to encode in a contract.
+    const { root, cleanup } = await flatRepo();
+    try {
+      const proposer = new FeatureProposer({
+        targetRepoPath: root,
+        adapter: {
+          execute: async () => ({
+            ok: true,
+            resultText: JSON.stringify({
+              title: "Nothing to do",
+              understanding: "Add tests to any module missing them.",
+              steps: [],
+              noWorkNeeded: "Every module in this repo already has a sibling test file.",
+              uncertainties: [],
+            }),
+          }),
+        },
+      });
+      const result = await proposer.propose({ goal: "add tests to any module missing them" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.response.proposal.steps).toHaveLength(0);
+      expect(result.response.proposal.noWorkNeeded).toContain("already has a sibling test");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("refuses an empty plan that does NOT explain itself", async () => {
+    // Otherwise "nothing to do" and "the model returned nothing useful" are the same
+    // response, and an automation quietly doing nothing is the hardest failure to notice.
+    const { root, cleanup } = await flatRepo();
+    try {
+      const proposer = new FeatureProposer({
+        targetRepoPath: root,
+        adapter: {
+          execute: async () => ({
+            ok: true,
+            resultText: JSON.stringify({
+              title: "Nothing",
+              understanding: "u",
+              steps: [],
+              noWorkNeeded: null,
+              uncertainties: [],
+            }),
+          }),
+        },
+      });
+      const result = await proposer.propose({ goal: "add tests to any module missing them" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain("noWorkNeeded");
+    } finally {
+      await cleanup();
+    }
   });
 });

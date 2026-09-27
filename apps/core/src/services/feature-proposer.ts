@@ -32,7 +32,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  FeatureProposalSchema,
+  ValidatedFeatureProposalSchema,
   ProposeFeatureRequestSchema,
   nonRecoverable,
   type FeatureProposal,
@@ -138,8 +138,14 @@ function buildPrompt(goal: string, profileText: string): string {
     '  "title": string,',
     '  "understanding": string,',
     '  "steps": [{ "title": string, "rationale": string, "declaredSurface": string[], "acceptanceMd": string }],',
+    '  "noWorkNeeded": string | null,',
     '  "uncertainties": string[]',
     "}",
+    "",
+    "IF THERE IS NOTHING TO DO, SAY SO. Return steps as [] and put the reason in",
+    "noWorkNeeded. A request like \"add tests to any module missing them\" against a repo",
+    "where every module already has tests has one correct answer, and it is an empty list.",
+    "Never invent work to avoid returning nothing.",
     "",
     "Rules that matter more than elegance:",
     "",
@@ -159,6 +165,8 @@ function buildPrompt(goal: string, profileText: string): string {
     "   perfectly good answer for a small request.",
     "7. Put anything you are guessing in uncertainties. A guess recorded there is useful;",
     "   the same guess buried silently in a surface is how runs die.",
+    "8. Returning no steps is a real answer, not a failure. Prefer it over a step you do",
+    "   not believe in.",
     "",
     "## What the user wants built",
     goal,
@@ -218,7 +226,7 @@ export class FeatureProposer {
         return { ok: false, error: result.error ?? nonRecoverable("propose.failed", "the proposer did not finish") };
       }
 
-      const parsed = FeatureProposalSchema.safeParse(extractJsonBlock(result.resultText));
+      const parsed = ValidatedFeatureProposalSchema.safeParse(extractJsonBlock(result.resultText));
       if (!parsed.success) {
         const issue = parsed.error.issues[0];
         return {

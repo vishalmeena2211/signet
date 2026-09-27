@@ -94,6 +94,19 @@ class PrismaIncrements implements IncrementRepo {
       freshRestarts: row.freshRestarts,
     }));
   }
+
+  async setBudget(
+    id: IncrementId,
+    budget: { repairAttempt?: number; freshRestarts?: number },
+  ): Promise<void> {
+    await this.db.increment.update({
+      where: { id },
+      data: {
+        ...(budget.repairAttempt !== undefined ? { repairAttempt: budget.repairAttempt } : {}),
+        ...(budget.freshRestarts !== undefined ? { freshRestarts: budget.freshRestarts } : {}),
+      },
+    });
+  }
 }
 
 // ── runs ─────────────────────────────────────────────────────────────────────

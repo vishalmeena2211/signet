@@ -41,7 +41,18 @@ export interface WorkflowDeps {
   db: PrismaClient;
   /** Proposes a breakdown for a description against a repo. */
   propose(input: { goal: string; repoId?: string }): Promise<
-    | { ok: true; title: string; briefMd: string; increments: Array<{ title: string; declaredSurface: string[]; acceptanceMd: string }> }
+    | {
+        ok: true;
+        title: string;
+        briefMd: string;
+        increments: Array<{ title: string; declaredSurface: string[]; acceptanceMd: string }>;
+        /**
+         * Set when the honest answer was that nothing needs doing. A maintenance recipe
+         * finding nothing is the system working, not failing — treating it as an error is
+         * what made the first real automated run report failure against a clean repo.
+         */
+        noWorkNeeded?: string | null;
+      }
     | { ok: false; reason: string }
   >;
   createFeature(input: {
@@ -165,11 +176,25 @@ export class WorkflowEngine {
           ...(repoId ? { repoId } : {}),
         });
         if (!proposal.ok) {
-          outcomes.push({ recipeName: recipe.name, featureId: null, stepsQueued: 0, error: proposal.reason });
+          outcomes.push({ recipeName: recipe.name, featureId: null, stepsQueued: 0, error: proposal.reason, nothingNeeded: null });
           failed = true;
           // Stop the workflow: later recipes usually assume the earlier ones landed, and
           // carrying on would build on something that is not there.
           break;
+        }
+
+        if (proposal.increments.length === 0) {
+          // Nothing to do, and that is a result. No feature is created, because a feature
+          // with no steps is not a thing — but the run succeeds and says why, so a nightly
+          // automation that correctly finds nothing does not read as broken.
+          outcomes.push({
+            recipeName: recipe.name,
+            featureId: null,
+            stepsQueued: 0,
+            error: null,
+            nothingNeeded: proposal.noWorkNeeded ?? "Nothing needed doing.",
+          });
+          continue;
         }
 
         const created = await this.deps.createFeature({
@@ -195,6 +220,7 @@ export class WorkflowEngine {
           featureId: created.featureId,
           stepsQueued: increments.length,
           error: null,
+          nothingNeeded: null,
         });
       } catch (e) {
         outcomes.push({
@@ -202,6 +228,7 @@ export class WorkflowEngine {
           featureId: null,
           stepsQueued: 0,
           error: e instanceof Error ? e.message : String(e),
+          nothingNeeded: null,
         });
         failed = true;
         break;

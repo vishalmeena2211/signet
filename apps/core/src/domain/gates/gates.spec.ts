@@ -91,7 +91,39 @@ describe("tests gate — fail-then-pass discipline (real execution)", () => {
     expect(v.outcome).toBe("pass");
   });
 
-  it("a vacuous test (passes on base too) is REJECTED", async () => {
+  it("a vacuous test alongside a source change is REJECTED", async () => {
+    // The scenario the check exists for: the agent was asked to change behaviour, and
+    // wrote a test that would pass with or without the change. `changedFiles` includes a
+    // source file, because an agent implementing something always touches one — which is
+    // exactly when falsifiability is meaningful.
+    await writeFile(
+      join(repo, "vacuous.test.mjs"),
+      `if (1 + 1 !== 2) throw new Error("universe broken");\n`,
+    );
+    const v = await gate.run({
+      workspacePath: repo,
+      baseRef: "main",
+      changedFiles: ["math.mjs", "vacuous.test.mjs"],
+      runId: RUN,
+    });
+    expect(v.outcome).toBe("fail");
+    expect(v.findings[0]?.dimension).toBe("fail_then_pass");
+    await rm(join(repo, "vacuous.test.mjs"));
+  });
+
+  it("a TEST-ONLY change is not asked to be falsifiable, and says so", async () => {
+    // A deliberate narrowing, with a real cost.
+    //
+    // Falsifiability proves a test exercises NEW behaviour. With no source change there is
+    // no new behaviour, so the demand is unsatisfiable — and it was blocking two kinds of
+    // legitimate work: rewriting a test's style while keeping its assertions, and adding
+    // coverage to code that already works. A live run died on the first of those.
+    //
+    // What is given up: a vacuous test introduced with NO source change is no longer
+    // caught here. The suite still has to pass and a human still reads the diff, but this
+    // gate will not stop it. That is a narrower guard, stated rather than hidden — the
+    // verdict carries a finding explaining the exemption, so it is visible on screen
+    // instead of being a silent hole.
     await writeFile(
       join(repo, "vacuous.test.mjs"),
       `if (1 + 1 !== 2) throw new Error("universe broken");\n`,
@@ -102,8 +134,9 @@ describe("tests gate — fail-then-pass discipline (real execution)", () => {
       changedFiles: ["vacuous.test.mjs"],
       runId: RUN,
     });
-    expect(v.outcome).toBe("fail");
+    expect(v.outcome).toBe("pass");
     expect(v.findings[0]?.dimension).toBe("fail_then_pass");
+    expect(v.findings[0]?.message).toMatch(/Only test files changed/);
     await rm(join(repo, "vacuous.test.mjs"));
   });
 

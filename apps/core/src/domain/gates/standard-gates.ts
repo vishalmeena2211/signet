@@ -97,8 +97,43 @@ export function testsGate(deps: TestsGateDeps): Gate {
         };
       }
 
-      // 2) falsifiability: agent-authored test changes must FAIL against base
-      const testFiles = ctx.changedFiles.filter((f) => /\.(spec|test)\.(c|m)?[jt]sx?$/.test(f));
+      // 2) falsifiability: agent-authored test changes must FAIL against base.
+      //
+      // Only when a SOURCE file also changed. Falsifiability proves that a test exercises
+      // the NEW behaviour — so with no new behaviour there is nothing to falsify, and
+      // demanding it blocks two kinds of legitimate work:
+      //
+      //   · Rewriting a test's style while preserving every assertion. It passes before
+      //     and after by definition. A live run was killed by this: the task was
+      //     "convert cart.test.mjs to node:test style", and the gate reported the tests
+      //     "prove nothing about this change" — correct by its own rule, and the wrong
+      //     conclusion.
+      //   · Adding tests to code that already works. The new test passes on base because
+      //     the behaviour was already there; covering it is the entire point.
+      //
+      // Anything that changes behaviour still has to prove it, which is where the check
+      // earns its keep.
+      const isTest = (f: string): boolean => /\.(spec|test)\.(c|m)?[jt]sx?$/.test(f);
+      const testFiles = ctx.changedFiles.filter(isTest);
+      const sourceFiles = ctx.changedFiles.filter((f) => !isTest(f));
+
+      if (testFiles.length > 0 && sourceFiles.length === 0) {
+        // Passed, and says why the strongest part of this gate did not apply — a silent
+        // exemption is how a guard quietly stops guarding.
+        return {
+          gate: "tests",
+          outcome: "pass",
+          findings: [
+            {
+              dimension: "fail_then_pass",
+              message:
+                "Only test files changed, so falsifiability was not checked: there is no new " +
+                "behaviour for a test to fail against. The suite passes.",
+            },
+          ],
+        };
+      }
+
       if (testFiles.length > 0) {
         const onBase = await deps.runOnBase({
           workspacePath: ctx.workspacePath,

@@ -41,7 +41,21 @@ const exec = promisify(execFile);
 class MemIncrements implements IncrementRepo {
   rows = new Map<string, IncrementRow>();
   async get(id: IncrementId) {
-    return this.rows.get(id) ?? null;
+    const row = this.rows.get(id);
+    // A COPY, deliberately.
+    //
+    // This fake used to hand back the live object out of the map, which made it more
+    // forgiving than the real repository — Prisma maps each read into a fresh object, so
+    // mutating what `get()` returned writes to nothing.
+    //
+    // That difference hid a genuine unbounded loop: the engine incremented
+    // `row.repairAttempt` in place, the fake happily kept it because it was the same
+    // reference, and the budget-exhaustion test below passed. In production the counter
+    // never moved and one step spent 49 gate rounds and 57 agent spawns.
+    //
+    // A double that is laxer than the thing it stands in for does not reduce risk, it
+    // relocates it to where nobody is looking.
+    return row ? { ...row, state: { ...row.state } } : null;
   }
   async transition(id: IncrementId, _from: never, state: IncrementRow["state"]) {
     const row = this.rows.get(id);
@@ -49,6 +63,12 @@ class MemIncrements implements IncrementRepo {
   }
   async listByStatus() {
     return [...this.rows.values()];
+  }
+  async setBudget(id: IncrementId, budget: { repairAttempt?: number; freshRestarts?: number }) {
+    const row = this.rows.get(id);
+    if (!row) return;
+    if (budget.repairAttempt !== undefined) row.repairAttempt = budget.repairAttempt;
+    if (budget.freshRestarts !== undefined) row.freshRestarts = budget.freshRestarts;
   }
 }
 
@@ -165,6 +185,8 @@ function makeHarness(opts: {
   agentImplement: AgentDriver["implement"];
   gateResults: Array<{ passed: boolean; feedback?: string }>;
   planFiles?: string[];
+  /** Called once per gate round, so a test can COUNT them rather than infer the bound. */
+  onGateRound?: () => void;
 }) {
   const increments = new MemIncrements();
   increments.rows.set(INC, {
@@ -207,6 +229,7 @@ function makeHarness(opts: {
     async runAll() {
       const r = opts.gateResults[Math.min(gateCall, opts.gateResults.length - 1)];
       gateCall += 1;
+      opts.onGateRound?.();
       if (!r) throw new Error("no gate result configured");
       return r.passed
         ? { passed: true }
@@ -340,6 +363,40 @@ describe("run engine — full loop", () => {
     expect(outcome.outcome).toBe("escalated");
     if (outcome.outcome !== "escalated") return;
     expect(outcome.question).toMatch(/repair budget/);
+  });
+
+  it("PERSISTS the repair counter, so the budget can actually run out", async () => {
+    // The assertion that was missing. The test above only checked that escalation
+    // eventually happened, which the fake satisfied by letting the engine mutate its own
+    // row in place. Against the real repository the counter never moved, and "fails
+    // forever" meant exactly that: 49 gate rounds on one step.
+    //
+    // Asserting the counter lands in the REPOSITORY is what makes the bound real.
+    const h = makeHarness({
+      agentImplement: writingImplement("v6"),
+      gateResults: [{ passed: false }],
+    });
+    await h.engine.execute(RUN, INC, "ASSEMBLE_PACK", 1);
+    const row = await h.increments.get(INC);
+    expect(row?.repairAttempt).toBe(3); // maxRepairIterations
+    expect(row?.freshRestarts).toBe(1); // maxFreshRestarts
+  });
+
+  it("stops after a bounded number of gate rounds", async () => {
+    // Counted rather than inferred. An unbounded loop is not a slow failure, it is an
+    // expensive one: every round is a fresh agent spawn against the user's subscription.
+    let rounds = 0;
+    const h = makeHarness({
+      agentImplement: writingImplement("v7"),
+      gateResults: [{ passed: false }],
+      onGateRound: () => {
+        rounds += 1;
+      },
+    });
+    await h.engine.execute(RUN, INC, "ASSEMBLE_PACK", 1);
+    // 3 repairs + 1 fresh restart, each with its own gate round, plus the first.
+    expect(rounds).toBeLessThanOrEqual(12);
+    expect(rounds).toBeGreaterThan(1);
   });
 });
 

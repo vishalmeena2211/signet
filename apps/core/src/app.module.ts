@@ -355,7 +355,16 @@ function buildDispatcher(
             const res = await proposer.propose({ goal, ...(repoId ? { repoId } : {}) });
             if (!res.ok) return { ok: false, reason: res.error.message };
             const req = proposalToCreateRequest(res.response.proposal);
-            return { ok: true, title: req.title, briefMd: req.briefMd, increments: req.increments };
+            return {
+              ok: true,
+              title: req.title,
+              briefMd: req.briefMd,
+              increments: req.increments,
+              // Carried, not dropped. Without this the engine falls back to a generic
+              // "Nothing needed doing." and the agent's actual reasoning — the only
+              // useful part of a no-work result — never reaches the screen.
+              noWorkNeeded: res.response.proposal.noWorkNeeded,
+            };
           },
           createFeature: (input) => controls.createFeature(input),
           // Signature 1 only. There is deliberately no path from here to merge().
