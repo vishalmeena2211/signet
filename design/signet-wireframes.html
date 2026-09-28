@@ -1,0 +1,1969 @@
+<!--
+  Signet, reimagined from zero — not a drawing of the console that exists.
+  Built with the digistay-wireframes skill (its gallery, notes and states method),
+  with a visual system designed fresh rather than read from code.
+-->
+<title>Signet Reimagined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif&display=swap">
+<style>
+
+/* ─────────────────────────────────────────────────────────────────────────
+   A visual system designed from zero, not read from the existing console.
+   Direction: restrained monochrome (chosen earlier: Linear / Vercel / Geist).
+
+   ONE RULE carries the whole system:   colour means YOU.
+   Everything is greyscale except the seal — a single warm ochre, the colour
+   of a signet's gold — and it appears only where a human decision is needed.
+   Grey is handled. A running step, a merged step, a failure the agent is
+   already fixing: all grey. A signature waiting, a question asked, a failure
+   that needs you: seal. If you can see colour, it is your move.
+
+   Starter NAMES are kept so its CSS keeps working; values are new.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: dark;
+  /* ink, back to front */
+  --ink-0: #0C0C0E;   --ink-1: #131316;   --ink-2: #1A1A1E;   --ink-3: #232328;
+  --line-1: #26262B;  --line-2: #34343B;
+  --fg-1: #EDEDEF;    --fg-2: #A0A0A8;    --fg-3: #6B6B73;
+  /* the seal: the only colour in the product */
+  --seal: #E6A53A;
+  --seal-quiet: color-mix(in srgb, var(--seal) 13%, var(--ink-1));
+  --seal-line: color-mix(in srgb, var(--seal) 42%, var(--ink-1));
+  --seal-ink: #1A1206;               /* text ON the seal */
+
+  /* ── mapped onto the starter's names ── */
+  --primary: var(--fg-1);            /* primary action = inverted, Geist-style */
+  --primary-hover: #FFFFFF;
+  --primary-soft: color-mix(in srgb, var(--fg-1) 7%, var(--ink-1));
+  --primary-soft-hover: color-mix(in srgb, var(--fg-1) 12%, var(--ink-1));
+  --border: var(--line-1);
+  --surface: var(--ink-1);
+  --surface-subtle: var(--ink-0);
+  --surface-paper: var(--ink-2);
+  --hover: var(--ink-3);
+  --text: var(--fg-1);
+  --text-strong: #FFFFFF;
+  --text-2: var(--fg-2);
+  --rule: var(--fg-3);
+  --disabled: var(--ink-2);
+  --disabled-text: #55555C;
+  --danger: var(--seal);             /* a failure that needs you IS your move */
+  --danger-hover: var(--seal);
+  --success: var(--fg-2);            /* done is handled, so done is grey */
+  --info: var(--fg-2);
+  --badge-success-bg: var(--ink-2);  --badge-success-fg: var(--fg-2);
+  --badge-danger-bg: var(--seal-quiet); --badge-danger-fg: var(--seal);
+  --badge-blue-bg: var(--ink-2);     --badge-blue-fg: var(--fg-2);
+  --badge-gray-bg: var(--ink-2);     --badge-gray-fg: var(--fg-3);
+  --badge-warn-bg: var(--seal-quiet); --badge-warn-fg: var(--seal);
+  --info-soft: var(--ink-2);
+  --warn-soft: var(--seal-quiet);
+  --danger-soft: var(--seal-quiet);
+  --success-soft: var(--ink-2);
+  --overlay: color-mix(in srgb, #000000 66%, transparent);
+  --doc-ground: #08080A;
+  --doc-ink: var(--fg-1);
+  --frame-shadow: 0 1px 2px color-mix(in srgb, #000000 50%, transparent), 0 16px 40px color-mix(in srgb, #000000 55%, transparent);
+  --curve: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* A serif appears in exactly one place: the signing sheet. A contract has a
+     signature line; this is the product's signature line. */
+  --sign: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  font-family: var(--sans);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--doc-ground); color: var(--doc-ink); font-size: 14px; -webkit-font-smoothing: antialiased; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── Gallery chrome ─────────────────────────────────────────────────────── */
+.doc { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
+.index { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 24px 16px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }
+.index h1 { font-size: 16px; line-height: 22px; margin: 0; font-weight: 700; text-wrap: balance; }
+.index .lede { font-size: 12px; line-height: 18px; color: var(--text-2); margin: 4px 0 0; }
+.group-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); font-weight: 600; margin: 0 0 6px 8px; }
+.index ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.index button { width: 100%; text-align: left; border: 0; background: transparent; padding: 8px; border-radius: 4px; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--text); cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+.index button:hover { background: var(--hover); }
+.index button[aria-current="true"] { background: var(--primary-soft); color: var(--primary); }
+.index .code { font-variant-numeric: tabular-nums; color: var(--text-2); min-width: 22px; }
+.index button[aria-current="true"] .code { color: var(--primary); }
+.index .foot { margin-top: auto; font-size: 11px; line-height: 16px; color: var(--text-2); border-top: 1px solid var(--border); padding-top: 12px; }
+
+.stage { padding: 24px 32px 48px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.stage-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.stage-head .eyebrow { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+.stage-head h2 { margin: 2px 0 0; font-size: 22px; line-height: 28px; font-weight: 700; text-wrap: balance; }
+.stage-nav { display: flex; gap: 8px; }
+.stage-nav button { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 500; cursor: pointer; }
+.stage-nav button:hover { border-color: var(--primary); }
+.frame-fit { width: 100%; overflow: hidden; }
+.frame { width: 1280px; transform-origin: top left; box-shadow: var(--frame-shadow); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.frame.phone-pair { width: 1280px; background: transparent; box-shadow: none; display: flex; gap: 32px; justify-content: center; padding: 8px 0 16px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.note { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.note h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); font-weight: 600; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 19px; max-width: 65ch; }
+.sample-flag { font-size: 11px; color: var(--text-2); background: var(--surface); border: 1px dashed var(--rule); border-radius: 4px; padding: 2px 8px; }
+
+/* ── PMS frame primitives ────────────────────────────────────────────────── */
+.app { display: grid; grid-template-columns: 208px minmax(0,1fr); height: 820px; font-size: 12px; color: var(--text); background: var(--surface); }
+.side { border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 8px; padding: 0 4px 12px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.brand-mark { width: 28px; height: 28px; border-radius: 6px; background: var(--primary); color: var(--surface); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.brand b { font-size: 13px; display: block; }
+.brand span { font-size: 11px; color: var(--text-2); }
+.nav { display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 12px; border-radius: 4px; font-weight: 500; line-height: 18px; color: var(--text); position: relative; }
+.nav svg { width: 16px; height: 16px; stroke: currentColor; flex: none; }
+.nav.on { background: var(--primary-soft); color: var(--primary); }
+.nav .dot { position: absolute; left: 22px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+.nav .count { margin-left: auto; font-size: 10px; font-weight: 600; background: var(--primary); color: var(--surface); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+.new-sash { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 0 4px; line-height: 14px; }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; padding: 0 20px; flex: none; }
+.topbar h1 { font-size: 16px; font-weight: 600; margin: 0; }
+.topbar .spacer { flex: 1; }
+.chip-live { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; font-weight: 500; color: var(--text); }
+.chip-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--surface-paper); display: grid; place-items: center; font-weight: 600; font-size: 11px; color: var(--text-2); }
+.subnav { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex: none; }
+.tab { height: 32px; min-width: 80px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text); }
+.tab.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 500; }
+.tab .pip { margin-left: 6px; }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 2px 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; line-height: 14px; }
+.b-success { background: var(--badge-success-bg); color: var(--badge-success-fg); }
+.b-danger { background: var(--badge-danger-bg); color: var(--badge-danger-fg); }
+.b-blue { background: var(--badge-blue-bg); color: var(--badge-blue-fg); }
+.b-gray { background: var(--badge-gray-bg); color: var(--badge-gray-fg); }
+.b-warn { background: var(--badge-warn-bg); color: var(--badge-warn-fg); }
+
+.btn { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid transparent; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: default; white-space: nowrap; }
+.btn svg { width: 14px; height: 14px; stroke: currentColor; }
+.btn-primary { background: var(--primary); color: var(--surface); }
+.btn-secondary { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+.btn-outline { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-danger { background: var(--danger); color: var(--surface); }
+.btn-danger-outline { background: var(--surface); color: var(--danger); border-color: var(--danger); }
+.btn-disabled { background: var(--disabled); color: var(--disabled-text); cursor: not-allowed; }
+.btn-block { width: 100%; }
+.link { color: var(--primary); font-weight: 600; }
+
+.input { height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; display: flex; align-items: center; gap: 8px; color: var(--text-2); background: var(--surface); }
+.input svg { width: 14px; height: 14px; stroke: var(--text-2); }
+.input.filled { color: var(--text); }
+
+.card { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.card-h h4 { margin: 0; font-size: 12px; font-weight: 600; }
+.card-b { padding: 12px 14px; }
+.label { font-size: 11px; color: var(--text-2); }
+.kv { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; font-size: 12px; line-height: 18px; }
+.kv dt { color: var(--text-2); }
+.kv dd { margin: 0; color: var(--text); font-variant-numeric: tabular-nums; }
+.money { font-variant-numeric: tabular-nums; }
+
+/* ── Calls: three panes ──────────────────────────────────────────────────── */
+.panes { display: grid; grid-template-columns: 300px minmax(0,1fr) 292px; flex: 1; min-height: 0; }
+.queue { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.queue-tools { padding: 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border); }
+.queue-tools .tabs { display: flex; gap: 6px; }
+.queue-tools .tab { min-width: 0; flex: 1; height: 28px; }
+.queue-list { overflow: hidden; flex: 1; }
+.qgroup { padding: 10px 12px 4px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; color: var(--text-2); display: flex; justify-content: space-between; }
+.qcard { margin: 0 8px 6px; padding: 10px 10px 10px 12px; border-radius: 8px; border: 1px solid transparent; display: flex; flex-direction: column; gap: 3px; position: relative; }
+.qcard.on { background: var(--primary-soft); border-color: var(--primary); }
+.qcard .row1 { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.qcard .who { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qcard .what { color: var(--text); }
+.qcard .meta { color: var(--text-2); font-size: 11px; display: flex; gap: 6px; }
+.qcard .edge { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; }
+.edge-warn { background: var(--badge-warn-fg); } .edge-danger { background: var(--badge-danger-fg); }
+
+.detail { overflow: hidden; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.dhead h2 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 700; }
+.dhead .line { color: var(--text-2); display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; }
+.dhead .line a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.sep { color: var(--rule); }
+.evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quote { border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 18px; }
+.quote .who { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; color: var(--text-2); display: flex; justify-content: space-between; margin-bottom: 4px; }
+.quote.ai { background: var(--surface-subtle); border: 1px solid var(--border); }
+.quote.caller { background: var(--primary-soft); border: 1px solid var(--primary-soft-hover); }
+.player { display: flex; align-items: center; gap: 10px; }
+.play { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); display: grid; place-items: center; flex: none; }
+.play svg { width: 12px; height: 12px; fill: var(--surface); stroke: none; }
+.wave { flex: 1; height: 24px; display: flex; align-items: center; gap: 2px; }
+.wave i { flex: 1; background: var(--border); border-radius: 2px; }
+.wave i.done { background: var(--primary); }
+.player .t { color: var(--text-2); font-variant-numeric: tabular-nums; font-size: 11px; }
+.leg-tabs { display: flex; gap: 6px; }
+.leg-tabs .tab { height: 24px; min-width: 0; font-size: 11px; }
+.transcript { display: flex; flex-direction: column; gap: 8px; }
+.turn { display: flex; flex-direction: column; gap: 2px; max-width: 78%; }
+.turn .bubble { padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 18px; }
+.turn .ts { font-size: 10px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.turn.ai { align-self: flex-start; }
+.turn.ai .bubble { background: var(--surface-subtle); border: 1px solid var(--border); }
+.turn.caller { align-self: flex-end; align-items: flex-end; }
+.turn.caller .bubble { background: var(--primary-soft); }
+.step { align-self: center; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-2); border: 1px dashed var(--border); border-radius: 999px; padding: 2px 10px; }
+.step svg { width: 12px; height: 12px; stroke: var(--text-2); }
+.more { align-self: flex-start; }
+.media-gone { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--surface-subtle); border: 1px dashed var(--border); border-radius: 8px; color: var(--text-2); }
+.media-gone svg { width: 16px; height: 16px; stroke: var(--text-2); flex: none; }
+
+.rail { border-left: 1px solid var(--border); background: var(--surface-subtle); display: flex; flex-direction: column; min-height: 0; }
+.rail-b { padding: 16px; display: flex; flex-direction: column; gap: 12px; flex: 1; overflow: hidden; }
+.rail-f { padding: 12px 16px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; background: var(--surface-subtle); }
+.rail h3 { margin: 0; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); font-weight: 600; }
+.total { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.total small { font-size: 11px; font-weight: 500; color: var(--text-2); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 18px; }
+.check svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+.ok svg { stroke: var(--success); } .bad svg { stroke: var(--danger); } .wait svg { stroke: var(--badge-warn-fg); }
+.callout { border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 18px; }
+.callout b { display: block; margin-bottom: 2px; }
+.callout.warn { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--badge-warn-fg) 30%, var(--surface)); }
+.callout.danger { background: var(--danger-soft); border: 1px solid color-mix(in srgb, var(--badge-danger-fg) 25%, var(--surface)); }
+.callout.info { background: var(--info-soft); border: 1px solid color-mix(in srgb, var(--info) 25%, var(--surface)); }
+.callout.success { background: var(--success-soft); border: 1px solid color-mix(in srgb, var(--badge-success-fg) 25%, var(--surface)); }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compare div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.compare strong { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+.strike { text-decoration: line-through; color: var(--text-2); }
+.hint { font-size: 11px; line-height: 16px; color: var(--text-2); }
+
+/* Dialog overlay */
+.overlay { position: absolute; inset: 0; background: var(--overlay); display: grid; place-items: center; }
+.dialog { width: 440px; background: var(--surface); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: var(--frame-shadow); }
+.dialog h3 { margin: 0; font-size: 16px; }
+.dialog p { margin: 0; color: var(--text-2); font-size: 12px; line-height: 18px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); display: inline-flex; align-items: center; font-size: 12px; background: var(--surface); }
+.chip.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 500; }
+.textarea { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-height: 64px; color: var(--text); font-size: 12px; line-height: 18px; }
+.row { display: flex; gap: 8px; justify-content: flex-end; }
+.rel { position: relative; }
+
+/* Empty */
+.empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--text-2); padding: 40px; }
+.empty .ico { width: 44px; height: 44px; border-radius: 50%; background: var(--surface-paper); display: grid; place-items: center; margin: 0 auto 10px; }
+.empty .ico svg { width: 20px; height: 20px; stroke: var(--text-2); }
+.empty b { display: block; color: var(--text); font-size: 14px; margin-bottom: 4px; }
+
+/* Insights */
+.page { padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; flex: 1; }
+.page-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.page-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.kpi { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.kpi .v { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.kpi .s { font-size: 11px; color: var(--text-2); }
+.grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; }
+.stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden; gap: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 11px; color: var(--text-2); }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
+.bars { display: flex; flex-direction: column; gap: 8px; }
+.bar { display: grid; grid-template-columns: 150px 1fr 40px; gap: 8px; align-items: center; font-size: 12px; }
+.bar .track { height: 8px; background: var(--surface-paper); border-radius: 4px; overflow: hidden; }
+.bar .fill { height: 100%; background: var(--primary); border-radius: 4px; }
+.bar .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.table th { text-align: left; font-weight: 500; color: var(--text-2); padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-subtle); }
+.table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.table tr:last-child td { border-bottom: 0; }
+
+/* Settings */
+.settings { display: grid; grid-template-columns: minmax(0, 720px) 1fr; gap: 16px; padding: 20px; overflow: hidden; flex: 1; align-content: start; }
+.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.mode { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.mode.on { border-color: var(--primary); background: var(--primary-soft); }
+.mode.locked { background: var(--surface-subtle); }
+.mode .radio { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--rule); }
+.mode.on .radio { border: 4px solid var(--primary); }
+.mode b { font-size: 13px; }
+.mode p { margin: 0; font-size: 11px; line-height: 16px; color: var(--text-2); }
+.lock { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; color: var(--badge-warn-fg); font-weight: 500; }
+.lock svg { width: 12px; height: 12px; stroke: currentColor; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 12px; font-weight: 500; }
+.checkbox { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--rule); flex: none; }
+.checkbox.on { background: var(--primary); border-color: var(--primary); display: grid; place-items: center; }
+.checkbox.on svg { width: 11px; height: 11px; stroke: var(--surface); }
+.limits { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 12px; }
+.limits div { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border); padding-bottom: 6px; }
+.limits span { color: var(--text-2); }
+.savebar { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface); flex: none; }
+
+/* Super admin */
+.sa .side .nav { font-size: 13px; padding: 10px 12px; border-radius: 8px; }
+.sa .grouplbl { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-2); padding: 12px 12px 4px; }
+.timeline { display: flex; flex-direction: column; }
+.ev { display: grid; grid-template-columns: 70px 170px 1fr 70px 16px; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.ev .t { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ev code, .raw { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
+.ev .ms { text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ev svg { width: 14px; height: 14px; stroke: var(--text-2); }
+.raw { background: var(--surface-subtle); border-bottom: 1px solid var(--border); padding: 10px 12px 10px 92px; line-height: 17px; white-space: pre; color: var(--text); overflow: hidden; }
+.checklist { display: flex; flex-direction: column; }
+.cl { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); align-items: center; font-size: 12px; }
+.cl:last-child { border-bottom: 0; }
+.cl svg { width: 16px; height: 16px; }
+.cl .sub { color: var(--text-2); font-size: 11px; }
+.progress { height: 6px; background: var(--surface-paper); border-radius: 3px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--success); }
+
+/* Phones */
+/* Phones: PMS mobile = navbar with menu button, full-screen lists, pinned actions, BottomSheet */
+.phone { width: 390px; height: 820px; border-radius: 40px; border: 10px solid var(--text); background: var(--surface); overflow: hidden; display: flex; flex-direction: column; font-size: 13px; box-shadow: var(--frame-shadow); position: relative; flex: none; }
+.status-bar { height: 34px; display: flex; justify-content: space-between; align-items: center; padding: 0 22px; font-size: 12px; font-weight: 600; flex: none; }
+.status-bar span:last-child { letter-spacing: 1px; }
+.ptop { min-height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 0 12px; flex: none; }
+.ptop .ttl { flex: 1; min-width: 0; }
+.ptop .ttl b { font-size: 16px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ptop .ttl span { font-size: 11px; color: var(--text-2); }
+.iconbtn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); display: grid; place-items: center; flex: none; }
+.iconbtn svg { width: 18px; height: 18px; stroke: var(--text); }
+.pbody { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.pscroll { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.pfoot { border-top: 1px solid var(--border); padding: 10px 12px 22px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); flex: none; }
+.pfoot .btns { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.pfoot .btn { height: 44px; font-size: 14px; }
+.hscroll { display: flex; gap: 8px; overflow: hidden; }
+.hscroll .tab { height: 34px; flex: none; font-size: 13px; }
+.banner { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--info-soft); border-bottom: 1px solid color-mix(in srgb, var(--info) 20%, var(--surface)); font-size: 12px; }
+.banner i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex: none; }
+.mcard { border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; position: relative; overflow: hidden; }
+.mcard .edge { left: 0; top: 0; bottom: 0; border-radius: 0; }
+.mcard .who { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcard .what { grid-column: 1 / -1; color: var(--text); }
+.mcard .foot { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; color: var(--text-2); font-size: 12px; }
+.mcard .amt { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.mgroup { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; color: var(--text-2); display: flex; justify-content: space-between; padding: 4px 2px 0; }
+.summary { border-radius: 12px; padding: 14px; background: var(--primary-soft); display: flex; flex-direction: column; gap: 10px; }
+.summary .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.summary .big small { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.facts div { background: var(--surface); border-radius: 8px; padding: 8px 10px; }
+.facts span { display: block; font-size: 11px; color: var(--text-2); }
+.facts b { font-size: 13px; font-weight: 600; }
+.acc { border: 1px solid var(--border); border-radius: 10px; }
+.acc-h { display: flex; justify-content: space-between; align-items: center; padding: 12px; font-weight: 600; }
+.acc-h svg { width: 16px; height: 16px; stroke: var(--text-2); }
+.acc-b { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.tel { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.tel .circle { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-soft); display: grid; place-items: center; flex: none; }
+.tel .circle svg { width: 16px; height: 16px; stroke: var(--primary); }
+.tel b { display: block; font-variant-numeric: tabular-nums; }
+.recheck { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--text-2); }
+.recheck svg { width: 14px; height: 14px; stroke: var(--success); flex: none; }
+.sheet-scrim { position: absolute; inset: 0; background: var(--overlay); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 16px 16px 0 0; padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+.sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); align-self: center; margin-bottom: 4px; }
+.sheet h3 { margin: 0; font-size: 17px; }
+.sheet p { margin: 0; font-size: 13px; line-height: 19px; color: var(--text-2); }
+.radio-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; }
+.radio-list div { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.radio-list div:last-child { border-bottom: 0; }
+.radio-list .radio { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--rule); flex: none; }
+.radio-list .on .radio { border: 5px solid var(--primary); }
+.toast { position: absolute; left: 12px; right: 12px; bottom: 96px; background: var(--text); color: var(--surface); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.toast svg { width: 18px; height: 18px; stroke: var(--badge-success-bg); flex: none; }
+.plain-tl { display: flex; flex-direction: column; }
+.ptl { display: grid; grid-template-columns: 64px 28px 1fr; gap: 0 10px; align-items: start; font-size: 12px; }
+.ptl .t { color: var(--text-2); font-variant-numeric: tabular-nums; padding-top: 6px; }
+.ptl .dotcol { display: flex; flex-direction: column; align-items: center; height: 100%; }
+.ptl .dotcol span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-subtle); border: 1px solid var(--border); flex: none; }
+.ptl .dotcol span svg { width: 13px; height: 13px; stroke: var(--text-2); }
+.ptl .dotcol i { flex: 1; width: 1px; background: var(--border); min-height: 14px; }
+.ptl:last-child .dotcol i { display: none; }
+.ptl .txt { padding: 5px 0 14px; line-height: 18px; }
+.ptl .txt .hint { display: block; }
+.ptl.bad .dotcol span { background: var(--danger-soft); border-color: color-mix(in srgb, var(--badge-danger-fg) 30%, var(--surface)); }
+.ptl.bad .dotcol span svg { stroke: var(--badge-danger-fg); }
+.ptl.good .dotcol span { background: var(--success-soft); }
+.ptl.good .dotcol span svg { stroke: var(--badge-success-fg); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .index button, .stage-nav button { transition: background-color 140ms var(--curve), border-color 140ms var(--curve); }
+}
+@media (max-width: 900px) {
+  .doc { grid-template-columns: 1fr; }
+  .index { position: static; height: auto; }
+}
+
+/* ════ Reimagined primitives (new concepts the PMS starter never needed) ════ */
+.app, .page, .frame { font-family: var(--sans); }
+.mono { font-family: var(--mono); font-size: 12px; }
+.seal { color: var(--seal); }
+.btn-primary { background: var(--fg-1); color: var(--ink-0); border-color: var(--fg-1); }
+.btn-seal { background: var(--seal); color: var(--seal-ink); border: 1px solid var(--seal); font-weight: 600; }
+.kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; font-family: var(--mono); font-size: 11px; line-height: 16px; text-align: center; color: var(--fg-2); background: var(--ink-2); }
+
+/* shell: three places and one verb */
+.shell2 { display: grid; grid-template-columns: 208px minmax(0, 1fr); height: 100%; background: var(--ink-0); color: var(--fg-1); }
+.rail2 { background: var(--ink-0); border-right: 1px solid var(--line-1); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.mark { display: flex; align-items: baseline; gap: 8px; padding: 4px 8px 16px; }
+.mark b { font-family: var(--sign); font-size: 24px; font-weight: 400; letter-spacing: -0.01em; }
+.mark span { font-family: var(--mono); font-size: 11px; color: var(--fg-3); }
+.ask { display: flex; align-items: center; gap: 8px; justify-content: space-between; white-space: nowrap; font-size: 13px; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--ink-1); margin-bottom: 12px; }
+.place { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; color: var(--fg-2); font-size: 14px; }
+.place svg { width: 16px; height: 16px; stroke: currentColor; }
+.place.on { background: var(--ink-2); color: var(--fg-1); }
+.place .n { margin-left: auto; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; background: var(--seal); color: var(--seal-ink); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.place .n.grey { background: var(--ink-3); color: var(--fg-2); }
+.rail2 .foot2 { margin-top: auto; padding: 8px; border-top: 1px solid var(--line-1); font-size: 12px; color: var(--fg-3); display: flex; flex-direction: column; gap: 4px; }
+.body2 { overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.head2 { height: 52px; flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--line-1); }
+.head2 h1 { font-size: 15px; font-weight: 500; margin: 0; }
+.crumb { color: var(--fg-3); font-size: 13px; }
+.status-line { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--fg-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-1); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fg-1) 12%, transparent); display: inline-block; }
+.dot-seal { width: 8px; height: 8px; border-radius: 50%; background: var(--seal); display: inline-block; flex: 0 0 auto; }
+.dot-grey { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-3); display: inline-block; flex: 0 0 auto; }
+.content2 { flex: 1; overflow: hidden; padding: 24px 32px; display: flex; flex-direction: column; gap: 16px; }
+
+/* desk: an inbox of decisions */
+.inbox { border: 1px solid var(--line-1); border-radius: 12px; background: var(--ink-1); overflow: hidden; }
+.dec { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 16px 20px; border-top: 1px solid var(--line-1); }
+.dec:first-child { border-top: 0; }
+.dec.sel { background: var(--ink-2); box-shadow: inset 2px 0 0 var(--seal); }
+.dec .what { font-size: 15px; font-weight: 500; }
+.dec .why { font-size: 13px; color: var(--fg-2); margin-top: 2px; }
+.dec .meta { font-size: 12px; color: var(--fg-3); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.dec .acts { display: flex; gap: 8px; align-items: center; }
+.quiet { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; color: var(--fg-2); }
+.quiet .big { font-family: var(--sign); font-size: 44px; color: var(--fg-1); line-height: 1; }
+
+/* flow strip: work in motion, read at a glance */
+.flowstrip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.fcol { border: 1px solid var(--line-1); border-radius: 8px; padding: 8px 12px; background: var(--ink-1); }
+.fcol.yours { border-color: var(--seal-line); background: var(--seal-quiet); }
+.fcol .lab { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-3); }
+.fcol.yours .lab { color: var(--seal); }
+.fcol .num { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+/* flow board: lanes */
+.board { flex: 1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; overflow: hidden; }
+.lane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lane h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-3); font-weight: 500; display: flex; justify-content: space-between; }
+.lane.yours h4 { color: var(--seal); }
+.lane.yours { background: color-mix(in srgb, var(--seal) 5%, transparent); border-radius: 12px; padding: 8px; margin: -8px; }
+.tile { border: 1px solid var(--line-1); border-radius: 8px; background: var(--ink-1); padding: 8px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.tile.yours { border-color: var(--seal-line); }
+.tile .f { font-size: 11px; color: var(--fg-3); }
+.tile .bar { height: 2px; background: var(--ink-3); border-radius: 1px; overflow: hidden; }
+.tile .bar i { display: block; height: 100%; background: var(--fg-2); }
+
+/* ask: a conversation that ends in a proposal */
+.convo { flex: 1; display: flex; flex-direction: column; gap: 16px; max-width: 760px; width: 100%; margin: 0 auto; overflow: hidden; }
+.msg { display: flex; gap: 12px; }
+.msg .who { width: 24px; height: 24px; border-radius: 50%; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.msg.you .who { background: var(--ink-3); color: var(--fg-1); }
+.msg.sig .who { background: var(--fg-1); color: var(--ink-0); font-family: var(--sign); font-size: 15px; font-weight: 400; }
+.msg .txt { font-size: 14px; line-height: 1.6; color: var(--fg-1); padding-top: 2px; min-width: 0; }
+.msg .txt p { margin: 0 0 8px; }
+.reading { font-family: var(--mono); font-size: 12px; color: var(--fg-3); border-left: 1px solid var(--line-2); padding: 4px 0 4px 12px; display: flex; flex-direction: column; gap: 2px; }
+.reading b { color: var(--fg-2); font-weight: 400; }
+.choice-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.choice { border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 12px; font-size: 13px; background: var(--ink-1); }
+.choice.on { border-color: var(--seal-line); background: var(--seal-quiet); color: var(--fg-1); }
+.composer { margin-top: auto; border: 1px solid var(--line-2); border-radius: 12px; background: var(--ink-1); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.composer .ph { color: var(--fg-3); font-size: 14px; }
+.composer .row2 { display: flex; align-items: center; gap: 8px; color: var(--fg-3); font-size: 12px; }
+
+/* the proposal card */
+.proposal { border: 1px solid var(--line-2); border-radius: 12px; background: var(--ink-1); overflow: hidden; }
+.proposal .ph2 { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line-1); }
+.proposal .ph2 b { font-size: 14px; font-weight: 500; }
+.pstep { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line-1); }
+.pstep:first-of-type { border-top: 0; }
+.pstep .ix { font-family: var(--mono); font-size: 12px; color: var(--fg-3); padding-top: 2px; }
+.pstep .t { font-size: 14px; font-weight: 500; }
+.pstep .r { font-size: 12px; color: var(--fg-3); margin: 2px 0 8px; }
+.fence { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.fence .fl { font-size: 11px; color: var(--fg-3); margin-right: 4px; }
+.path { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border: 1px solid var(--line-2); border-radius: 4px; color: var(--fg-2); background: var(--ink-0); }
+.path.bad { border-color: var(--seal-line); color: var(--seal); background: var(--seal-quiet); }
+.done-when { margin-top: 8px; font-size: 13px; color: var(--fg-2); line-height: 1.55; }
+.done-when b { color: var(--fg-1); font-weight: 500; }
+.confidence { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-3); }
+.meter { width: 64px; height: 4px; border-radius: 2px; background: var(--ink-3); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--fg-2); }
+
+/* the signing sheet: a document, with a signature line */
+.sheet-wrap { position: absolute; inset: 0; background: var(--overlay); display: flex; justify-content: flex-end; }
+.sheet-doc { width: 720px; height: 100%; background: var(--ink-1); border-left: 1px solid var(--line-2); display: flex; flex-direction: column; }
+.sheet-doc .sd-head { padding: 24px 32px 16px; border-bottom: 1px solid var(--line-1); }
+.sheet-doc .eyebrow2 { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--seal); }
+.sheet-doc h2 { font-family: var(--sign); font-weight: 400; font-size: 32px; line-height: 1.1; margin: 8px 0 4px; letter-spacing: -0.01em; }
+.sheet-doc .sub2 { color: var(--fg-2); font-size: 13px; }
+.sd-body { flex: 1; overflow: hidden; padding: 16px 32px; display: flex; flex-direction: column; gap: 16px; }
+.clause { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; }
+.clause .ck { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); padding-top: 2px; }
+.clause .cv { font-size: 14px; line-height: 1.6; color: var(--fg-1); }
+.crit { border: 1px solid var(--line-1); border-radius: 8px; overflow: hidden; }
+.crit-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 12px; border-top: 1px solid var(--line-1); align-items: start; font-size: 13px; }
+.crit-row:first-child { border-top: 0; }
+.crit-row .claim { color: var(--fg-1); line-height: 1.5; }
+.crit-row .proof { display: flex; flex-direction: column; gap: 4px; color: var(--fg-2); }
+.crit-row.missing { background: var(--seal-quiet); }
+.crit-row.missing .proof { color: var(--seal); }
+.tick { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-2); display: inline-flex; align-items: center; justify-content: center; }
+.tick svg { width: 12px; height: 12px; stroke: var(--fg-2); }
+.tick.gap { border-color: var(--seal); }
+.tick.gap svg { stroke: var(--seal); }
+.sd-foot { padding: 16px 32px 24px; border-top: 1px solid var(--line-1); display: flex; flex-direction: column; gap: 12px; }
+.sigline { display: flex; align-items: flex-end; gap: 16px; }
+.sigline .line3 { flex: 1; border-bottom: 1px solid var(--line-2); padding-bottom: 4px; font-family: var(--sign); font-size: 22px; color: var(--fg-3); }
+.hold { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 8px; background: var(--seal); color: var(--seal-ink); font-weight: 600; font-size: 14px; overflow: hidden; }
+.hold::before { content: ""; position: absolute; inset: 0; width: 38%; background: color-mix(in srgb, var(--text-strong) 26%, transparent); }
+.hold span { position: relative; }
+.hold.off { background: var(--ink-2); color: var(--fg-3); }
+.hold.off::before { display: none; }
+
+/* thread: one feature's whole life */
+.threadwrap { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; overflow: hidden; }
+.thread { display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.ev2 { display: grid; grid-template-columns: 56px 20px minmax(0, 1fr); gap: 12px; padding: 8px 0; }
+.ev2 .tm { font-size: 11px; color: var(--fg-3); font-family: var(--mono); padding-top: 3px; text-align: right; }
+.ev2 .spine { display: flex; flex-direction: column; align-items: center; }
+.ev2 .spine i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fg-3); background: var(--ink-0); margin-top: 3px; }
+.ev2 .spine u { flex: 1; width: 1px; background: var(--line-1); margin-top: 4px; }
+.ev2.you .spine i { border-color: var(--fg-1); background: var(--fg-1); }
+.ev2.ask .spine i { border-color: var(--seal); background: var(--seal); }
+.ev2 .et { font-size: 14px; color: var(--fg-1); }
+.ev2 .ed { font-size: 13px; color: var(--fg-2); margin-top: 2px; line-height: 1.5; }
+.now { border: 1px solid var(--line-2); border-radius: 12px; background: var(--ink-1); padding: 12px 16px; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.now.yours { border-color: var(--seal-line); background: var(--seal-quiet); }
+.side2 { display: flex; flex-direction: column; gap: 12px; }
+.facts2 { border: 1px solid var(--line-1); border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.facts2 .k { font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.phases { display: flex; gap: 4px; }
+.phases i { flex: 1; height: 4px; border-radius: 2px; background: var(--ink-3); }
+.phases i.d { background: var(--fg-2); }
+.phases i.n { background: var(--fg-1); }
+
+/* routines: written as sentences */
+.sentence { font-size: 20px; line-height: 1.9; color: var(--fg-2); }
+.slot { display: inline-block; padding: 0 8px; margin: 0 2px; border: 1px solid var(--line-2); border-radius: 8px; color: var(--fg-1); background: var(--ink-2); line-height: 1.5; }
+.slot.stop { border-color: var(--seal-line); color: var(--seal); background: var(--seal-quiet); }
+
+/* command bar */
+.cmdk { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); width: 600px; background: var(--ink-1); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--frame-shadow); overflow: hidden; }
+.cmdk .q { padding: 16px 20px; border-bottom: 1px solid var(--line-1); font-size: 16px; }
+.cmdk .grp { padding: 8px 12px 4px 20px; font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.cmdk .it { display: flex; align-items: center; gap: 12px; padding: 8px 20px; font-size: 14px; color: var(--fg-2); }
+.cmdk .it.on { background: var(--ink-2); color: var(--fg-1); }
+.cmdk .it .kbd { margin-left: auto; }
+
+/* phone */
+.phone { border-color: var(--ink-3); }
+.phone .notif { margin: 8px; border-radius: 16px; background: var(--ink-2); padding: 12px; display: flex; gap: 12px; }
+.phone .appicon { width: 36px; height: 36px; border-radius: 8px; background: var(--fg-1); color: var(--ink-0); display: inline-flex; align-items: center; justify-content: center; font-family: var(--sign); font-size: 22px; flex: 0 0 auto; }
+@media (prefers-reduced-motion: reduce) { .hold::before { display: none; } }
+
+
+/* ── v2 · the seal, the canal, the repo map, first run ─────────────────── */
+/* Every lucide icon inside the product frames takes its colour from the text around it. */
+.shell2 svg[viewBox="0 0 24 24"] { width: 15px; height: 15px; stroke: currentColor; flex: none; }
+.ask { white-space: nowrap; }
+
+/* Signature 1 is initials in the margin; signature 2 is a seal you press. */
+.initials { font-family: var(--sign); font-size: 22px; color: var(--fg-1); letter-spacing: .02em; }
+.init-box { display: inline-flex; align-items: flex-end; gap: 8px; border-bottom: 1px solid var(--line-2); padding: 0 12px 2px; min-width: 96px; height: 34px; }
+.sealpress { display: flex; align-items: center; gap: 20px; }
+.sealbtn { position: relative; width: 88px; height: 88px; flex: none; display: grid; place-items: center; }
+.sealbtn svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.sealbtn circle { fill: none; stroke-width: 3; }
+.sealbtn .track { stroke: var(--line-2); }
+.sealbtn .fillr { stroke: var(--seal); stroke-linecap: round; }
+.sealbtn .face { width: 68px; height: 68px; border-radius: 50%; background: var(--seal); color: var(--seal-ink); display: grid; place-items: center; font-family: var(--sign); font-size: 26px; box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--seal-ink) 18%, transparent), 0 6px 20px color-mix(in srgb, var(--seal) 25%, transparent); }
+.sealbtn.off .face { background: var(--ink-3); color: var(--fg-3); box-shadow: none; }
+.sealbtn.off .fillr { stroke: none; }
+.imp .edge { fill: var(--seal); }
+.imp .inner { fill: none; stroke: var(--seal-ink); stroke-width: .8; opacity: .45; }
+.imp .rimpath { fill: none; }
+.imp text { fill: var(--seal-ink); }
+.imp .ini { font-family: var(--sign); }
+.imp .rim { font-family: var(--mono); font-size: 6.2px; letter-spacing: .14em; }
+.imp.trust .edge { fill: none; stroke: var(--seal); stroke-width: 1.2; stroke-dasharray: 2.5 2.5; }
+.imp.trust text { fill: var(--seal); }
+.imp.trust .inner { stroke: var(--seal); }
+.stamped { position: absolute; right: 40px; bottom: 120px; transform: rotate(-9deg); filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--ink-0) 70%, transparent)); }
+
+/* Doubts replace a confidence number: what it is unsure of, each answerable. */
+.doubt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; background: var(--seal-quiet); border: 1px solid var(--seal-line); font-size: 12.5px; line-height: 1.5; color: var(--fg-1); margin-top: 8px; }
+.doubt .qm { color: var(--seal); font-family: var(--sign); font-size: 20px; line-height: 1; }
+.doubt .choice-row { margin-top: 6px; }
+
+/* Reshaping a plan by hand. */
+.path.lifted { transform: rotate(-3deg) translateY(-6px); box-shadow: 0 10px 24px color-mix(in srgb, var(--ink-0) 85%, transparent); border-color: var(--fg-1); color: var(--fg-1); background: var(--ink-3); position: relative; z-index: 2; }
+.path.ghost { opacity: .35; border-style: dashed; }
+.fence.drop { outline: 1px dashed var(--fg-1); outline-offset: 6px; border-radius: 4px; }
+.split { display: flex; align-items: center; gap: 8px; color: var(--fg-2); font-size: 11px; margin: 8px 0; }
+.split::before, .split::after { content: ""; flex: 1; border-top: 1px dashed var(--fg-3); }
+.grip { color: var(--fg-3); padding-top: 2px; }
+
+/* The canal: work drifts on its own; two locks only you open. */
+.canal { position: relative; flex: 1; display: grid; grid-template-columns: 1.05fr 72px 1.5fr 72px 1.05fr; border: 1px solid var(--line-1); border-radius: 12px; overflow: hidden; background: var(--ink-1); }
+.canal .band { position: absolute; left: 0; right: 0; top: 26%; bottom: 22%; background: repeating-linear-gradient(90deg, var(--ink-2) 0 38px, color-mix(in srgb, var(--ink-2) 70%, var(--ink-1)) 38px 40px); border-top: 1px solid var(--line-1); border-bottom: 1px solid var(--line-1); }
+.reach { position: relative; display: flex; flex-direction: column; padding: 16px; gap: 10px; }
+.reach h4 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); display: flex; justify-content: space-between; }
+.reach .sub { font-size: 12px; color: var(--fg-3); line-height: 1.5; min-height: 54px; }
+.reach .water { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding-bottom: 40px; }
+.boat { max-width: 230px; border: 1px solid var(--line-2); background: var(--ink-1); border-radius: 8px; padding: 8px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 4px 14px color-mix(in srgb, var(--ink-0) 60%, transparent); }
+.boat .f { font-size: 11px; color: var(--fg-3); }
+.boat.yours { border-color: var(--seal); align-self: flex-end; }
+.boat.yours .f.w { color: var(--seal); }
+.boat.done { opacity: .72; flex-direction: row; align-items: center; gap: 10px; }
+.boat .bar { height: 2px; background: var(--line-2); border-radius: 1px; overflow: hidden; }
+.boat .bar i { display: block; height: 100%; background: var(--fg-2); }
+.gate { position: relative; display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 8px; }
+.gate .lk { color: var(--seal); margin-top: 38px; }
+.gate .doors { position: absolute; top: 26%; bottom: 22%; display: flex; gap: 6px; }
+.gate .doors i { width: 5px; background: var(--seal); border-radius: 2px; }
+.gate .gl { position: absolute; bottom: 16px; text-align: center; font-size: 11px; line-height: 1.4; color: var(--seal); padding: 0 4px; }
+
+/* The repo as a map, with the fence drawn around what may change. */
+.rmap { display: flex; flex-direction: column; gap: 12px; font-family: var(--mono); font-size: 11px; }
+.rdir { display: flex; flex-direction: column; gap: 6px; }
+.rdir .dn { color: var(--fg-3); }
+.rrow { display: flex; flex-wrap: wrap; gap: 4px; align-items: stretch; }
+.ft { flex: 1 1 auto; padding: 6px 8px; border-radius: 4px; background: var(--ink-2); color: var(--fg-3); border: 1px solid transparent; min-height: 30px; display: flex; align-items: center; }
+.ft.read { color: var(--fg-2); border-color: var(--line-2); }
+.ft.wrote { background: var(--fg-1); color: var(--ink-0); }
+.ft.hit { border-color: var(--seal); color: var(--seal); background: var(--seal-quiet); }
+.fencebox { position: relative; display: flex; gap: 4px; padding: 4px; border: 1px dashed var(--fg-2); border-radius: 6px; flex: 1 1 auto; }
+.fencebox::before { content: "may change"; position: absolute; top: -8px; left: 8px; background: var(--ink-1); padding: 0 4px; font-family: var(--sans); font-size: 10px; color: var(--fg-2); }
+.rlegend { display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--sans); color: var(--fg-3); padding-top: 4px; }
+.rlegend span { display: inline-flex; align-items: center; gap: 6px; }
+.rlegend i { display: inline-block; width: 12px; height: 12px; min-height: 0; padding: 0; flex: none; }
+.rlegend .fencebox::before { display: none; }
+.panel { border: 1px solid var(--line-1); border-radius: 12px; background: var(--ink-1); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.panel .k { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); }
+
+/* Watching it work. */
+.intent { font-family: var(--sign); font-size: 30px; line-height: 1.15; color: var(--fg-1); text-wrap: balance; }
+.attack { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.attack div { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: center; color: var(--fg-3); }
+.attack .d { color: var(--fg-2); }
+.attack .c { color: var(--fg-1); }
+.attack .c .o { width: 10px; height: 10px; border-radius: 50%; background: var(--fg-1); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fg-1) 15%, transparent); }
+.attack .o { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--fg-3); justify-self: center; }
+.tape { font-family: var(--mono); font-size: 11.5px; color: var(--fg-3); display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line-1); padding-top: 12px; }
+.tape b { font-weight: 400; color: var(--fg-2); }
+
+/* Review by leaving a note on a line. */
+.diff { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line-1); border-radius: 8px; overflow: hidden; }
+.dfile { padding: 8px 12px; border-bottom: 1px solid var(--line-1); color: var(--fg-2); font-family: var(--sans); font-size: 12px; background: var(--ink-2); display: flex; gap: 8px; }
+.dl { display: grid; grid-template-columns: 40px 18px minmax(0, 1fr); color: var(--fg-2); white-space: pre; line-height: 20px; }
+.dl .n { color: var(--fg-3); text-align: right; padding-right: 8px; }
+.dl .s { color: var(--fg-3); }
+.dl.add { background: color-mix(in srgb, var(--fg-1) 6%, transparent); color: var(--fg-1); }
+.dl.del { color: var(--fg-3); }
+.dl.del .code { text-decoration: line-through; }
+.dl.sel { background: var(--seal-quiet); box-shadow: inset 2px 0 0 var(--seal); }
+.mnote { border: 1px solid var(--seal-line); background: var(--ink-2); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.55; }
+.mnote .by { font-size: 11px; color: var(--seal); letter-spacing: .04em; }
+.stabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line-1); font-size: 13px; }
+.stabs span { padding: 0 0 8px; color: var(--fg-3); }
+.stabs .on { color: var(--fg-1); box-shadow: inset 0 -2px 0 var(--fg-1); }
+
+/* The morning page. */
+.brief { max-width: 820px; display: flex; flex-direction: column; gap: 20px; }
+.brief .hello { font-family: var(--sign); font-size: 52px; line-height: 1; }
+.brief .para { font-size: 18px; line-height: 1.65; color: var(--fg-2); max-width: 64ch; }
+.brief .para b { color: var(--fg-1); font-weight: 500; }
+.night { position: relative; height: 92px; margin: 28px 8px 0; border-top: 1px solid var(--line-2); }
+.night .band2 { position: absolute; top: -1px; height: 1px; background: var(--fg-3); }
+.night .mk { position: absolute; top: -5px; width: 9px; height: 9px; border-radius: 50%; background: var(--fg-2); transform: translateX(-50%); }
+.night .mk.you { background: var(--seal); }
+.night .lb { position: absolute; top: 12px; transform: translateX(-50%); font-size: 11px; color: var(--fg-3); line-height: 1.4; text-align: center; width: 104px; }
+.night .lb b { display: block; color: var(--fg-2); font-weight: 500; }
+.night .hr { position: absolute; top: -26px; white-space: nowrap; font-size: 10px; color: var(--fg-3); font-family: var(--mono); transform: translateX(-50%); }
+
+/* First run. */
+.first { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; padding-top: 12px; }
+.first h2 { font-family: var(--sign); font-weight: 400; font-size: 46px; margin: 0; line-height: 1.05; text-wrap: balance; }
+.first .lead { font-size: 15px; line-height: 1.6; color: var(--fg-2); margin: 0; max-width: 60ch; }
+.dropz { border: 1px dashed var(--line-2); border-radius: 12px; padding: 20px 24px; display: flex; align-items: center; gap: 16px; color: var(--fg-2); font-size: 14px; }
+.dropz svg[viewBox="0 0 24 24"] { width: 22px; height: 22px; }
+.repolist { border: 1px solid var(--line-1); border-radius: 12px; overflow: hidden; }
+.reporow { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line-1); font-size: 14px; }
+.reporow:last-child { border-bottom: 0; }
+.reporow .d { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
+.reporow.sel { background: var(--ink-2); }
+.reporow.dim { opacity: .5; }
+.radio { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--fg-3); }
+.radio.on { border: 4px solid var(--fg-1); }
+.portrait { font-size: 17px; line-height: 1.8; color: var(--fg-2); max-width: 66ch; }
+.portrait .fact { color: var(--fg-1); border-bottom: 1px dashed var(--fg-3); }
+.portrait .fact.unsure { color: var(--seal); border-bottom-color: var(--seal); }
+.checks { border: 1px solid var(--line-1); border-radius: 12px; overflow: hidden; }
+.checkrow { display: grid; grid-template-columns: 110px 210px minmax(0, 1fr); gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line-1); font-size: 13px; align-items: center; }
+.checkrow:last-child { border-bottom: 0; }
+.checkrow .cmd { font-family: var(--mono); font-size: 12px; color: var(--fg-2); }
+.checkrow .res { color: var(--fg-3); display: flex; gap: 8px; align-items: center; }
+.starter { display: flex; flex-wrap: wrap; gap: 8px; }
+.starter span { border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 14px; font-size: 13px; color: var(--fg-1); background: var(--ink-1); }
+
+/* The ledger. */
+.ledger { border: 1px solid var(--line-1); border-radius: 12px; overflow: hidden; }
+.lrow { display: grid; grid-template-columns: 44px minmax(0, 1fr) 150px 80px 70px 56px; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line-1); font-size: 13px; }
+.lrow .f { font-size: 12px; color: var(--fg-3); }
+.lrow .m { font-family: var(--mono); font-size: 11.5px; color: var(--fg-2); }
+.lrow .r { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg-2); }
+.lrec { padding: 16px 16px 16px 72px; border-bottom: 1px solid var(--line-1); background: var(--ink-1); display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; }
+.lrec .steps2 { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--fg-2); }
+.lrec .steps2 span b { color: var(--fg-1); font-weight: 500; }
+
+/* The quota window as a strip of time. */
+.qwin { display: flex; flex-direction: column; gap: 6px; }
+.qbar { display: flex; height: 30px; border-radius: 6px; overflow: hidden; font-size: 11px; }
+.qbar > div { display: flex; align-items: center; padding: 0 10px; gap: 6px; white-space: nowrap; overflow: hidden; }
+.qbar .used { flex: 5; background: var(--ink-3); color: var(--fg-3); }
+.qbar .wait { flex: 4; background: repeating-linear-gradient(135deg, var(--ink-2) 0 6px, var(--ink-1) 6px 12px); color: var(--fg-3); border-left: 2px solid var(--fg-1); }
+.qbar .queued { flex: 4; border: 1px dashed var(--line-2); border-left: 2px solid var(--seal); color: var(--fg-2); }
+.qbar .queued i { width: 22px; height: 10px; border-radius: 2px; background: var(--line-2); display: inline-block; }
+.qlab { display: flex; font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.qlab span { flex: 5; }
+.qlab span:nth-child(2) { flex: 4; color: var(--fg-1); }
+.qlab span:nth-child(3) { flex: 4; color: var(--seal); }
+
+/* Gallery: what changed in this version. */
+.newtag { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; line-height: 16px; flex: none; }
+.newtag.n { color: var(--seal); border-color: var(--seal-line); }
+
+</style>
+
+<div class="doc">
+  <nav class="index" aria-label="Screens">
+    <div>
+      <h1>Signet, from zero</h1>
+      <p class="lede">The console redesigned as if none of it existed. You <em>initial</em> a plan and <em>seal</em> the work; everything between flows on its own. Version 2 · frames marked new or reworked.</p>
+    </div>
+    <div id="index-groups"></div>
+    <p class="foot">One example repo (~/code/cartographer) and one feature carried through every frame; times, costs and counts are example data. A new visual system, not the current console’s tokens. 28 Sep 2026.</p>
+  </nav>
+
+  <main class="stage">
+    <div class="stage-head">
+      <div>
+        <div class="eyebrow" id="screen-eyebrow"></div>
+        <h2 id="screen-title"></h2>
+      </div>
+      <div class="stage-nav">
+        <span class="sample-flag">Example data</span>
+        <button type="button" id="prev">← Previous</button>
+        <button type="button" id="next">Next →</button>
+      </div>
+    </div>
+    <div class="frame-fit" id="fit"><div class="frame" id="frame"></div></div>
+    <section class="notes" id="notes" aria-label="Notes for this screen"></section>
+  </main>
+</div>
+
+<script>
+/* ── Icons: one stroke set (lucide geometry, as the PMS uses lucide-react) ── */
+const I = (d, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d}</svg>`;
+const ICON = {
+  home: I('<path d="M3 10.5 12 3l9 7.5V21H3z"/>'),
+  bed: I('<path d="M2 4v16M2 12h20v8M2 17h20M6 12V9h8a4 4 0 0 1 4 4"/>'),
+  cal: I('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+  list: I('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'),
+  users: I('<circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M16 3.1a4 4 0 0 1 0 7.8M21 21v-2a4 4 0 0 0-3-3.9"/>'),
+  food: I('<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/>'),
+  book: I('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5z"/>'),
+  receipt: I('<path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2l-3 2-3-2-3 2-3-2-3 2z"/><path d="M8 8h8M8 12h8"/>'),
+  chart: I('<path d="M3 3v18h18M7 16V9M12 16V5M17 16v-4"/>'),
+  chat: I('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+  phone: I('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>'),
+  gear: I('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+  search: I('<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>'),
+  check: I('<path d="M20 6 9 17l-5-5"/>'),
+  checkCircle: I('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
+  x: I('<path d="M18 6 6 18M6 6l12 12"/>'),
+  xCircle: I('<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>'),
+  clock: I('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+  alert: I('<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4M12 17h.01"/>'),
+  lock: I('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+  tag: I('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><path d="M7 7h.01"/>'),
+  transfer: I('<path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>'),
+  ext: I('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>'),
+  back: I('<path d="m15 18-6-6 6-6"/>'),
+  chevDown: I('<path d="m6 9 6 6 6-6"/>'),
+  chevRight: I('<path d="m9 18 6-6-6-6"/>'),
+  mic: I('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>'),
+  eyeOff: I('<path d="M9.9 4.2A10 10 0 0 1 12 4c7 0 10 8 10 8a13 13 0 0 1-1.7 2.7M6.6 6.6A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.4-1.6M2 2l20 20"/><path d="M14.1 14.1a3 3 0 1 1-4.2-4.2"/>'),
+  pause: I('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'),
+  hash: I('<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>'),
+  building: I('<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>'),
+  shield: I('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+  play: '<svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg>',
+  plus: I('<path d="M12 5v14M5 12h14"/>'),
+};
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ── Icons the new places need (same lucide stroke geometry) ── */
+Object.assign(ICON, {
+  inbox: I('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+  columns: I('<rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/>'),
+  wrench: I('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'),
+  pen: I('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+  reply: I('<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>'),
+  git: I('<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/>'),
+  file: I('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'),
+  folder: I('<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'),
+  lock: I('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+  scissors: I('<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>'),
+  grip: I('<circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>'),
+  undo: I('<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>'),
+  sun: I('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
+});
+
+/* ── The example world ───────────────────────────────────────────────────────
+   One repository, ~/code/cartographer (a TypeScript map library, 118 files).
+   One feature carried through: "Cluster markers at low zoom", three steps.
+   Monday 28 Sep: asked 2:51 pm, initialled 2:58, step 1 sealed 3:03, step 2
+   built 3:06 and sealed 3:14 as merge commit 7c41e0a. The morning page is the
+   next day, Tuesday 29 Sep, 9:02 am. All example data.
+   ──────────────────────────────────────────────────────────────────────────── */
+const FEAT = 'Cluster markers at low zoom';
+
+/** The shell: three places and one verb. */
+function desk(content, { place = 'desk', title = '', crumb = '', waiting = 3, status = 'running', overlay = '' } = {}) {
+  const places = [
+    ['inbox', 'Desk', 'desk', waiting ? `<span class="n">${waiting}</span>` : ''],
+    ['columns', 'Flow', 'flow', '<span class="n grey">5</span>'],
+    ['wrench', 'Workshop', 'workshop', ''],
+  ];
+  const stat = status === 'held'
+    ? `<span class="dot-seal"></span><span>Held · your Claude quota resets 6:40 pm</span>`
+    : status === 'quiet'
+      ? `<span class="dot-grey"></span><span>1 building</span><span>·</span><span>$2.10 today</span>`
+      : status === 'morning'
+        ? `<span class="dot-grey"></span><span>nothing building</span><span>·</span><span>$2.40 overnight</span>`
+        : `<span class="pulse"></span><span>2 building</span><span>·</span><span>$1.84 today</span>`;
+  return `<div class="shell2" style="height:800px;position:relative">
+    <aside class="rail2">
+      <div class="mark"><b>Signet</b><span>cartographer</span></div>
+      <div class="ask">${ICON.pen}<span style="flex:1">Ask for something</span><span class="kbd">N</span></div>
+      ${places.map(([ic, label, key, n]) =>
+        `<div class="place ${place === key ? 'on' : ''}">${ICON[ic]}<span>${label}</span>${n}</div>`).join('')}
+      <div class="foot2">
+        <span><span class="kbd">K</span> anything</span>
+        <span>Your Claude subscription · no API key</span>
+      </div>
+    </aside>
+    <main class="body2">
+      <header class="head2">
+        ${crumb ? `<span class="crumb">${crumb}</span><span class="crumb">/</span>` : ''}
+        <h1>${title}</h1>
+        <div class="status-line">${stat}</div>
+      </header>
+      <div class="content2">${content}</div>
+    </main>
+    ${overlay}
+  </div>`;
+}
+
+/** Before there is a repo, there is no shell: one question, full screen. */
+function bare(content) {
+  return `<div class="shell2" style="height:800px;display:block;overflow:hidden"><div class="content2" style="height:100%">${content}</div></div>`;
+}
+
+/** One decision in the desk inbox. */
+function decision({ sel = false, dot = 'seal', what, why, meta, acts }) {
+  return `<div class="dec ${sel ? 'sel' : ''}">
+    <span class="${dot === 'seal' ? 'dot-seal' : 'dot-grey'}"></span>
+    <div style="min-width:0"><div class="what">${what}</div><div class="why">${why}</div><div class="meta">${meta}</div></div>
+    <div class="acts">${acts}</div>
+  </div>`;
+}
+
+/** Work in motion, as six counts — the two that are yours are lit. */
+function flowstrip(n = [1, 1, 2, 1, 1, 12]) {
+  const cols = [['Asked', false], ['To initial', true], ['Building', false], ['Checking', false], ['To seal', true], ['Landed today', false]];
+  return `<div class="flowstrip">${cols.map(([l, y], i) =>
+    `<div class="fcol ${y ? 'yours' : ''}"><div class="lab">${l}</div><div class="num">${n[i]}</div></div>`).join('')}</div>`;
+}
+
+const tick = (gap = false) => `<span class="tick ${gap ? 'gap' : ''}">${gap ? ICON.x : ICON.check}</span>`;
+
+/** A thread event. */
+function ev({ tm, kind = '', t, d = '' }) {
+  return `<div class="ev2 ${kind}"><div class="tm">${tm}</div>
+    <div class="spine"><i></i><u></u></div>
+    <div><div class="et">${t}</div>${d ? `<div class="ed">${d}</div>` : ''}</div></div>`;
+}
+
+/** The feature's thread, used behind the sheets as well. */
+function featureThread({ upto = 5 } = {}) {
+  const evs = [
+    { tm: '2:51 pm', kind: 'you', t: 'You asked', d: 'Cluster nearby markers when more than 40 are on screen, and split them as you zoom in.' },
+    { tm: '2:53 pm', t: 'Signet proposed three steps', d: 'Read 118 files. Found an existing quad-tree in src/spatial.ts to build on, so no new index.' },
+    { tm: '2:58 pm', kind: 'you', t: 'You initialled the plan', d: 'Nothing had been spent yet.' },
+    { tm: '3:01 pm', t: 'Step 1 landed · Add a clustering helper', d: 'Checks passed first time. You sealed it at 3:03 pm.' },
+    { tm: '3:06 pm', t: 'Step 2 built · Use it in the map layer', d: 'Tests caught a cluster of one drawn as a cluster. Sent back once; fixed.' },
+  ];
+  return `<div class="thread">${evs.slice(0, upto).map(ev).join('')}</div>`;
+}
+
+/**
+ * A seal impression: a scalloped disc, initials in the middle, the date, time
+ * and commit running round the rim. The product is named after a seal ring;
+ * this is the one place it looks like one.
+ */
+let sealSeq = 0;
+function sealMark({ size = 120, ini = 'VM', rim = 'SEALED · 28 SEP 2026 · 3:14 PM · 7C41E0A · ', trust = false } = {}) {
+  const id = `rim${++sealSeq}`;
+  const bumps = 44, R = 50, r = 47.2;
+  let d = '';
+  for (let i = 0; i < bumps * 2; i++) {
+    const a = (Math.PI * i) / bumps;
+    const rad = i % 2 ? r : R;
+    d += `${i ? 'L' : 'M'}${(50 + rad * Math.cos(a)).toFixed(2)} ${(50 + rad * Math.sin(a)).toFixed(2)}`;
+  }
+  return `<svg class="imp ${trust ? 'trust' : ''}" width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${trust ? 'Sealed on trust' : 'Sealed'}">
+    <path class="edge" d="${d}Z"/>
+    <circle class="inner" cx="50" cy="50" r="41"/>
+    <circle class="inner" cx="50" cy="50" r="27"/>
+    ${rim ? `<path id="${id}" class="rimpath" d="M50 16 a34 34 0 1 1 -0.01 0"/>
+    <text class="rim"><textPath href="#${id}">${rim}</textPath></text>` : ''}
+    <text class="ini" x="50" y="${rim ? 58 : 60}" text-anchor="middle" font-size="${rim ? 22 : 34}">${ini}</text>
+  </svg>`;
+}
+
+/** The seal you press and hold. pct is how far the ring has filled. */
+function sealButton({ pct = 38, off = false, ini = 'VM' } = {}) {
+  const C = 2 * Math.PI * 42;
+  return `<span class="sealbtn ${off ? 'off' : ''}"><svg width="88" height="88" viewBox="0 0 88 88">
+    <circle class="track" cx="44" cy="44" r="42"/>
+    <circle class="fillr" cx="44" cy="44" r="42" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - pct / 100)).toFixed(1)}"/>
+  </svg><span class="face">${ini}</span></span>`;
+}
+
+/** The repo as a map of files, sized by length, with the step's fence drawn round what it may change. */
+function repoMap({ fence = ['src/layer.ts', 'src/layer.test.ts'], read = [], wrote = [], hit = [] } = {}) {
+  const tree = [
+    ['src/', [['index.ts', 40], ['spatial.ts', 180], ['spatial.test.ts', 120], ['cluster.ts', 90], ['cluster.test.ts', 110],
+      ['layer.ts', 210], ['layer.test.ts', 160], ['options.ts', 70], ['options.test.ts', 60], ['tiles.ts', 240], ['theme.ts', 50]]],
+    ['src/render/', [['canvas.ts', 150], ['canvas.test.ts', 90], ['webgl.ts', 260]]],
+    ['', [['package.json', 40], ['tsconfig.json', 30], ['vitest.config.ts', 30], ['README.md', 90]]],
+  ];
+  const cls = (p) => (hit.includes(p) ? 'hit' : wrote.includes(p) ? 'wrote' : read.includes(p) ? 'read' : '');
+  const tile = (p, name, w) => `<span class="ft ${cls(p)}" style="flex-basis:${Math.round(w / 3 + 36)}px">${name}</span>`;
+  return `<div class="rmap">${tree.map(([dir, files]) => {
+    const inside = files.filter(([n]) => fence.includes(dir + n));
+    const outside = files.filter(([n]) => !fence.includes(dir + n));
+    return `<div class="rdir"><span class="dn">${dir || 'top level'}</span><div class="rrow">
+      ${inside.length ? `<span class="fencebox">${inside.map(([n, w]) => tile(dir + n, n, w)).join('')}</span>` : ''}
+      ${outside.map(([n, w]) => tile(dir + n, n, w)).join('')}</div></div>`;
+  }).join('')}
+    <div class="rlegend"><span><i class="ft read"></i>read</span><span><i class="ft wrote"></i>changed</span><span><i class="fencebox"></i>may change</span>${hit.length ? '<span><i class="ft hit"></i>reached outside</span>' : ''}</div>
+  </div>`;
+}
+
+/** A diff line. Content is escaped; the sign column is drawn, not typed. */
+const dl = (n, kind, code, sel = false) =>
+  `<div class="dl ${kind} ${sel ? 'sel' : ''}"><span class="n">${n}</span><span class="s">${kind === 'add' ? '+' : kind === 'del' ? '−' : ''}</span><span class="code">${esc(code)}</span></div>`;
+
+const SCREENS_A = [
+
+/* ═════════════════════════ FIRST RUN ═════════════════════════ */
+{
+  group: 'First run', title: 'What should I work on?', tag: 'new',
+  render: () => bare(`<div class="first">
+    <div class="mark" style="padding:0"><b>Signet</b></div>
+    <h2>What should I work on?</h2>
+    <p class="lead">Point me at a repository on this machine. I will only read it — nothing is changed, nothing is installed, and nothing is sent anywhere except through your own Claude Code login.</p>
+    <div class="dropz">${ICON.folder}<span>Drop a folder here, or pick one I found in <span class="mono">~/code</span></span></div>
+    <div class="repolist">
+      <div class="reporow sel"><span class="radio on"></span><div><div>cartographer</div><div class="d">~/code/cartographer · on main · 118 files · tests found</div></div><span class="crumb">edited today</span></div>
+      <div class="reporow"><span class="radio"></span><div><div>tile-server</div><div class="d">~/code/tile-server · on main · 64 files · no tests found — I can plan here, but my checks will have little to go on</div></div><span class="crumb">3 days ago</span></div>
+      <div class="reporow"><span class="radio"></span><div><div>vishalmeena2211/atlas-docs</div><div class="d">on GitHub · plan only — landing work there means pushing, which Signet does not do yet</div></div><span class="crumb">GitHub</span></div>
+      <div class="reporow dim"><span class="radio"></span><div><div>dotfiles</div><div class="d">~/code/dotfiles · no source code found</div></div><span class="crumb"></span></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center"><span class="btn btn-primary">Read cartographer</span><span style="color:var(--fg-3);font-size:12px">About 20 seconds. Free — reading is not a model call.</span></div>
+  </div>`),
+  notes: [
+    ['The idea', [
+      'The first screen asks one question in the product’s own voice. There is no navigation yet because there is nothing to navigate — the three places appear once there is a repo to work in.',
+      'Each repo explains what Signet can do there before you choose it: "no tests found" and "plan only" are said at the point of choosing, not discovered after the first run fails.',
+      'The trust sentence is up front: only reads, nothing installed, nothing leaves except through your Claude Code login. For a tool that will write code on your machine, that is the first thing to settle.',
+    ]],
+    ['Behaviour', [
+      'The list is the existing repo discovery (local folders under the scanned roots, plus GitHub if the gh command is signed in). Dropping a folder adds it.',
+      'Reading is the deterministic survey — free and repeatable. Nothing costs quota until you initial a plan.',
+    ]],
+  ],
+},
+
+{
+  group: 'First run', title: 'Here is your repo, as I read it', tag: 'new',
+  render: () => bare(`<div class="first" style="max-width:860px;gap:16px">
+    <h2 style="font-size:38px">Here is cartographer, as I read it.</h2>
+    <div class="portrait">
+      A <span class="fact">TypeScript</span> library of <span class="fact">118 files</span>, installed with <span class="fact">pnpm</span>.
+      Tests are written with <span class="fact">vitest</span> and live <span class="fact">beside the module they test</span>.
+      Linting is <span class="fact">eslint with a flat config</span>. I think it is built with <span class="fact unsure">tsup, run directly</span> — there is no build script, so I am not sure.
+    </div>
+    <div class="doubt" style="margin:0;max-width:640px"><span class="qm">?</span><div>How is it built? <div class="choice-row"><span class="choice on">tsup, as you guessed</span><span class="choice">It is not built — it ships source</span><span class="choice">Something else…</span></div></div></div>
+    <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);margin-top:4px">How I will check work here — run once on main just now</div>
+    <div class="checks">
+      <div class="checkrow"><span>Types</span><span class="cmd">pnpm tsc --noEmit</span><span class="res">${tick()}passes on main · 0.9 s</span></div>
+      <div class="checkrow"><span>Lint</span><span class="cmd">pnpm eslint .</span><span class="res">${tick()}passes on main · 2 existing warnings, treated as the starting point</span></div>
+      <div class="checkrow"><span>Tests</span><span class="cmd">pnpm vitest run</span><span class="res">${tick()}212 pass on main · 4.1 s</span></div>
+      <div class="checkrow"><span>Design</span><span class="cmd">—</span><span class="res">nothing to compare against; add a designs folder whenever you like</span></div>
+      <div class="checkrow"><span>Conventions</span><span class="cmd">read from your code</span><span class="res">3 found, none enforced until you accept them</span></div>
+    </div>
+    <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);margin-top:4px">Good first asks — small, and each one is checkable</div>
+    <div class="starter"><span>Cover src/tiles.ts — the only module without a test</span><span>Reject a negative zoom in setZoom()</span><span>Explain the quad-tree in src/spatial.ts</span></div>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:4px"><span class="btn btn-primary">That is right · start</span><span style="color:var(--fg-3);font-size:12px">Or ask for anything — these are suggestions, not a queue.</span></div>
+  </div>`),
+  notes: [
+    ['The idea', [
+      'Signet shows you what it understood as a paragraph you can read in ten seconds, with every fact underlined. Anything it is unsure of is in the seal colour and asked about right there. A settings form would make you do the survey’s job.',
+      'The checks are run once on main before any work starts. That is the most important thing on this page: if a check cannot run here — a missing tool, a broken test command — you find out now, not after the first run fails for reasons no code change can fix.',
+      '"Good first asks" come from the survey (the module with no sibling test, a function with no input check). They exist to make the first feature small enough to judge the tool by.',
+    ]],
+    ['Behaviour', [
+      'Existing lint warnings on main become the starting point, so a later step is judged only on what it adds.',
+      'Clicking an underlined fact lets you correct it; corrections are kept with the repo.',
+    ]],
+    ['Data', [
+      'Not built yet: running the checks against main at setup, and the good-first-ask suggestions. The survey fields in the paragraph exist today.',
+    ]],
+  ],
+},
+
+/* ═════════════════════════ DESK ═════════════════════════ */
+{
+  group: 'Desk', title: 'Good morning', tag: 'new',
+  render: () => desk(`<div class="brief">
+    <div class="hello">Good morning.</div>
+    <div class="para">While you were away, <b>three steps were built and are waiting for your seal</b>, and the 3:00 am routine proposed <b>“Cover src/tiles.ts”</b> and built its first step. <b>Nothing reached main without you.</b> It spent $2.40 — 31% of this week’s quota.</div>
+    <div class="night">
+      <span class="hr" style="left:0;transform:none">6 pm</span><span class="hr" style="left:20%">9 pm</span><span class="hr" style="left:40%">midnight</span><span class="hr" style="left:60%">3 am</span><span class="hr" style="left:80%">6 am</span><span class="hr" style="left:auto;right:0;transform:none">9 am</span>
+      <span class="mk" style="left:4%"></span><span class="lb" style="left:0;transform:none;text-align:left;width:88px"><b>6:40 pm</b>quota came back</span>
+      <span class="mk you" style="left:19%"></span><span class="lb" style="left:19%"><b>7:05 pm</b>clusterRadius option built</span>
+      <span class="mk you" style="left:37%"></span><span class="lb" style="left:37%"><b>11:20 pm</b>404 tiles built · 2 repairs</span>
+      <span class="mk" style="left:60%"></span><span class="lb" style="left:58%"><b>3:00 am</b>routine proposed tiles tests</span>
+      <span class="mk you" style="left:65%"></span><span class="lb" style="left:74%"><b>3:24 am</b>its first step built</span>
+    </div>
+    <div class="dec sel" style="margin-top:4px">
+      <span class="dot-seal"></span>
+      <div><div class="what">Start with “Expose a clusterRadius option”</div><div class="why">It finishes ${FEAT} — the other two can wait</div><div class="meta">3 of 3 promises proven · 2 files · $0.38</div></div>
+      <div class="acts"><span class="btn btn-seal">Go through all 3</span><span class="kbd">↵</span></div>
+    </div>
+  </div>`, { place: 'desk', title: 'Desk', waiting: 4, status: 'morning' }),
+  notes: [
+    ['The idea', [
+      'A tool that works while you sleep owes you a morning page. It is one paragraph and one line of time, written like a note left on a desk — not a feed to scroll.',
+      'The sentence that matters most is "Nothing reached main without you." It is always true, and saying it every morning is what lets someone leave Signet running overnight.',
+      'The night is drawn as a strip of time. Your marks (seal colour) are the things waiting on you; grey marks are things that simply happened.',
+    ]],
+    ['Behaviour', [
+      '"Go through all 3" opens the sheets one after another — review, seal, next — so a morning’s signatures take a couple of minutes with the keyboard.',
+      'It suggests where to start: the decision that finishes a feature first, since a finished feature is worth more than three half-finished ones.',
+      'Shown when you return after four or more hours with something new; otherwise the Desk opens as usual.',
+    ]],
+    ['Data', [
+      'Not built: the away-summary. Every event in it is already recorded — this is a read over what happened since your last visit.',
+    ]],
+  ],
+},
+
+{
+  group: 'Desk', title: 'Three decisions waiting', tag: 'reworked',
+  render: () => desk(`
+    ${flowstrip()}
+    <div class="inbox">
+      ${decision({ sel: true, what: 'Seal “Use it in the map layer”', why: `${FEAT} · every check passed, one repair along the way`,
+        meta: '2 files · +48 −6 · 3 of 3 promises proven · waiting 6 min',
+        acts: '<span class="kbd">↵</span><span class="btn btn-seal">Review and seal</span>' })}
+      ${decision({ what: 'Initial the plan for “Expose a clusterRadius option”', why: `${FEAT} · step 3 of 3 · nothing spent yet`,
+        meta: 'may change src/options.ts, src/options.test.ts · waiting 6 min', acts: '<span class="btn btn-outline">Review</span>' })}
+      ${decision({ what: 'Signet asked: should an empty tile be retried or skipped?', why: 'Tiles: survive empty responses · it stopped rather than guess',
+        meta: 'asked 18 min ago', acts: '<span class="btn btn-outline">Answer</span>' })}
+    </div>
+    <div style="display:flex;gap:16px;color:var(--fg-3);font-size:12px">
+      <span><span class="kbd">J</span> <span class="kbd">K</span> move</span>
+      <span><span class="kbd">↵</span> review</span>
+      <span><span class="kbd">E</span> done for now</span>
+      <span style="margin-left:auto">Grey means handled. Colour means you.</span>
+    </div>`, { place: 'desk', title: 'Desk', waiting: 3 }),
+  notes: [
+    ['The idea', [
+      'The home screen is an inbox of decisions, not a dashboard of numbers. If it is on the Desk, it needs you; clear it and it leaves.',
+      'Two plain verbs replace "signature 1" and "signature 2": you initial a plan and you seal the work. People already know the difference between initialling a draft and sealing the final — the words carry the weight without explaining it.',
+    ]],
+    ['Layout', [
+      'The flow strip is the whole pipeline in six numbers; only the two columns that are yours are lit.',
+      'Keyboard-first: J and K move, Enter opens the sheet, E puts one aside.',
+    ]],
+    ['Open question', [
+      'Order by age (fair, predictable) or by how much work the decision unblocks (efficient, but reshuffles under you)? The morning page already picks "finishes a feature first".',
+    ]],
+  ],
+},
+
+{
+  group: 'Desk', title: 'Nothing needs you',
+  render: () => desk(`
+    ${flowstrip([0, 0, 1, 0, 0, 14])}
+    <div class="quiet">
+      <div class="big">Nothing needs you.</div>
+      <div style="max-width:52ch;line-height:1.6">One step is building on its own. You will see it here when it is ready to seal, and nowhere else until then.</div>
+      <div style="display:flex;gap:8px;margin-top:8px"><span class="btn btn-primary">${ICON.pen}Ask for something</span><span class="btn btn-outline">Watch it work</span></div>
+      <div style="color:var(--fg-3);font-size:12px;margin-top:16px">14 steps sealed today · last one 3:12 pm</div>
+    </div>`, { place: 'desk', title: 'Desk', waiting: 0, status: 'quiet' }),
+  notes: [
+    ['The idea', [
+      'Calm is the success state, so it looks like one — one sentence in the signature face, not six zeroed tiles.',
+      'It still says what is happening, where you will hear about it, and offers the one useful action.',
+    ]],
+  ],
+},
+
+{
+  group: 'Desk', title: 'Held · your Claude quota ran out', tag: 'reworked',
+  render: () => desk(`
+    <div class="now yours" style="margin-top:0">
+      <div style="display:flex;gap:12px;align-items:center"><span class="dot-seal"></span><b>Nothing can build until 6:40 pm</b></div>
+      <div style="color:var(--fg-2);font-size:13px;line-height:1.6">Your Claude quota is used up for this window. The two waiting steps start by themselves when it comes back. Sealing needs no quota — it is git, not the model — so this is a good time to clear your Desk.</div>
+      <div class="qwin">
+        <div class="qbar"><div class="used">used since 1:40 pm</div><div class="wait">2 h 20 m to go</div><div class="queued"><i></i><i></i>then these start</div></div>
+        <div class="qlab"><span>1:40 pm</span><span>now · 4:20 pm</span><span>6:40 pm · quota back</span></div>
+      </div>
+    </div>
+    ${flowstrip([0, 1, 0, 0, 1, 9])}
+    <div class="inbox">
+      ${decision({ what: 'Seal “Use it in the map layer”', why: `${FEAT} · built before the quota ran out`, meta: 'waiting 42 min · sealing lands it now, no quota needed', acts: '<span class="btn btn-seal">Review and seal</span>' })}
+      ${decision({ what: 'Initial the plan for “Expose a clusterRadius option”', why: 'will start at 6:40 pm once initialled', meta: 'waiting 42 min', acts: '<span class="btn btn-outline">Review</span>' })}
+    </div>`, { place: 'desk', title: 'Desk', waiting: 2, status: 'held' }),
+  notes: [
+    ['Why blocked / Way forward', [
+      'Held is not a failure and not yours to fix, so it is stated once, with the time it clears, drawn as a strip of time: what is used, how long is left, and what starts the moment it returns.',
+      'The useful correction: sealing does not need quota. Being held is a good time to clear your seals, and the screen says so.',
+    ]],
+    ['Data', [
+      'The reset time comes from the quota message Claude Code returns. The window’s start time is inferred (reset minus five hours) and not shown when unknown.',
+    ]],
+  ],
+},
+
+/* ═════════════════════════ ASK ═════════════════════════ */
+{
+  group: 'Ask', title: 'You describe it; Signet reads the repo',
+  render: () => desk(`<div class="convo">
+    <div class="msg you"><span class="who">VM</span><div class="txt">
+      <p>When there are more than 40 markers on screen, group the nearby ones into a single cluster marker showing the count, and split them apart as you zoom in.</p></div></div>
+    <div class="msg sig"><span class="who">S</span><div class="txt">
+      <p>Reading <span class="mono">~/code/cartographer</span> before I suggest anything.</p>
+      <div class="reading">
+        <span><b>src/spatial.ts</b> · a quad-tree with a query(bounds) method — worth building on</span>
+        <span><b>src/layer.ts</b> · draws markers one by one in drawMarker()</span>
+        <span><b>src/options.ts</b> · one options object, validated on construction</span>
+        <span style="color:var(--fg-2)">reading src/tiles.ts…</span>
+      </div></div></div>
+    <div class="composer"><span class="ph">Add detail while it reads… type @ to point at a file</span>
+      <div class="row2">${ICON.git}<span class="mono">~/code/cartographer</span><span>·</span><span>main</span><span style="margin-left:auto">nothing is created until you initial it</span></div></div>
+  </div>`, { place: 'desk', title: 'Ask', crumb: 'Desk' }),
+  notes: [
+    ['The idea', [
+      'Asking is a conversation, not a form. The repo read is shown as it happens, in the terms that matter for planning — what already exists to build on.',
+      'Type @ to point at a file yourself. Pointing is the fastest way to say "here, not there" and it becomes part of what you asked for.',
+    ]],
+    ['Data', [
+      'Streaming the survey line by line is not built — it returns in one piece today. @-mentions are not built.',
+    ]],
+  ],
+},
+
+{
+  group: 'Ask', title: 'Signet asks before it proposes',
+  render: () => desk(`<div class="convo">
+    <div class="msg you"><span class="who">VM</span><div class="txt"><p>When there are more than 40 markers on screen, group the nearby ones into a cluster marker showing the count…</p></div></div>
+    <div class="msg sig"><span class="who">S</span><div class="txt">
+      <p>I can build on the quad-tree in <span class="mono">src/spatial.ts</span>. Two things I would otherwise have to guess:</p>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px">
+        <div><div style="color:var(--fg-1)">A cluster of one marker — draw it as a cluster, or as the marker itself?</div>
+          <div class="choice-row"><span class="choice on">The marker itself</span><span class="choice">A cluster of one</span></div></div>
+        <div><div style="color:var(--fg-1)">When a cluster splits on zoom, animate the markers apart or just redraw?</div>
+          <div class="choice-row"><span class="choice">Animate apart</span><span class="choice on">Redraw in place</span>
+            <span style="color:var(--fg-3);font-size:12px;align-self:center">the repo has no animation helpers yet</span></div></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px"><span class="btn btn-primary">Propose with these</span><span class="btn btn-outline">Skip · let it guess</span></div>
+    </div></div>
+  </div>`, { place: 'desk', title: 'Ask', crumb: 'Desk' }),
+  notes: [
+    ['The idea', [
+      'Uncertainty is resolved before the plan exists. Every guess an agent makes silently is a place a run can go wrong later, when it is expensive.',
+      'Its suggested answers are pre-selected, with a reason where it has one. Accepting them all is one press.',
+    ]],
+    ['Data', [
+      'Not built. The proposer returns its uncertainties alongside the plan today; asking first needs a two-turn proposal.',
+    ]],
+  ],
+},
+
+{
+  group: 'Ask', title: 'The proposal, ready to initial', tag: 'reworked',
+  render: () => desk(`<div class="convo">
+    <div class="msg sig"><span class="who">S</span><div class="txt" style="width:100%">
+      <p>Three steps, each small enough to review on its own. One thing I am still unsure of is pinned to its step.</p>
+      <div class="proposal">
+        <div class="ph2"><b>${FEAT}</b><span class="crumb">3 steps · about $1.20</span></div>
+        ${[
+          ['Add a clustering helper', 'A pure function first, so the rendering change stays small.', ['src/cluster.ts', 'src/cluster.test.ts'],
+           'cluster(points, radiusPx) groups points within radiusPx into one entry with a count. <b>One point stays one point. An empty list returns an empty list.</b>', ''],
+          ['Use it in the map layer', 'The only step touching rendering, so a visual regression has one place to live.', ['src/layer.ts', 'src/layer.test.ts'],
+           'Above 40 markers, clusters are drawn; below, individual markers. <b>A cluster of one draws as the marker. Zooming in splits a cluster into its members.</b>',
+           `<div class="doubt"><span class="qm">?</span><div>I assumed “40 on screen” means in the visible map, not per tile. <div class="choice-row"><span class="choice on">Visible map</span><span class="choice">Per tile</span></div></div></div>`],
+          ['Expose a clusterRadius option', 'Last, because an option is only worth having once the behaviour it tunes exists.', ['src/options.ts', 'src/options.test.ts'],
+           'Defaults to 60. <b>A value that is not a positive number is rejected, not clamped.</b>', ''],
+        ].map(([t, r, files, done, doubt], i) => `<div class="pstep"><span class="ix">${i + 1}</span><div>
+          <div class="t">${t}</div><div class="r">${r}</div>
+          <div class="fence"><span class="fl">may change</span>${files.map(f => `<span class="path">${f}</span>`).join('')}</div>
+          <div class="done-when">${done}</div>${doubt}</div></div>`).join('')}
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+        <span class="btn btn-primary">${ICON.pen}Initial the plan</span><span class="btn btn-outline">Reshape</span><span class="btn btn-outline">Ask again</span>
+        <span style="color:var(--fg-3);font-size:12px;margin-left:8px">Initialling starts step 1. Nothing has been spent.</span></div>
+    </div></div>
+  </div>`, { place: 'desk', title: 'Ask', crumb: 'Desk' }),
+  notes: [
+    ['The idea', [
+      'The confidence meter is gone. A number implied a precision the model does not have; what it actually has is specific doubts. Each is pinned to the step it affects, in the seal colour because it is your call, and answerable in one tap.',
+      '"May change" is a fence of file chips because it is a hard boundary, not a text field.',
+      'Each step says why it is its own step. A breakdown you cannot argue with is one you cannot check.',
+    ]],
+    ['Behaviour', [
+      'Initialling is one click, because nothing has been spent. The bold part of "done when" is what a test must prove; it becomes the list of promises when you seal.',
+      '"About $1.20" is estimated from similar-sized steps in this repo. Not built yet.',
+    ]],
+  ],
+},
+
+{
+  group: 'Ask', title: 'Reshape the plan by hand', tag: 'new',
+  render: () => desk(`<div class="convo">
+    <div class="msg sig"><span class="who">S</span><div class="txt" style="width:100%">
+      <div class="proposal">
+        <div class="ph2"><b>${FEAT}</b><span class="crumb">reshaping · 3 steps → 4</span></div>
+        <div class="pstep"><span class="grip">${ICON.grip}</span><div>
+          <div class="t">Add a clustering helper</div>
+          <div class="fence" style="margin-top:8px"><span class="fl">may change</span><span class="path">src/cluster.ts</span><span class="path">src/cluster.test.ts</span></div></div></div>
+        <div class="pstep"><span class="grip">${ICON.grip}</span><div>
+          <div class="t">Use it in the map layer</div>
+          <div class="fence" style="margin-top:8px"><span class="fl">may change</span><span class="path">src/layer.ts</span><span class="path">src/layer.test.ts</span><span class="path ghost">src/options.ts</span></div>
+          <div class="done-when">Above 40 markers, clusters are drawn; below, individual markers.</div>
+          <div class="split">${ICON.scissors} split here — the rest becomes its own step</div>
+          <div class="done-when" style="margin-top:0">Zooming in splits a cluster into its members.</div></div></div>
+        <div class="pstep"><span class="grip">${ICON.grip}</span><div>
+          <div class="t">Expose a clusterRadius option</div>
+          <div class="fence drop" style="margin-top:8px"><span class="fl">may change</span><span class="path">src/options.test.ts</span><span class="path lifted">src/options.ts</span></div></div></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:12px;align-items:center;font-size:12px;color:var(--fg-3)">
+        <span>Drag a file between fences · drag a step to reorder · cut between promises to split a step</span>
+        <span class="btn btn-outline" style="margin-left:auto">Done reshaping</span></div>
+    </div></div>
+  </div>`, { place: 'desk', title: 'Ask', crumb: 'Desk' }),
+  notes: [
+    ['The idea', [
+      'Editing a plan should feel like moving index cards, not filling in a form. You pick up a file and drop it into another step’s fence; you cut a step in two between its promises.',
+      'Splitting happens between the bold "done when" promises, because a promise is the natural unit of a step — each half keeps the promises it had.',
+    ]],
+    ['Behaviour', [
+      'Every drop re-runs the fence check instantly, so a move that leaves a step with a fence that matches nothing shows its warning on the spot.',
+      'Asking Signet to re-propose after you have reshaped keeps your changes as constraints.',
+    ]],
+    ['Data', [
+      'Not built. The plan is editable as text today; the drag interactions are new front-end work only — the saved shape is the same.',
+    ]],
+  ],
+},
+
+{
+  group: 'Ask', title: 'A fence that encloses nothing',
+  render: () => desk(`<div class="convo">
+    <div class="msg sig"><span class="who">S</span><div class="txt" style="width:100%">
+      <div class="proposal">
+        <div class="ph2"><b>${FEAT}</b><span class="crumb">3 steps</span></div>
+        <div class="pstep"><span class="ix">1</span><div>
+          <div class="t">Add a clustering helper</div>
+          <div class="fence" style="margin-top:8px"><span class="fl">may change</span><span class="path bad">src/clustering/**</span><span class="path">src/cluster.test.ts</span></div>
+          <div class="now yours" style="margin-top:8px;padding:8px 12px">
+            <div style="font-size:13px;line-height:1.55"><b class="seal">No file matches src/clustering/**.</b> This repo keeps modules flat in <span class="mono">src/</span>. The step would stop the moment it started.</div>
+            <div style="display:flex;gap:8px"><span class="btn btn-secondary">Use src/cluster.ts instead</span><span class="btn btn-outline">Keep it, I know better</span></div>
+          </div></div></div>
+        <div class="pstep"><span class="ix">2</span><div><div class="t">Use it in the map layer</div>
+          <div class="fence" style="margin-top:8px"><span class="fl">may change</span><span class="path bad">**</span></div>
+          <div style="margin-top:6px;font-size:12px" class="seal">This fence encloses the whole repo, which is the same as having no fence.</div></div></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+        <span class="btn btn-primary">Initial the plan</span><span style="color:var(--fg-3);font-size:12px">You can initial anyway. Two fences look wrong.</span></div>
+    </div></div>
+  </div>`, { place: 'desk', title: 'Ask', crumb: 'Desk' }),
+  notes: [
+    ['The idea', [
+      'The problem is shown on the exact chip that is wrong, with the fix as a button next to it.',
+      'A fence that encloses nothing reads perfectly well, gets initialled, and then stops the run it produced. This is the single most valuable check on the screen.',
+    ]],
+  ],
+},
+];
+
+/** The seal sheet's promise list. gaps: indexes with no proof. */
+function promises({ gaps = [], brief = false } = {}) {
+  const rows = [
+    ['Above 40 markers, clusters are drawn; below, individual markers.', ['test · “groups markers above the threshold”', 'src/layer.ts:41–44']],
+    ['A cluster of one draws as the marker.', ['test · “renders a cluster of one as a plain marker”', 'src/layer.ts:47 · added by the repair']],
+    ['Zooming in splits a cluster into its members.', ['test · “splits a cluster back apart as zoom increases”', 'src/layer.ts:52–58']],
+  ];
+  return `<div class="crit">${rows.map(([claim, proof], i) => gaps.includes(i)
+    ? `<div class="crit-row missing">${tick(true)}<div class="claim">${claim}</div>
+        <div class="proof"><b>No test proves this.</b><span style="font-size:12px">The code may do it — src/layer.ts:47 looks right — but nothing would catch it breaking.</span></div></div>`
+    : `<div class="crit-row">${tick()}<div class="claim">${claim}</div>
+        <div class="proof">${brief ? '<span style="font-size:12px">proven</span>' : proof.map(p => `<span class="mono" style="font-size:11.5px">${p}</span>`).join('')}</div></div>`).join('')}</div>`;
+}
+
+/** The sheet that slides over the thread. */
+function sheet({ eyebrow, h, sub, body, foot }) {
+  return `<div class="sheet-wrap"><div class="sheet-doc" style="position:relative">
+    <div class="sd-head"><div class="eyebrow2">${eyebrow}</div><h2>${h}</h2><div class="sub2">${sub}</div></div>
+    <div class="sd-body">${body}</div>
+    <div class="sd-foot">${foot}</div>
+  </div></div>`;
+}
+
+const SEAL_H = 'Seal “Use it in the map layer”';
+
+const SCREENS_B = [
+
+/* ═════════════════════════ INITIAL & SEAL ═════════════════════════ */
+{
+  group: 'Initial and seal', title: 'Initial the plan', tag: 'reworked',
+  render: () => desk(featureThread({ upto: 2 }), {
+    place: 'desk', title: FEAT, crumb: 'Desk',
+    overlay: sheet({
+      eyebrow: 'Initial · the plan', h: 'Build “Expose a clusterRadius option”', sub: `Step 3 of 3 · ${FEAT} · ~/code/cartographer`,
+      body: `
+        <div class="clause"><div class="ck">You agree to</div><div class="cv">Signet writing this step in its own copy of the repo, on its own branch, using your Claude subscription.</div></div>
+        <div class="clause"><div class="ck">It may change</div><div class="cv"><div class="fence"><span class="path">src/options.ts</span><span class="path">src/options.test.ts</span></div>
+          <div style="color:var(--fg-3);font-size:12px;margin-top:4px">If it needs anything else, it stops and asks.</div></div></div>
+        <div class="clause"><div class="ck">Done when</div><div class="cv">clusterRadius defaults to 60. A value that is not a positive number is rejected, not clamped.</div></div>
+        <div class="clause"><div class="ck">It will not</div><div class="cv">Merge anything. Push anything. Touch your checkout. You seal it before any of it reaches main.</div></div>
+        <div class="clause"><div class="ck">Likely cost</div><div class="cv">About $0.40, from the last 12 steps of similar size here. Nothing spent yet.</div></div>`,
+      foot: `<div class="sigline"><span class="init-box"><span class="initials" style="color:var(--fg-3)">VM</span></span><span style="flex:1;color:var(--fg-3);font-size:12px">Initials go here when you click</span><span class="btn btn-primary">${ICON.pen}Initial the plan</span></div>
+        <div style="color:var(--fg-3);font-size:12px">One click. Initials approve spending, not code — the seal comes later.</div>`,
+    }) }),
+  notes: [
+    ['The idea', [
+      'You initial a plan the way you initial a draft: quickly, in the margin, knowing a final signature comes later. The word does the explaining that "signature 1 of 2" needed a sentence for.',
+      'Each clause is one thing you are agreeing to, and "It will not" is said as plainly as what it will.',
+      'The sheet slides over the thread, so what you asked for stays visible behind the decision.',
+    ]],
+    ['Behaviour', [
+      'One click stamps your initials in the margin and starts the step when a worker is free.',
+      '"If it needs anything else, it stops and asks" — reaching outside the fence becomes a question (see the thread frame "It reached outside the fence"), not a dead run.',
+    ]],
+  ],
+},
+
+{
+  group: 'Initial and seal', title: 'Seal the work', tag: 'reworked',
+  render: () => desk(featureThread({ upto: 5 }), {
+    place: 'desk', title: FEAT, crumb: 'Desk',
+    overlay: sheet({
+      eyebrow: 'Seal · the work', h: SEAL_H, sub: '2 files · +48 −6 · built 3:06 pm · one repair · $0.62',
+      body: `
+        <div class="stabs"><span class="on">Promises · 3 of 3 proven</span><span>The change · 2 files</span><span>How it got here</span></div>
+        ${promises()}
+        <div class="clause"><div class="ck">Checks</div><div class="cv" style="font-size:13px;color:var(--fg-2)">Types · Lint · Tests passed. Design has nothing to compare against. Conventions passed.</div></div>
+        <div class="clause"><div class="ck">Lands on</div><div class="cv">main, in ~/code/cartographer, as one merge commit. Not pushed. You can take it back from the ledger.</div></div>
+        <div class="clause"><div class="ck">Built from</div><div class="cv" style="font-size:13px;color:var(--fg-2)">What you asked for, version 2 — including your answer about clusters of one.</div></div>`,
+      foot: `<div class="sealpress">${sealButton({ pct: 38 })}
+          <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:15px">Press and hold the seal</div>
+          <div style="color:var(--fg-3);font-size:12px">About a second · or hold <span class="kbd">↵</span> · the ring fills as you hold</div></div>
+          <span style="margin-left:auto;color:var(--fg-3);font-size:12px">Send back with a note <span class="kbd">C</span></span></div>`,
+    }) }),
+  notes: [
+    ['The idea', [
+      'A signet is a seal ring. The irreversible decision is made by pressing a seal: hold it and the ring fills; let go early and nothing happens. The product’s name finally is its gesture.',
+      'The sheet leads with promises, not the diff. Each thing you agreed to when you initialled sits beside the test that proves it and the lines that do it. "The change" and "How it got here" are one tab away.',
+      '"Added by the repair" names evidence that came from the agent fixing its own mistake — the strongest evidence on the sheet.',
+    ]],
+    ['Behaviour', [
+      'Holding checks the repo state first, then makes a real merge commit, never pushed.',
+      'Hold works from the keyboard (hold Enter); a setting turns the hold into a click for anyone who finds holds hard.',
+      'C starts a note on the change instead — see "Send it back with a note".',
+    ]],
+    ['Data', [
+      'Mapping each promise to a test and to lines is not built — it is the one genuinely new capability this design asks for. The checks already know which tests were added.',
+    ]],
+  ],
+},
+
+{
+  group: 'Initial and seal', title: 'Sealed', tag: 'new',
+  render: () => desk(featureThread({ upto: 5 }), {
+    place: 'desk', title: FEAT, crumb: 'Desk',
+    overlay: sheet({
+      eyebrow: 'Sealed · 3:14 pm', h: SEAL_H.replace('Seal ', 'Sealed '), sub: 'Landed on main as 7c41e0a · not pushed',
+      body: `${promises({ brief: true })}
+        <div class="clause"><div class="ck">What happens next</div><div class="cv">Step 3, “Expose a clusterRadius option”, is already initialled and starts now. You will see it on your Desk when it is ready to seal.</div></div>
+        <div class="stamped">${sealMark({ size: 168 })}</div>`,
+      foot: `<div style="display:flex;gap:8px;align-items:center"><span class="btn btn-primary">Next decision</span><span class="kbd">↵</span>
+        <span class="btn btn-outline" style="margin-left:auto">${ICON.undo}Take it back</span></div>
+        <div style="color:var(--fg-3);font-size:12px">The seal is kept in the ledger with the promises, the proof and the commit.</div>`,
+    }) }),
+  notes: [
+    ['The idea', [
+      'Finishing should feel like finishing. The seal lands on the document, slightly askew the way a real stamp does, with the date, time and commit running round its rim — a record you can recognise at a glance later.',
+      'Straight after, the sheet says what happens next, and Enter goes to the next decision. Clearing a morning’s seals is a rhythm: read, hold, next.',
+      '"Take it back" is right here, because the safest-feeling tools are the ones where undo is obvious.',
+    ]],
+    ['Behaviour', [
+      'The impression is generated from the merge: your initials, the time, the short commit. The same mark appears on the phone and in the ledger.',
+      'Taking it back makes a revert commit that you seal like any other change; it never rewrites history.',
+    ]],
+  ],
+},
+
+{
+  group: 'Initial and seal', title: 'A promise with no proof',
+  render: () => desk(featureThread({ upto: 5 }), {
+    place: 'desk', title: FEAT, crumb: 'Desk',
+    overlay: sheet({
+      eyebrow: 'Seal · the work', h: SEAL_H, sub: '2 files · +41 −6 · every check passed',
+      body: `
+        <div class="stabs"><span class="on">Promises · 2 of 3 proven</span><span>The change · 2 files</span><span>How it got here</span></div>
+        ${promises({ gaps: [1] })}
+        <div class="now yours" style="margin-top:0">
+          <div style="font-size:13px;line-height:1.6"><b>Every check passed, and one thing you agreed to is still unproven.</b> Checks only cover what was tested. Ask for the missing test — a small, targeted repair — or seal knowing this one is taken on trust.</div>
+          <div style="display:flex;gap:8px"><span class="btn btn-secondary">${ICON.reply}Ask for the missing test</span><span class="btn btn-outline">Seal on trust</span></div>
+        </div>`,
+      foot: `<div class="sealpress">${sealButton({ off: true })}
+        <div style="color:var(--fg-3);font-size:12px;line-height:1.5">The seal unlocks when every promise has proof,<br>or when you choose to seal one on trust.</div></div>`,
+    }) }),
+  notes: [
+    ['The idea', [
+      'Green checks are not the same as done. This is where the gap becomes visible — and the reason the seal sheet is promise-by-promise.',
+      'The seal itself goes grey. You can see from across the room that it cannot be pressed yet.',
+    ]],
+    ['Why blocked / Way forward', [
+      'Two keys: proof, or your explicit choice to seal on trust. Trust is allowed, but it is recorded — a seal on trust is drawn as a dashed outline in the ledger, forever distinguishable from a proven one.',
+    ]],
+    ['Open question', [
+      'Should a routine ever be allowed to reach this point with a gap, or should routines drop steps that cannot prove every promise?',
+    ]],
+  ],
+},
+
+{
+  group: 'Initial and seal', title: 'Send it back with a note', tag: 'new',
+  render: () => desk(featureThread({ upto: 5 }), {
+    place: 'desk', title: FEAT, crumb: 'Desk',
+    overlay: sheet({
+      eyebrow: 'Seal · the work', h: SEAL_H, sub: '2 files · +48 −6 · 3 of 3 promises proven',
+      body: `
+        <div class="stabs"><span>Promises · 3 of 3 proven</span><span class="on">The change · 2 files</span><span>How it got here</span></div>
+        <div class="diff">
+          <div class="dfile">${ICON.file}<span class="mono">src/layer.ts</span><span style="margin-left:auto">+9 −1</span></div>
+          ${dl(38, '', 'export function drawLayer(map: MapView, markers: Marker[]) {')}
+          ${dl(39, '', '  const zoom = map.zoom();')}
+          ${dl(40, 'del', '  markers.forEach((m) => drawMarker(map, m));')}
+          ${dl(41, 'add', '  if (markers.length <= CLUSTER_THRESHOLD) {')}
+          ${dl(42, 'add', '    markers.forEach((m) => drawMarker(map, m));')}
+          ${dl(43, 'add', '    return;')}
+          ${dl(44, 'add', '  }')}
+          ${dl(45, 'add', '  const radius = 60 / Math.pow(2, zoom - 10);', true)}
+          ${dl(46, 'add', '  for (const c of cluster(markers, radius)) {')}
+          ${dl(47, 'add', '    if (c.count === 1) drawMarker(map, c.members[0]);')}
+          ${dl(48, 'add', '    else drawCluster(map, c);')}
+          ${dl(49, 'add', '  }')}
+        </div>
+        <div class="mnote">
+          <div class="by">YOUR NOTE · LINE 45</div>
+          <div>Use pxToMeters() from src/spatial.ts — this formula ignores latitude, so clusters will stretch near the poles.</div>
+          <div style="display:flex;gap:8px;align-items:center"><span class="btn btn-secondary">${ICON.reply}Send back with 1 note</span><span style="color:var(--fg-3);font-size:12px">One repair, aimed at these lines. The promises stay as they are.</span></div>
+        </div>`,
+      foot: `<div class="sealpress">${sealButton({ pct: 0 })}
+        <div style="color:var(--fg-3);font-size:12px;line-height:1.5">Sealing now would drop your note.</div></div>`,
+    }) }),
+  notes: [
+    ['The idea', [
+      'Rejecting a whole step to fix one line is out of proportion. Here you click a line, write what you would say in a code review, and send it back. The agent gets exactly that line and exactly your words.',
+      'A note is yours, so it is drawn in the seal colour — the same colour that marks everything else waiting on you.',
+    ]],
+    ['Behaviour', [
+      'Sending back uses one repair from the step’s budget and returns to the Desk when rebuilt, with your note shown against the new lines so you can check it was heard.',
+      'Several notes can be left before sending; they go together as one repair.',
+      'The diff is monochrome on purpose: added lines are brighter, removed lines are struck through. Red and green would compete with the one colour that means you.',
+    ]],
+    ['Data', [
+      'Not built. Answering a question already amends what you asked for and resumes the step; a note is the same mechanism with a line reference.',
+    ]],
+  ],
+},
+
+{
+  group: 'Initial and seal', title: 'Your checkout is elsewhere',
+  render: () => desk(featureThread({ upto: 5 }), {
+    place: 'desk', title: FEAT, crumb: 'Desk',
+    overlay: sheet({
+      eyebrow: 'Seal · the work', h: SEAL_H, sub: '3 of 3 promises proven · every check passed',
+      body: `
+        <div class="now yours" style="margin-top:0">
+          <div style="font-size:14px"><b>Your checkout is on <span class="mono">spike/tiles</span>, not <span class="mono">main</span>.</b></div>
+          <div style="font-size:13px;color:var(--fg-2);line-height:1.6">Sealing now would land this on spike/tiles. Switch back and the seal unlocks by itself — Signet will not move your checkout for you.</div>
+          <div style="display:flex;gap:8px;align-items:center"><span class="path">git switch main</span><span class="btn btn-outline">Copy</span>
+            <span style="color:var(--fg-3);font-size:12px;margin-left:auto">watching for the switch…</span></div>
+        </div>
+        ${promises({ brief: true })}`,
+      foot: `<div class="sealpress">${sealButton({ off: true })}<div style="color:var(--fg-3);font-size:12px">Unlocks when your checkout is on main.</div></div>`,
+    }) }),
+  notes: [
+    ['The idea', [
+      'The sheet watches for the fix and unlocks itself. You switch branches in your terminal and the seal comes alive — no reload, no "try again".',
+      'The exact command is offered to copy, not run: moving your checkout could strand uncommitted work.',
+    ]],
+    ['Data', [
+      'The refusal is built. Watching for the switch while a sheet is open is a small addition.',
+    ]],
+  ],
+},
+
+/* ═════════════════════════ THREAD ═════════════════════════ */
+{
+  group: 'Thread', title: 'A feature, as one timeline',
+  render: () => desk(`<div class="threadwrap">
+    <div style="display:flex;flex-direction:column;overflow:hidden">
+      ${featureThread({ upto: 4 })}
+      <div class="now">
+        <div style="display:flex;gap:12px;align-items:center"><span class="pulse"></span><b>Step 2 · Use it in the map layer</b>
+          <span class="crumb" style="margin-left:auto;font-variant-numeric:tabular-nums">writing the code · 1 m 12 s</span></div>
+        <div class="phases">${['d', 'd', 'd', 'd', 'n', '', ''].map(c => `<i class="${c}"></i>`).join('')}</div>
+        <div style="display:flex;gap:16px;font-size:12px;color:var(--fg-3);font-variant-numeric:tabular-nums">
+          <span>editing src/layer.ts</span><span>$0.21 so far</span><span style="margin-left:auto">Watch it work <span class="kbd">W</span></span></div>
+      </div>
+    </div>
+    <aside class="side2">
+      <div class="facts2"><span class="k">Steps</span>
+        ${[['Add a clustering helper', 'sealed'], ['Use it in the map layer', 'building'], ['Expose a clusterRadius option', 'needs your initials']]
+          .map(([t, s], i) => `<div style="display:flex;gap:8px"><span class="${i === 2 ? 'dot-seal' : 'dot-grey'}" style="margin-top:6px"></span><div><div>${t}</div><div style="color:${i === 2 ? 'var(--seal)' : 'var(--fg-3)'};font-size:12px">${s}</div></div></div>`).join('')}</div>
+      <div class="facts2"><span class="k">So far</span><span style="font-variant-numeric:tabular-nums">$0.83 · 3 runs · 1 repair</span></div>
+      <div class="facts2"><span class="k">Repo</span><span class="mono">~/code/cartographer</span></div>
+    </aside>
+  </div>`, { place: 'flow', title: FEAT, crumb: 'Flow' }),
+  notes: [
+    ['The idea', [
+      'A feature is a story over time, so it is drawn as one: asked, proposed, initialled, built, questioned, fixed, sealed. It replaces three separate screens about the same thing.',
+      'What is happening now is pinned at the bottom, like the latest message. Your events are solid dots; Signet’s are hollow.',
+    ]],
+  ],
+},
+
+{
+  group: 'Thread', title: 'Watch it work', tag: 'new',
+  render: () => desk(`<div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:24px;overflow:hidden">
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;gap:10px;align-items:center;color:var(--fg-3);font-size:12px"><span class="pulse"></span>Step 2 · Use it in the map layer · 1 m 40 s · $0.24</div>
+      <div class="intent">Making the new test pass: a cluster of one should draw as the marker itself.</div>
+      <div class="attack">
+        <div class="d">${tick()}<span>Find where markers are drawn</span><span class="crumb">drawMarker() in src/layer.ts</span></div>
+        <div class="d">${tick()}<span>Write a test for a cluster of one, and watch it fail</span><span class="crumb">failed, as intended</span></div>
+        <div class="c"><span class="o"></span><span>Make it pass</span><span class="crumb">now · 40 s</span></div>
+        <div><span class="o"></span><span>Run every test in the layer</span><span></span></div>
+        <div><span class="o"></span><span>Hand it to the checks</span><span></span></div>
+      </div>
+      <div class="tape">
+        <span>3:05:12 &nbsp;read <b>src/spatial.ts</b> — to reuse the quad-tree query</span>
+        <span>3:05:31 &nbsp;ran the layer tests — <b>1 failing</b>, the new one</span>
+        <span>3:05:48 &nbsp;editing <b>src/layer.ts</b> lines 41–49</span>
+      </div>
+    </div>
+    <div class="panel"><span class="k">Where it has been</span>
+      ${repoMap({ read: ['src/spatial.ts', 'src/cluster.ts', 'src/options.ts', 'src/index.ts'], wrote: ['src/layer.ts', 'src/layer.test.ts'] })}
+    </div>
+  </div>`, { place: 'flow', title: FEAT, crumb: 'Flow' }),
+  notes: [
+    ['The idea', [
+      'Watching an agent should be like looking over a colleague’s shoulder, not reading a log. The headline is what it is trying to do right now, in a sentence. Under it is its own plan of attack, ticking off.',
+      'The repo is drawn as a map, each file sized by its length. You see where it has been reading, what it has changed, and the fence around what it is allowed to change. Staying inside the lines is visible, not a promise.',
+      'The tape of recent actions is in plain words with the reason attached ("to reuse the quad-tree query"), not tool names.',
+    ]],
+    ['Behaviour', [
+      'Watching is optional and costs nothing — the Desk never asks you to watch. It exists for trust in the first weeks, and for curiosity.',
+    ]],
+    ['Data', [
+      'Claude Code already streams its own to-do list and every file it reads and edits; Signet reads that stream today but keeps only the tokens and the result. Surfacing it is new front-end work plus keeping those events.',
+    ]],
+  ],
+},
+
+{
+  group: 'Thread', title: 'It reached outside the fence', tag: 'new',
+  render: () => desk(`<div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:24px;overflow:hidden">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="thread">
+        ${ev({ tm: '3:04 pm', t: 'Writing the code' })}
+        ${ev({ tm: '3:05 pm', kind: 'ask', t: 'It wanted to change src/tiles.ts, outside this step’s fence' })}
+      </div>
+      <div class="now yours">
+        <div style="font-size:14px;line-height:1.6"><b>Why it wanted to:</b> tile coordinates are rounded in <span class="mono">src/tiles.ts</span>, so markers on a tile edge are counted twice and clusters come out one too big. It stopped instead of changing a file you had not agreed to.</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="choice" style="display:block;padding:10px 12px"><b>Widen the fence</b> to include src/tiles.ts · you initial the change · it carries on</div>
+          <div class="choice" style="display:block;padding:10px 12px"><b>Make it its own step</b> · “Fix tile-edge rounding” goes before this one</div>
+          <div class="choice" style="display:block;padding:10px 12px"><b>Stay inside</b> · find a way that only changes src/layer.ts</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel"><span class="k">Where it reached</span>
+      ${repoMap({ read: ['src/spatial.ts', 'src/cluster.ts', 'src/tiles.ts'], wrote: ['src/layer.ts'], hit: ['src/tiles.ts'] })}
+    </div>
+  </div>`, { place: 'desk', title: FEAT, crumb: 'Desk' }),
+  notes: [
+    ['The idea', [
+      'The fence is drawn and so is the reach: the file it wanted is lit in the seal colour, outside the dashed line. You understand what happened before you read a word.',
+      'It says why it wanted to — a real reason you can judge — and offers the three sensible ways forward. The second one, making it its own step, is usually the right answer and is easy to forget.',
+    ]],
+    ['Behaviour', [
+      'This changes current behaviour. Today, a plan that touches a file outside its fence fails the run outright and cannot be repaired. Here it becomes a question, and the work done so far is kept.',
+      'Widening the fence is a change to what you initialled, so it asks for your initials again — one click, recorded in the thread.',
+    ]],
+    ['Data', [
+      'Needs the scope check to raise a question with the offending path and the agent’s reason, instead of a non-recoverable error.',
+    ]],
+  ],
+},
+
+{
+  group: 'Thread', title: 'Signet stopped to ask you',
+  render: () => desk(`<div class="threadwrap"><div style="display:flex;flex-direction:column;overflow:hidden">
+    <div class="thread">
+      ${ev({ tm: '2:40 pm', kind: 'you', t: 'You initialled the plan · Handle empty tile responses' })}
+      ${ev({ tm: '2:44 pm', t: 'Writing the code', d: 'Found that the tile server returns 204 with no body for tiles outside its coverage.' })}
+      ${ev({ tm: '2:46 pm', kind: 'ask', t: 'Stopped to ask rather than guess' })}
+    </div>
+    <div class="now yours">
+      <div style="font-size:14px;line-height:1.6">An empty tile could mean <b>“nothing here”</b> (the sea) or <b>“try again”</b> (a flaky server). Treating the sea as flaky would retry forever; treating a flaky server as the sea would leave holes in the map.</div>
+      <div class="choice-row"><span class="choice">Skip it · it is empty</span><span class="choice">Retry twice, then skip</span><span class="choice">Retry forever</span></div>
+      <div class="composer" style="margin-top:4px;padding:8px 12px"><span class="ph">Or answer in your own words…</span></div>
+    </div></div>
+    <aside class="side2"><div class="facts2"><span class="k">Why it asked</span><span style="font-size:13px;line-height:1.55;color:var(--fg-2)">Both readings pass every check. Picking one would be a product decision made by the agent, silently.</span></div></aside>
+  </div>`, { place: 'desk', title: 'Tiles: survive empty responses', crumb: 'Desk', waiting: 3 }),
+  notes: [
+    ['The idea', [
+      'A question is a message in the thread, answered in place — seal colour because it is your move, not red, because nothing is broken.',
+      'Each answer’s consequence is in the sentence above it.',
+    ]],
+  ],
+},
+
+{
+  group: 'Thread', title: 'A check caught it, and it fixed itself',
+  render: () => desk(`<div class="threadwrap"><div style="display:flex;flex-direction:column;overflow:hidden">
+    <div class="thread">
+      ${ev({ tm: '3:03 pm', kind: 'you', t: 'You sealed step 1' })}
+      ${ev({ tm: '3:04 pm', t: 'Step 2 · wrote the code', d: 'src/layer.ts, src/layer.test.ts' })}
+      ${ev({ tm: '3:05 pm', t: 'Tests failed · 2 findings', d: '<span class="mono" style="font-size:12px">expected 3 clusters at zoom 4, got 4</span><br><span class="mono" style="font-size:12px">a cluster of one rendered as a cluster, not a marker</span>' })}
+      ${ev({ tm: '3:05 pm', t: 'Sent back to the agent with both findings', d: 'Repair 1 of 3. You were not asked — this is the checks doing their job.' })}
+      ${ev({ tm: '3:06 pm', t: 'Tests passed', d: 'Both fixed. The fix for clusters of one added a test, which shows up as proof when you seal.' })}
+    </div></div>
+    <aside class="side2"><div class="facts2"><span class="k">Repairs</span><span>1 of 3 used</span><span style="color:var(--fg-3);font-size:12px">After 3 it tries once from a clean copy, then stops and asks you.</span></div></aside>
+  </div>`, { place: 'flow', title: FEAT, crumb: 'Flow' }),
+  notes: [
+    ['The idea', [
+      'A failure the system fixed by itself is grey, because it needed nothing from you. Nothing turns colour until something genuinely does.',
+    ]],
+  ],
+},
+
+/* ═════════════════════════ FLOW ═════════════════════════ */
+{
+  group: 'Flow', title: 'Everything in motion · the canal', tag: 'new',
+  render: () => desk(`
+    <div class="subnav" style="margin:0"><span class="tab on">In motion</span><span class="tab">Ledger</span></div>
+    <div class="canal"><div class="band"></div>
+      <div class="reach"><h4><span>Being planned</span><span>2</span></h4><div class="sub">Signet reads the repo and proposes.</div>
+        <div class="water">
+          <div class="boat"><span>Retina tile support</span><span class="f">reading the repo</span><span class="bar"><i style="width:40%"></i></span></div>
+          <div class="boat yours"><span>Expose a clusterRadius option</span><span class="f">${FEAT}</span><span class="f w">waiting for your initials</span></div>
+        </div></div>
+      <div class="gate"><span class="lk">${ICON.pen}</span><span class="doors"><i></i><i></i></span><span class="gl">you<br>initial</span></div>
+      <div class="reach"><h4><span>Building and checking</span><span>4</span></h4><div class="sub">Nobody needs to watch. Checks send work back until it passes.</div>
+        <div class="water">
+          <div class="boat" style="align-self:flex-start"><span>Audit exports</span><span class="f">Public API</span><span class="bar"><i style="width:25%"></i></span></div>
+          <div class="boat" style="align-self:center"><span>Cache tile headers</span><span class="f">Tiles: speed · repair 1</span><span class="bar"><i style="width:60%"></i></span></div>
+          <div class="boat" style="align-self:center"><span>Handle 404 tiles</span><span class="f">Tiles: resilience · checking</span><span class="bar"><i style="width:85%"></i></span></div>
+          <div class="boat yours"><span>Use it in the map layer</span><span class="f">${FEAT}</span><span class="f w">3 of 3 proven · waiting for your seal</span></div>
+        </div></div>
+      <div class="gate"><span class="lk">${ICON.lock}</span><span class="doors"><i></i><i></i></span><span class="gl">you<br>seal</span></div>
+      <div class="reach"><h4><span>On main today</span><span>3</span></h4><div class="sub">Merged, never pushed.</div>
+        <div class="water">
+          <div class="boat done">${sealMark({ size: 28, rim: '' })}<span>Add a clustering helper</span></div>
+          <div class="boat done">${sealMark({ size: 28, rim: '' })}<span>Fix zoom rounding</span></div>
+          <div class="boat done">${sealMark({ size: 28, rim: '' })}<span>Changelog script</span></div>
+        </div></div>
+    </div>`, { place: 'flow', title: 'Flow' }),
+  notes: [
+    ['The idea', [
+      'Work flows like water through a canal, on its own, and there are exactly two locks — only you can open them. Things waiting for you visibly pile up against a gate. The product’s whole promise, "built between two signatures", is the shape of the screen.',
+      'Replaces a six-column board. The board said the same thing, but as six equal columns it treated your two gates like any other stage. Here the gates are architecture.',
+      'Anything pressed against a gate is outlined in the seal colour. Everything in open water is grey, because it is moving by itself.',
+    ]],
+    ['Layout', [
+      'Boats in open water show a thin progress line. Boats at a gate show what they are waiting for instead — they are not progressing.',
+      'Sealed work leaves on the right carrying its seal, and goes on to the ledger.',
+    ]],
+    ['Behaviour', [
+      'Nothing can be dragged through a gate. Clicking a boat at a gate opens its sheet; clicking one in open water opens "Watch it work".',
+    ]],
+  ],
+},
+
+{
+  group: 'Flow', title: 'The ledger', tag: 'new',
+  render: () => desk(`
+    <div class="subnav" style="margin:0"><span class="tab">In motion</span><span class="tab on">Ledger</span></div>
+    <div class="ledger">
+      <div class="lrow"><span>${sealMark({ size: 36, rim: '' })}</span><div><div>Use it in the map layer</div><div class="f">${FEAT}</div></div><span class="f">3 of 3 proven · 1 repair</span><span class="m">7c41e0a</span><span class="r">3:14 pm</span><span class="r">$0.62</span></div>
+      <div class="lrec">
+        <div class="steps2">
+          <span><b>Asked</b> 2:51 pm · version 2, with your answer about clusters of one</span>
+          <span><b>Initialled</b> by V. Meena · 2:58 pm</span>
+          <span><b>Built</b> in one run · tests sent it back once · 1 m 58 s</span>
+          <span><b>Sealed</b> by V. Meena · 3:14 pm · every promise proven</span>
+          <span><b>Landed</b> on main as merge commit 7c41e0a · not pushed</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+          <span class="btn btn-outline">${ICON.undo}Take it back</span>
+          <span style="font-size:12px;color:var(--fg-3);line-height:1.5">Makes a revert commit you seal like any change. “Expose a clusterRadius option” was built on top of this and would go with it — you see both before anything happens.</span>
+        </div>
+      </div>
+      <div class="lrow"><span>${sealMark({ size: 36, rim: '' })}</span><div><div>Add a clustering helper</div><div class="f">${FEAT}</div></div><span class="f">2 of 2 proven</span><span class="m">3b9d2f1</span><span class="r">3:03 pm</span><span class="r">$0.21</span></div>
+      <div class="lrow"><span>${sealMark({ size: 36, rim: '', trust: true })}</span><div><div>Fix zoom rounding</div><div class="f">Map core</div></div><span class="f" style="color:var(--seal)">1 of 2 proven · 1 on trust</span><span class="m">a02c7e4</span><span class="r">11:52 am</span><span class="r">$0.34</span></div>
+      <div class="lrow"><span>${sealMark({ size: 36, rim: '' })}</span><div><div>Changelog script</div><div class="f">Tooling</div></div><span class="f">1 of 1 proven</span><span class="m">e81b09c</span><span class="r">10:30 am</span><span class="r">$0.18</span></div>
+    </div>`, { place: 'flow', title: 'Flow' }),
+  notes: [
+    ['The idea', [
+      'Every sealed change is kept as a record you can read in five lines: who asked, who initialled, how it was built, who sealed it, where it landed. It answers "why is this code here" months later.',
+      'A seal on trust is drawn as a dashed outline — permanently different from a proven seal. You can find every promise that was never tested by scanning for hollow seals.',
+      '"Take it back" lives on the record, with the consequence said before you press it, including anything built on top.',
+    ]],
+    ['Data', [
+      'Everything shown is recorded today except "on trust", which arrives with the promise-by-promise seal sheet.',
+    ]],
+  ],
+},
+
+/* ═════════════════════════ WORKSHOP ═════════════════════════ */
+{
+  group: 'Workshop', title: 'Conventions, decided in batches',
+  render: () => desk(`
+    <div class="subnav" style="margin:0"><span class="tab on">Conventions</span><span class="tab">Routines</span><span class="tab">Health</span></div>
+    <div style="font-size:14px;color:var(--fg-2);max-width:70ch;line-height:1.6">Patterns Signet read out of your code. None is enforced until you accept it, and accepted ones only warn.</div>
+    <div class="inbox">
+      ${[
+        ['Tests sit beside their module', '14 of 14 modules', 'Every module in src/ has a sibling .test.ts. Nothing in a __tests__ folder.', 100],
+        ['Use the colour token, not the literal', '41 uses · 3 exceptions', 'src/theme.ts declares the map ink colour. Three files write the literal directly.', 93],
+        ['One options object per module', '4 of 4', 'Every options file exports a single validated object.', 100],
+      ].map(([t, e, why, pct]) => `<div class="dec" style="grid-template-columns:minmax(0,1fr) 160px auto">
+        <div style="min-width:0"><div class="what">${t}</div><div class="why">${why}</div></div>
+        <div><div class="meta" style="margin:0 0 4px">${e}</div><div class="meter" style="width:100%"><i style="width:${pct}%"></i></div></div>
+        <div class="acts"><span class="btn btn-outline">Accept</span><span class="btn btn-outline">Not this</span></div></div>`).join('')}
+    </div>
+    <div style="display:flex;gap:12px;align-items:center"><span class="btn btn-secondary">Accept the 2 with no exceptions</span><span style="color:var(--fg-3);font-size:12px">Strongest evidence first</span></div>`,
+  { place: 'workshop', title: 'Workshop' }),
+  notes: [
+    ['The idea', [
+      'Evidence is drawn, not just counted. Batch action for the obvious ones — a queue that can only be cleared card by card is a queue nobody clears.',
+    ]],
+  ],
+},
+
+{
+  group: 'Workshop', title: 'Routines, written as sentences',
+  render: () => desk(`
+    <div class="subnav" style="margin:0"><span class="tab">Conventions</span><span class="tab on">Routines</span><span class="tab">Health</span></div>
+    <div class="inbox" style="padding:24px 28px">
+      <div class="sentence">
+        Every <span class="slot">night at 3:00</span>, <span class="slot">cover an untested module</span>
+        in <span class="slot">cartographer</span>, build <span class="slot">the first step</span>,
+        then <span class="slot stop">wait for my seal</span>.
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--line-1)">
+        <span class="btn btn-primary">Switch on</span><span class="btn btn-outline">Run it once now</span>
+        <span style="color:var(--fg-3);font-size:12px;margin-left:auto">Saved switched off · a routine nobody armed never fires</span></div>
+    </div>
+    <div class="inbox">
+      <div class="dec" style="grid-template-columns:20px minmax(0,1fr) auto"><span class="dot-grey"></span>
+        <div><div class="what">Last night, 3:00 am</div><div class="why">Proposed and built “Cover src/tiles.ts”. It is at your seal.</div></div>
+        <span class="crumb">$0.38</span></div>
+      <div class="dec" style="grid-template-columns:20px minmax(0,1fr) auto"><span class="dot-grey"></span>
+        <div><div class="what">Two nights ago, 3:00 am</div><div class="why">Nothing needed doing — every module in src/ already had a sibling test file.</div></div>
+        <span class="crumb">no cost beyond the read</span></div>
+    </div>`, { place: 'workshop', title: 'Workshop' }),
+  notes: [
+    ['The idea', [
+      'A routine is a sentence you can read aloud, with the changeable parts as slots. The last slot is always "wait for my seal", in the seal colour, and cannot be removed: a routine initials for you, and never seals for you.',
+    ]],
+    ['Behaviour', [
+      'Only the first step is built per firing, so one night cannot spend a whole quota. Finding nothing to do is reported, in grey, as the system working.',
+    ]],
+  ],
+},
+
+{
+  group: 'Workshop', title: 'Health',
+  render: () => desk(`
+    <div class="subnav" style="margin:0"><span class="tab">Conventions</span><span class="tab">Routines</span><span class="tab on">Health</span></div>
+    <div class="now yours" style="margin-top:0"><div style="display:flex;gap:12px;align-items:center"><span class="dot-seal"></span><b>Nothing can start: the workspaces folder is not writable</b></div>
+      <div style="font-size:13px;color:var(--fg-2);line-height:1.6">Signet makes its own copy of your repo there for every step. Fix the folder; everything already on main is unaffected.</div>
+      <div style="display:flex;gap:8px"><span class="path">chmod u+w ~/.signet/workspaces</span><span class="btn btn-outline">Copy</span></div></div>
+    <div class="inbox">
+      ${[
+        [true, 'Database', 'PostgreSQL 18.4'], [true, 'Your repo', '~/code/cartographer · on main at 4f2ab19'],
+        [true, 'Claude Code', '2.1.282 · your subscription login'], [false, 'Workspaces folder', 'not writable · ~/.signet/workspaces'],
+        [true, 'Checks on main', 'types, lint and tests all pass on main as of 9:02 am'],
+      ].map(([ok, k, v]) => `<div class="dec" style="grid-template-columns:20px 200px minmax(0,1fr)"><span class="${ok ? 'dot-grey' : 'dot-seal'}"></span>
+        <div class="what" style="font-size:14px">${k}</div><div class="why" style="margin:0;${ok ? '' : 'color:var(--seal)'}">${v}</div></div>`).join('')}
+    </div>`, { place: 'workshop', title: 'Workshop' }),
+  notes: [
+    ['The idea', [
+      'Healthy lines are grey; the one broken line is the seal colour. Each line is a fact with its value, not a tick beside "OK".',
+      '"Checks on main" is re-run each morning, so a check that stops working on its own is caught before it blames a step.',
+    ]],
+  ],
+},
+
+/* ═════════════════════════ ANYWHERE ═════════════════════════ */
+{
+  group: 'Anywhere', title: 'The command bar', tag: 'reworked',
+  render: () => desk(`${flowstrip()}<div class="inbox" style="opacity:.35;height:200px"></div>`, {
+    place: 'desk', title: 'Desk',
+    overlay: `<div class="sheet-wrap" style="justify-content:center;background:var(--overlay)"><div class="cmdk">
+      <div class="q">seal<span style="color:var(--fg-3)">|</span></div>
+      <div class="grp">Waiting for you</div>
+      <div class="it on">${ICON.lock}<span>Seal “Use it in the map layer”</span><span class="kbd">↵</span></div>
+      <div class="it">${ICON.lock}<span>Go through everything waiting · 3</span></div>
+      <div class="grp">Do</div>
+      <div class="it">${ICON.plus}<span>Ask for something new</span><span class="kbd">N</span></div>
+      <div class="it">${ICON.pause}<span>Hold everything</span></div>
+      <div class="it">${ICON.wrench}<span>Pause routines</span></div>
+      <div class="grp">Go to</div>
+      <div class="it">${ICON.undo}<span>Ledger · take something back</span></div>
+    </div></div>` }),
+  notes: [
+    ['The idea', [
+      'Everything is reachable from one bar (K), with what is waiting on you first. Enter on a seal opens its sheet — the bar gets you to decisions fast, never past the proof.',
+    ]],
+  ],
+},
+
+{
+  group: 'Anywhere', title: 'Seal from your phone', phone: true, tag: 'reworked',
+  render: () => {
+    const phoneShell = (inner) => `<div class="phone" style="background:var(--ink-0);color:var(--fg-1)"><div class="status-bar"><span>9:04</span><span></span></div>${inner}</div>`;
+    return `<div style="display:flex;gap:24px;justify-content:center;align-items:flex-start;padding:16px">
+      ${phoneShell(`<div class="pbody" style="padding:8px"><div style="text-align:center;padding:48px 0 32px;color:var(--fg-2)"><div style="font-size:72px;font-weight:300;color:var(--fg-1);line-height:1;font-variant-numeric:tabular-nums">9:04</div><div style="margin-top:8px">Tuesday 29 September</div></div>
+        <div class="notif"><span class="appicon">S</span>
+        <div style="font-size:13px;line-height:1.45"><b>3 waiting for your seal</b><div style="color:var(--fg-2)">Built overnight. Nothing reached main without you.</div></div></div></div>`)}
+      ${phoneShell(`<div class="pbody" style="padding:16px;display:flex;flex-direction:column;gap:12px;height:100%">
+        <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--seal)">Seal · 1 of 3</div>
+        <div style="font-family:var(--sign);font-size:26px;line-height:1.15">Seal “Expose a clusterRadius option”</div>
+        <div style="font-size:12px;color:var(--fg-2)">2 files · +22 −1 · built 7:05 pm</div>
+        <div class="crit">${['Defaults to 60', 'Rejects a radius that is not a positive number', 'Existing maps are unaffected']
+          .map(c => `<div class="crit-row" style="grid-template-columns:22px minmax(0,1fr)">${tick()}<div class="claim">${c}</div></div>`).join('')}</div>
+        <div style="font-size:12px;color:var(--fg-3)">Lands on main · not pushed · can be taken back</div>
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:12px;align-items:center">
+          ${sealButton({ pct: 64 })}
+          <div style="font-size:12px;color:var(--fg-3)">Press and hold</div>
+          <span class="btn btn-outline" style="justify-content:center;min-height:44px;align-self:stretch">See the change</span></div>
+      </div>`)}
+    </div>`;
+  },
+  notes: [
+    ['The idea', [
+      'The agent works while you are away; sealing is the part that can happen from anywhere. The lock-screen line repeats the morning promise — nothing reached main without you — because that is what makes an overnight notification calm rather than alarming.',
+      'The phone leads with the promises and their proof and puts the seal under your thumb. A diff is unreadable on a phone; a list of proven promises is not.',
+    ]],
+    ['Open question', [
+      'Signet runs on your machine. Reaching it from a phone means exposing it beyond localhost — a tunnel you control, or a relay. Which, and who holds the keys?',
+    ]],
+  ],
+},
+];
+
+const SCREENS = [...SCREENS_A, ...SCREENS_B];
+
+/* ── Gallery behaviour ──────────────────────────────────────────────────── */
+const frame = document.getElementById('frame');
+const fit = document.getElementById('fit');
+let current = 0;
+
+function buildIndex() {
+  const groups = [];
+  SCREENS.forEach((s, i) => {
+    let g = groups.find((x) => x.name === s.group);
+    if (!g) groups.push((g = { name: s.group, items: [] }));
+    g.items.push([i, s.title, s.tag]);
+  });
+  document.getElementById('index-groups').innerHTML = groups.map((g) => `
+    <div><div class="group-label">${esc(g.name)}</div><ol>
+      ${g.items.map(([i, t, tag]) => `<li><button type="button" data-i="${i}"><span class="code">${String(i + 1).padStart(2, '0')}</span><span>${esc(t)}</span>${tag ? `<span class="newtag ${tag === 'new' ? 'n' : ''}">${tag}</span>` : ''}</button></li>`).join('')}
+    </ol></div>`).join('<div style="height:12px"></div>');
+  document.querySelectorAll('.index button').forEach((b) => b.addEventListener('click', () => show(Number(b.dataset.i))));
+}
+
+function scaleFrame() {
+  const natural = frame.classList.contains('phone-pair') ? 860 : 1280;
+  const s = Math.min(1, fit.clientWidth / natural);
+  frame.style.transform = `scale(${s})`;
+  fit.style.height = `${frame.offsetHeight * s}px`;
+}
+
+function show(i) {
+  current = (i + SCREENS.length) % SCREENS.length;
+  const s = SCREENS[current];
+  frame.className = 'frame' + (s.phone ? ' phone-pair' : '');
+  frame.innerHTML = s.render();
+  document.getElementById('screen-eyebrow').textContent = `${s.group} · ${current + 1} of ${SCREENS.length}`;
+  document.getElementById('screen-title').textContent = s.title;
+  document.getElementById('notes').innerHTML = (s.notes || []).map(([h, items]) => `
+    <div class="note"><h3>${esc(h)}</h3><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+  document.querySelectorAll('.index button').forEach((b) => b.setAttribute('aria-current', String(Number(b.dataset.i) === current)));
+  try { localStorage.setItem('signet-reimagined', String(current)); } catch (e) {}
+  requestAnimationFrame(scaleFrame);
+}
+
+document.getElementById('prev').addEventListener('click', () => show(current - 1));
+document.getElementById('next').addEventListener('click', () => show(current + 1));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') show(current + 1);
+  if (e.key === 'ArrowLeft') show(current - 1);
+});
+new ResizeObserver(scaleFrame).observe(fit);
+
+buildIndex();
+let start = 0;
+try { start = Number(localStorage.getItem('signet-reimagined')) || 0; } catch (e) {}
+// A plain #f7 in the link opens frame 7, so a single frame can be shared.
+const deep = /^#f(\d+)$/.exec(location.hash);
+if (deep) start = Number(deep[1]) - 1;
+show(start);
+</script>

@@ -1,218 +1,203 @@
-# Signet
+<div align="center">
 
-**A feature built between two human signatures.**
+<img src=".github/readme/banner.png" alt="Signet: built between two signatures" width="100%">
 
-You say what you want. Signet reads your repository, proposes how to break the work
-up, writes the code, and runs every check. You sign twice: once on the plan, once on
-the diff. Nothing reaches your branch without the second signature.
+<br>
 
-It drives **your** Claude Code installation and subscription. Signet never holds an
-API key.
+**Say what you want built. Signet plans it, writes it and checks it on its own.<br>Nothing reaches your main branch until you seal it.**
 
+<br>
+
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-0c0c0e?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![NestJS 12](https://img.shields.io/badge/NestJS-12-0c0c0e?logo=nestjs&logoColor=white)](https://nestjs.com)
+[![React 19](https://img.shields.io/badge/React-19-0c0c0e?logo=react&logoColor=61dafb)](https://react.dev)
+[![Postgres with Prisma](https://img.shields.io/badge/Postgres-Prisma_7-0c0c0e?logo=postgresql&logoColor=white)](https://www.prisma.io)
+[![Your Claude Code](https://img.shields.io/badge/engine-your_own_Claude_Code-0c0c0e)](https://claude.com/claude-code)
+<br>
+[![Status: early](https://img.shields.io/badge/status-early,_used_by_one_person-e6a53a)](#how-far-to-trust-it)
+[![Runs on your machine](https://img.shields.io/badge/runs-on_your_machine,_never_pushes-e6a53a)](#the-rules-it-keeps)
+[![No API key](https://img.shields.io/badge/API_keys-none,_ever-e6a53a)](#the-rules-it-keeps)
+
+[What it does](#what-it-does) · [The rules it keeps](#the-rules-it-keeps) · [How it works](#how-it-works) · [Run it yourself](#run-it-on-your-machine) · [The wireframes](design)
+
+</div>
+
+<br>
+
+<p align="center">
+  <img src=".github/readme/screens.png" alt="Three screens: initialling a plan, the sealed step with each promise beside the test that proves it, and the ledger of sealed work" width="100%">
+</p>
+
+## Why Signet
+
+Coding agents are good at the middle of the work: reading the code, writing the change, running the tests, fixing what the tests catch. They are bad at the two ends. At the start, nobody has agreed what "done" means. At the finish, a green check is taken as proof that the work is right. The agent also tends to decide things nobody asked it to decide, quietly, somewhere along the way.
+
+Signet does the middle on its own and keeps the two ends for you. **You initial a plan** before anything is spent: which steps, which files each may change, and what each one promises. **You seal the work** before it lands: every promise is shown beside the test that proves it. A promise with no test is shown as unproven, however green the checks are. Between the two, a step that wants to change a file outside its plan, or has to choose between two answers that would both pass, stops and asks you.
+
+A *signet* is a seal ring. The irreversible gesture in the product is a seal you press and hold, and it leaves a stamp with the date, the time and the commit.
+
+## What it does
+
+| | |
+|---|---|
+| **Ask in plain words** | Describe the outcome. Signet surveys the repository, asks what it would otherwise have to guess (with its own answer already picked), then proposes steps. |
+| **A plan you can argue with** | Each step says why it is its own step, which files it may change (drawn as a *fence*), what it promises, and anything it is still unsure of. You can drag files between fences and cut a step in two. |
+| **Initial the plan** | One click, with a likely cost from the steps already built in that repo. Nothing has been spent until you initial it. |
+| **Builds in its own copy** | Each step gets its own git worktree and branch. Your checkout is never touched. |
+| **Six checks** | Types, lint, tests, design, conventions, and **promises**. A new test must fail on the old code and pass on the new, or it proves nothing about the change. |
+| **Watch it work** | The agent's own to-do list, what it just did, and a map of the files it read and changed, with the fence drawn round what it may change. |
+| **Stops to ask** | If it needs a file outside the fence, you choose: let it, make it a separate step, or stay inside. If it has to choose between answers that would both pass, it asks you instead of guessing. |
+| **Seal the work** | Every promise beside its test and the lines that do it. Press and hold to land it as one merge commit. Sealing a step whose promises are not all proven is allowed, "on trust", and recorded as such. |
+| **Send it back with a note** | Click a line in the change, write what you would say in a code review, and send it back for one repair. |
+| **Take it back** | Any sealed change can be taken back. The revert is a new step you seal, and history is never rewritten. |
+| **The Desk** | Only the decisions waiting on you. After a long absence, a morning page says what happened while you were away. |
+| **Routines as sentences** | "Every night at 3:00, cover an untested module in cartographer, build the first step, then wait for my seal." A routine can start work, but it can never seal it. |
+
+<p align="center">
+  <img src=".github/readme/canal.png" alt="Flow: work drifting through a canal with two gates, one for your initials and one for your seal. Work waiting on you is outlined in amber against the gates." width="100%">
+</p>
+
+## The rules it keeps
+
+- **Nothing reaches main without your seal.** Only a person merges. A routine can initial a plan and start it, and then it waits.
+- **Your subscription, never an API key.** Signet drives the Claude Code you already have installed and signed in.
+- **It never pushes, and never moves your checkout.** It merges into your local main branch, and refuses if that repo is on another branch.
+- **A fence is a hard limit.** Nothing outside a step's files is changed without you saying so.
+- **Green is not proof.** Each promise needs a test that was added in the change. A promise without one is shown as unproven, and sealing it anyway is recorded.
+- **Colour means you.** The console is black and white except for one amber, used only where your move is needed.
+
+## How far to trust it
+
+> [!IMPORTANT]
+> **Signet is early.** One person uses it, on their own machine. It has taken real features end to end, from a request in plain words to a merge commit: on its demo repository, and on a published npm package whose tests pass on main afterwards. The console was redesigned from scratch on 28 September 2026 to match [the wireframes](design). The frame-by-frame check that it matches is tracked in [`docs/wireframe-build.md`](docs/wireframe-build.md).
+
+What it does not do yet:
+
+- **Push.** GitHub repositories can be planned against, but not merged into, because landing work there means pushing.
+- **Reach your phone.** The console has a phone layout, but Signet only listens on your own machine. How a phone should reach it (a tunnel you control, or a relay) has not been decided.
+- **Judge how good a test is.** The promises check proves the named test was added in this change and that the suite passed. It does not prove the test asserts the promise well. That is still yours to read at the seal.
+
+## How it works
+
+```mermaid
+flowchart LR
+  YOU(("You")) -->|asks, in plain words| ASK["Ask<br/>survey, questions, proposal"]
+  ASK --> PLAN["A plan<br/>steps, fences, promises"]
+  YOU -->|initials| PLAN
+  PLAN --> WT["Its own copy<br/>git worktree + branch"]
+  WT --> AGENT["Your Claude Code<br/>writes the change"]
+  AGENT --> CHECKS["Six checks<br/>types · lint · tests<br/>design · conventions · promises"]
+  CHECKS -->|a check fails: up to 3 repairs| AGENT
+  AGENT -.->|needs a file outside the fence,<br/>or a choice it cannot make| YOU
+  CHECKS --> SEAL["The seal<br/>promises beside their proof"]
+  YOU -->|presses and holds| SEAL
+  SEAL -->|git merge --no-ff| MAIN[("Your main branch")]
+  MAIN --> LEDGER["The ledger"]
+  LEDGER -.->|take it back: a revert you seal| SEAL
 ```
-you describe it
-     │
-     ▼
-  ┌─────────────────┐
-  │ Signet reads    │  surveys the repo, proposes steps and the files each may touch
-  │ your repo       │
-  └────────┬────────┘
-           ▼
-     ✍ signature 1 ─── you approve the plan ─── nothing has run or cost anything yet
-           │
-           ▼
-  ┌─────────────────┐
-  │ writes the code │  in its own worktree, on its own branch
-  │ runs 5 checks   │  types · lint · tests · design · conventions
-  └────────┬────────┘
-           │  a failing check goes back to the agent, up to 3 times
-           ▼
-     ✍ signature 2 ─── you review the diff and merge ─── a real `git merge --no-ff`
+
+Everything Signet records lives in Postgres: features, steps, runs, checks, questions, and the timeline of what happened when. What the agent was given, and everything it did, is kept beside each run on disk, so "what did it know?" and "what did it touch?" always have an answer. Nothing leaves your machine except what your own Claude Code sends.
+
+| Part | What it uses |
+|---|---|
+| Core | [NestJS 12](https://nestjs.com), TypeScript in strict mode. Runs, checks, the merge, and the API |
+| Console | [React 19](https://react.dev) with [Vite](https://vite.dev): three places (Desk, Flow, Workshop) and one verb (Ask) |
+| Contracts | Every shape that crosses a boundary is a [zod](https://zod.dev) schema first, and a TypeScript type inferred from it |
+| Database | Postgres through [Prisma 7](https://www.prisma.io). For local use, an embedded Postgres on port 5765 that starts itself |
+| Agent | Your own [Claude Code](https://claude.com/claude-code), run headless, one copy of the repo per step |
+| Guard rails | `tooling/policy`: boundary and invariant checks that fail the build |
+
+## Run it on your machine
+
+You need Node.js 24.11 or newer, pnpm 11, and the `claude` command on your `PATH`, signed in. Signet uses your subscription, not an API key.
+
+```bash
+git clone https://github.com/vishalmeena2211/signet.git && cd signet
 ```
-
----
-
-## Why it works this way
-
-Most agent runners optimise for how much they can do without you. Signet optimises
-for the two moments where your judgement is worth more than throughput, and makes
-everything in between boring.
-
-**Signature 1 approves spending.** Nothing has cost anything when you press it.
-
-**Signature 2 approves code landing.** You see the diff, every check verdict, the
-acceptance criteria the agent was aiming at, and which version of your request it
-was built from. Nobody should sign blind.
-
-The consequence worth stating: automation can reach signature 2, and never past it.
-A scheduled workflow will prepare work, start it, run the checks and then stop —
-waiting for you. That is the whole reason it is safe to leave switched on.
-
-## The five checks
-
-Every step must pass all of them before it can ask for your signature.
-
-| Check | Blocks? | What it means |
-| --- | --- | --- |
-| **types** | yes | `tsc --noEmit` is clean |
-| **lint** | yes | your lint rules pass on the changed files |
-| **tests** | yes | the suite passes, **and** new tests fail against the old code |
-| **design** | yes | the change matches a design of record you approved |
-| **conventions** | warns | rules Signet learned from your codebase |
-
-The tests check is the unusual one. It is not enough that tests pass — a new test
-must **fail against the base commit**, or it proves nothing about the change. A test
-that passes before your change is not testing your change.
-
-That rule applies only when a source file also changed. A behaviour-preserving
-refactor passes before and after by definition, and demanding otherwise would block
-every refactor and every addition of coverage to code that already works.
-
-## Quick start
-
-**Requires** Node 24.11+, pnpm 11.25, and a working `claude` CLI on your `PATH`
-(signed in — Signet uses your subscription, not an API key).
 
 ```bash
 pnpm install
+```
+
+```bash
 pnpm console
 ```
 
-One command. It starts an embedded Postgres, applies migrations, builds whatever is
-stale, and serves the console and API together on **http://127.0.0.1:4700**.
-
-Then: **New feature** → pick a repo → describe the outcome → **Propose a plan**.
-
-No environment variables needed. It defaults to a demo repository under
-`~/.signet/` so you can watch a feature go end to end before pointing it at
-anything you care about.
+Then open http://127.0.0.1:4700. That one command starts the database, applies migrations, builds whatever is out of date, and serves the console and the API together. With no settings at all it points at a demo repository under `~/.signet/`, so you can watch a feature go end to end before trusting it with a repo you care about.
 
 <details>
-<summary>Configuring it properly</summary>
+<summary>Settings</summary>
 
-| Variable | Default | What |
-| --- | --- | --- |
-| `SIGNET_TARGET_REPO_PATH` | `~/.signet/demo-repo` | the repo used when a feature does not name its own |
-| `SIGNET_DATABASE_URL` | embedded Postgres on 5765 | state lives here |
-| `SIGNET_WORKSPACES_ROOT` | `~/.signet/workspaces` | one git worktree per step |
-| `SIGNET_PACKS_ROOT` | `~/.signet/packs` | what each run was told, kept for audit |
-
-A feature can target any **local** git repo, chosen per feature in the UI. Your
-GitHub repositories are listed too, but marked **plan only**: Signet can survey and
-plan against one, and cannot merge into it, because merging means pushing.
+| Variable | Default | What it sets |
+|---|---|---|
+| `SIGNET_TARGET_REPO_PATH` | `~/.signet/demo-repo` | The repo used when a request does not name one |
+| `SIGNET_DATABASE_URL` | embedded Postgres on 5765 | Where everything is recorded |
+| `SIGNET_WORKSPACES_ROOT` | `~/.signet/workspaces` | One working copy per step |
+| `SIGNET_PACKS_ROOT` | `~/.signet/packs` | What each run was given, and what it did |
 
 </details>
 
-## The console
+`pnpm check` is the bar for a change: build, types, lint, the policy checks and every test. Set `SIGNET_DATABASE_URL` so the database tests run rather than skip.
 
-Eight screens, each answering one question.
+## Repository layout
 
-| Screen | Answers |
-| --- | --- |
-| **Overview** | what needs me, and what is running |
-| **Work** | everything being built, with each feature's steps as a strip |
-| **Runs** | every attempt and how it went |
-| **Rules** | what Signet learned from your code, pending your confirmation |
-| **Graph** | how those learnings connect |
-| **Automations** | saved requests, and what runs them on a schedule |
-| **Activity** | what the system has been doing |
-| **System** | how this copy is configured, and whether it is healthy |
+| Folder | What is in it |
+|---|---|
+| [`apps/core`](apps/core) | The core: runs, checks, merging, and the API. It also serves the console |
+| [`packages/ui`](packages/ui) | The console |
+| [`packages/contracts`](packages/contracts) | Every shape shared between the two |
+| [`tooling/policy`](tooling/policy) | Checks that keep the layers and invariants honest |
+| [`design`](design) | The wireframes: one frame for each situation you can be in, with build notes under each. Open `signet-wireframes.html` in a browser |
+| [`docs`](docs) | The frame-by-frame record of building the console from those wireframes |
 
-A run is drawn as a pipeline: each phase with its duration, the five checks as
-parallel branches, and a repair loop as an arrow going *backwards* rather than a
-number. The last node is your merge, and it has no outgoing edge.
+Versions are pinned, with the reason for each, in [`VERSIONS.md`](VERSIONS.md).
 
-## Automations
+## Roadmap
 
-A **recipe** is a saved request. Leave `{{blanks}}` in it and it is a template you
-fill in; leave none and it is one click. A **workflow** is an ordered set of recipes
-plus a trigger — a schedule, or something happening inside Signet.
+- [x] Plans proposed from a survey of your repo, not typed by you
+- [x] Initial and seal, with a real `git merge --no-ff`
+- [x] Six checks, including tests that must fail on the old code
+- [x] Each promise paired with the test that proves it
+- [x] The agent stops and asks, instead of crossing a fence or guessing
+- [x] Notes on lines, take it back, routines, the morning page
+- [x] The console rebuilt from the wireframes
+- [ ] Every frame checked against its wireframe
+- [ ] Pushing, so GitHub repositories can be finished, not only planned
+- [ ] Reaching Signet from a phone, safely
+- [ ] Knowing which promise's proof came from a repair
 
-Four guards, written before anything ran rather than after something ran away:
+## Contributing
 
-- **A kill switch** for all automation, separate from pausing the pipeline. One stops
-  work from *running*; the other stops work from being *created*.
-- **A depth limit.** An event-triggered workflow can cause the event it listens for.
-- **No self-retrigger.** A workflow never fires on an event its own run produced.
-- **Templates are refused.** Unattended means nobody is there to fill in a blank.
+Start with the wireframes. A change to a screen is drawn in [`design/`](design) first, with notes saying what it needs from the backend, and then built. Keep the words plain: the console talks about steps, promises and seals, not increments, gates and escalations. `pnpm check` must pass.
 
-Only the **first** step of a feature is started, so one trigger cannot consume a
-whole quota window. And every refusal is recorded with its reason: a skip that leaves
-no trace is indistinguishable from never having fired.
+## Credits
 
-## Architecture
+Signet stands on other people's work, and names it:
 
-One **master** and many **ephemeral workers** that never talk to each other.
+- **[Claude Code](https://claude.com/claude-code)**, which does the writing, run with your own subscription.
+- **Fonts:** [Geist and Geist Mono](https://vercel.com/font) by Vercel, and [Instrument Serif](https://fonts.google.com/specimen/Instrument+Serif), all under the SIL Open Font Licence and bundled through [Fontsource](https://fontsource.org).
+- **Icons** drawn in the geometry of [Lucide](https://lucide.dev) (ISC licence).
 
-```
-apps/core            the master — runtime, gates, learner, API, serves the console
-packages/contracts   the spine: every cross-boundary shape as a zod schema
-packages/ui          the console, a React app
-tooling/policy       boundary and invariant checks that fail the build
-```
+## Licence
 
-`packages/contracts` is load-bearing. Every shape that crosses a boundary is a zod
-schema first and a TypeScript type second, inferred, never written twice. State
-payloads are validated at the persistence boundary: the database stores, contracts
-decide.
+There is no licence yet. This repository is private, and all rights are reserved until one is chosen.
 
-A run walks seven phases, and can be resumed from any of them after a crash:
+## Words used here
 
-```
-ASSEMBLE_PACK → CREATE_WORKSPACE → AGENT_PLAN → SCOPE_CHECK → AGENT_IMPLEMENT → GATES → FINALIZE
-```
+| Word | What it means |
+|---|---|
+| **Step** | One piece of a feature, small enough to review on its own. It lands as one merge commit |
+| **Fence** | The files a step may change. Needing anything else makes it stop and ask |
+| **Promise** | One line of what a step says "done" means. Each needs a test that proves it |
+| **Initial** | Your first signature: agreeing to a plan before anything is spent. One click |
+| **Seal** | Your second signature: landing the work on main. Press and hold |
+| **On trust** | Sealing a step whose promises are not all proven. Allowed, and recorded forever |
+| **Take it back** | Undoing a sealed step, with a revert that you seal like any change |
+| **Desk · Flow · Workshop** | The three places: what needs you, what is in motion, and the tuning (conventions, routines, health) |
+| **Routine** | Work that starts on a schedule or an event, and then waits for your seal |
 
-`SCOPE_CHECK` is the one to understand. Each step declares which files it may touch,
-and a plan that reaches outside that is **non-recoverable** — the run stops rather
-than negotiating. Those surfaces are proposed by Signet, from a survey of your repo,
-rather than typed by you.
+<br>
 
-## Development
-
-```bash
-pnpm check     # the merge bar: build + types + lint + policy + tests
-pnpm dev       # core in watch mode
-pnpm policy    # invariant checks alone
-```
-
-`pnpm check` is the whole bar, and it is not advisory. Two things worth knowing about
-it:
-
-- `SIGNET_DATABASE_URL` must be set for the database-backed suites to run, and it is
-  declared under turbo's `env` so the cache key includes it. Without it 28 tests skip
-  — and 28 skips read as a pass.
-- Every suite gets its **own** database, cloned from a migrated template. They used
-  to share one and tear down by truncating it, which meant whichever suite finished
-  first wiped the data out from under the others.
-
-Versions are pinned facts rather than vibes: see [VERSIONS.md](VERSIONS.md).
-
-## What is honest about this
-
-**Proven end to end.** A workflow trigger through propose, create, signature 1, code,
-checks, signature 2 and a real `git merge` — on a published npm package, whose tests
-pass on `main` afterwards.
-
-**Not done yet.**
-
-- **Pushing.** Nothing in the run path pushes, which is why GitHub repos are plan
-  only. Local repos work completely.
-- **Branching workflows.** The engine walks a list, so the canvas draws a chain. No
-  conditions, no parallel paths, no data passed between steps.
-- **Two of four automation triggers.** `step_merged`, `run_failed`,
-  `rules_proposed` and `quota_reset` all fire; GitHub events do not exist, because
-  that would need a publicly reachable endpoint.
-- **The design check needs a design.** With no approved design of record it skips,
-  rather than inventing an opinion.
-
-**A note on the test suite.** 427 tests, and the most valuable bugs this project has
-had were found by running the whole thing for real rather than by any of them —
-including a repair loop that spent 49 rounds on one step because a counter was never
-persisted, and a worktree that had no dependencies installed so every check exited
-"command not found". The fixture hid that one for weeks: it runs
-`node run-tests.mjs`, which needs nothing installed, so every green run was green for
-the wrong reason.
-
----
-
-Engine: your own Claude Code installation and subscription. Signet never uses API keys.
+<div align="center">
+<sub>Built between two signatures. Nothing reaches main without you.</sub>
+</div>
