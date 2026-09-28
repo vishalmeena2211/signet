@@ -17,6 +17,7 @@
 [![Status: early](https://img.shields.io/badge/status-early,_used_by_one_person-e6a53a)](#how-far-to-trust-it)
 [![Runs on your machine](https://img.shields.io/badge/runs-on_your_machine,_never_pushes-e6a53a)](#the-rules-it-keeps)
 [![No API key](https://img.shields.io/badge/API_keys-none,_ever-e6a53a)](#the-rules-it-keeps)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-0c0c0e)](#licence)
 
 [What it does](#what-it-does) · [The rules it keeps](#the-rules-it-keeps) · [How it works](#how-it-works) · [Run it yourself](#run-it-on-your-machine) · [The wireframes](design)
 
@@ -180,7 +181,9 @@ Signet stands on other people's work, and names it:
 
 ## Licence
 
-There is no licence yet. This repository is private, and all rights are reserved until one is chosen.
+**The code is under the [MIT licence](LICENSE).** Use it, change it and share it, keeping the copyright notice.
+
+The fonts and icons it bundles keep their own licences, named under [Credits](#credits): the SIL Open Font Licence for the fonts, and ISC for the Lucide geometry the icons follow.
 
 ## Words used here
 

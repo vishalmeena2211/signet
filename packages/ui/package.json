@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "The Signet console: the Desk (what needs you), Flow (what is in motion), the Workshop (conventions, routines, health), and Ask.",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

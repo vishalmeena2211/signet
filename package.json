@@ -2,7 +2,7 @@
   "name": "signet",
   "description": "Say what you want built. Signet plans it, writes it and checks it with your own Claude Code, and nothing reaches your main branch until you seal it.",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "turbo run build",
     "console": "node scripts/console.mjs",

@@ -4,6 +4,7 @@
   "description": "Shared lint settings for the Signet packages.",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "exports": {
     "./base": "./base.js",
     "./next-js": "./next.js",

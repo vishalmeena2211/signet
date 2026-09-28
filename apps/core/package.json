@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "Signet's core: runs each step in its own copy of the repo, runs the checks, merges on your seal, and serves the API and the console.",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "nest build",

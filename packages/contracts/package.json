@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "Every shape shared between Signet's core and console, as a zod schema first and a TypeScript type inferred from it.",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {
