@@ -90,14 +90,18 @@ export function isSuitePromise(promise: string): boolean {
 }
 
 /**
- * Credits suite promises to a passing tests check. Only when it PASSED: a skipped tests
- * check (no runner found) proves nothing, and the promise stays unproven.
+ * What only the tests check can prove, credited to it when it PASSED: a promise that the
+ * suite passes, and a promise kept by an existing test this change did not touch. A
+ * skipped tests check (no runner found) ran nothing, so both stay unproven.
  */
-export function creditSuite(proofs: readonly PromiseProof[], testsPassed: boolean): PromiseProof[] {
+export function creditTestsCheck(proofs: readonly PromiseProof[], testsPassed: boolean): PromiseProof[] {
   if (!testsPassed) return [...proofs];
-  return proofs.map((p) =>
-    !p.proven && isSuitePromise(p.promise) ? { ...p, proven: true, test: null, testFile: null, codeFile: null, codeLines: null, reason: null, bySuite: true } : p,
-  );
+  return proofs.map((p) => {
+    if (p.proven) return p;
+    if (p.existingTest) return { ...p, proven: true, reason: null };
+    if (isSuitePromise(p.promise)) return { ...p, proven: true, test: null, testFile: null, codeFile: null, codeLines: null, reason: null, bySuite: true };
+    return p;
+  });
 }
 
 /** The instruction appended to the implement prompt, numbering the promises. */
@@ -215,6 +219,11 @@ const TEST_DECLARATION = /^\s*(?:test|it)(?:\.\w+)*\s*\(/;
  * now checks every tone") is kept by changing that test, and no new title appears in
  * the diff — so looking only at added titles called a kept promise unproven.
  */
+/** Whether a test with this (normalised) title is declared in the file. */
+function declares(content: string, wanted: string): boolean {
+  return content.split("\n").some((l) => TEST_DECLARATION.test(l) && norm(l).includes(wanted));
+}
+
 function editedTestIn(content: string, change: FileChange, wanted: string): boolean {
   const lines = content.split("\n");
   const at = lines.findIndex((l) => TEST_DECLARATION.test(l) && norm(l).includes(wanted));
@@ -232,7 +241,10 @@ export function verifyProofs(input: {
   promises: readonly string[];
   claims: readonly ProofClaim[] | null;
   changes: Map<string, FileChange>;
-  /** The current text of changed test files, so an edited existing test can count. */
+  /**
+   * The current text of test files: the changed ones, so an edited existing test can
+   * count, and any other file a claim names, so an untouched existing test can be found.
+   */
   testContents?: Map<string, string>;
 }): PromiseProof[] {
   const testFiles = [...input.changes.keys()].filter(isTestFile);
@@ -266,6 +278,20 @@ export function verifyProofs(input: {
         });
     const where = added ?? edited;
     if (!where) {
+      // An existing test the change did not touch — the right proof for "still behaves as
+      // before". Recorded as found but not yet proven: whether it passed is the tests
+      // check's to say, and that is read at the seal, beside this verdict.
+      const kept = [...(input.testContents?.entries() ?? [])].find(
+        // Not added and not edited (both checked above), even if other lines of its file were.
+        ([f, content]) => (!claim.testFile || claim.testFile === f) && declares(content, wanted),
+      );
+      if (kept) {
+        return {
+          ...unproven("An existing test this change did not touch. It counts once the tests check has run it and passed."),
+          testFile: kept[0],
+          existingTest: true,
+        };
+      }
       return unproven(`It named the test “${claim.test}”, but no test with that title was added or changed in this change.`);
     }
 

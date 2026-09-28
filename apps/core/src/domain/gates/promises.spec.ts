@@ -3,7 +3,7 @@
 // the change must never read as proven.
 
 import { describe, expect, it } from "vitest";
-import { creditSuite, extractPromises, isSuitePromise, parseProofClaims, parseUnifiedDiff, proofInstruction, verifyProofs } from "./promises.js";
+import { creditTestsCheck, extractPromises, isSuitePromise, parseProofClaims, parseUnifiedDiff, proofInstruction, verifyProofs } from "./promises.js";
 
 describe("extractPromises — what done when promises", () => {
   it("reads one promise per bullet, without markdown", () => {
@@ -196,11 +196,11 @@ describe("a promise that the suite passes is proven by the tests check", () => {
   ];
 
   it("credits only the suite promise, and only when the tests check passed", () => {
-    const credited = creditSuite(proofs, true);
+    const credited = creditTestsCheck(proofs, true);
     expect(credited.map((p) => p.proven)).toEqual([true, true, false]);
     expect(credited[1]).toMatchObject({ bySuite: true, reason: null });
     // A skipped or failed tests check proves nothing about the suite.
-    expect(creditSuite(proofs, false).map((p) => p.proven)).toEqual([true, false, false]);
+    expect(creditTestsCheck(proofs, false).map((p) => p.proven)).toEqual([true, false, false]);
   });
 });
 
@@ -250,5 +250,45 @@ describe("a test that already existed counts when this change edited its body", 
   it("is not proven without the file's contents to look in", () => {
     const [proof] = verifyProofs({ promises, claims, changes: diffAt(7, 8) });
     expect(proof?.proven).toBe(false);
+  });
+});
+
+describe("a promise kept by an existing test the change did not touch", () => {
+  // From a real run: "banner('Sale now on') still returns exactly …" was proven by a test
+  // that existed before and was not edited, and was marked unproven.
+  const file = [
+    "import test from 'node:test';",
+    "test('banner returns text and brand purple background', () => {",
+    "  assert.deepStrictEqual(banner('Sale now on'), { text: 'Sale now on', background: '#6609be' });",
+    "});",
+  ].join("\n");
+  const promises = ["banner('Sale now on') still returns exactly { text: 'Sale now on', background: '#6609be' }"];
+  const claims = [{ promise: 1, test: "banner returns text and brand purple background", testFile: "banner.test.mjs" }];
+  const noChanges = parseUnifiedDiff("");
+
+  it("is found but not yet proven: that is the tests check's to say", () => {
+    const [proof] = verifyProofs({ promises, claims, changes: noChanges, testContents: new Map([["banner.test.mjs", file]]) });
+    expect(proof).toMatchObject({ proven: false, existingTest: true, testFile: "banner.test.mjs" });
+    expect(creditTestsCheck([proof!], true)[0]).toMatchObject({ proven: true, existingTest: true, reason: null });
+    // A tests check that ran nothing did not run this test either.
+    expect(creditTestsCheck([proof!], false)[0]?.proven).toBe(false);
+  });
+
+  it("is found even when other lines of its file changed, as long as its own body did not", () => {
+    // The real run: a wrapper was added at the top of the file; this test was left alone.
+    const changed = parseUnifiedDiff(["--- a/banner.test.mjs", "+++ b/banner.test.mjs", "@@ -1,0 +1,1 @@", "+import test from 'node:test';"].join("\n"));
+    const [proof] = verifyProofs({ promises, claims, changes: changed, testContents: new Map([["banner.test.mjs", file]]) });
+    expect(proof).toMatchObject({ proven: false, existingTest: true });
+  });
+
+  it("is not found in a different file than the one named", () => {
+    const [proof] = verifyProofs({ promises, claims, changes: noChanges, testContents: new Map([["other.test.mjs", file]]) });
+    expect(proof?.existingTest).toBeUndefined();
+  });
+
+  it("is not found in a comment that only repeats the title", () => {
+    const comment = "// banner returns text and brand purple background\ntest('something else', () => {});";
+    const [proof] = verifyProofs({ promises, claims, changes: noChanges, testContents: new Map([["banner.test.mjs", comment]]) });
+    expect(proof?.existingTest).toBeUndefined();
   });
 });

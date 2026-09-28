@@ -255,6 +255,12 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
         findingsJson: JSON.stringify([
           { dimension: "proven", message: "itemCount([]) returns 0", proof: { test: "empty", testFile: "cart.test.mjs", codeFile: null, codeLines: null } },
           { dimension: "unproven", message: "npm test exits with code 0, and cart.test.mjs reports ok", location: "No test proves this." },
+          {
+            dimension: "unproven",
+            message: "total() still sums prices",
+            location: "An existing test this change did not touch.",
+            proof: { test: "total sums prices", testFile: "cart.test.mjs", codeFile: null, codeLines: null, existingTest: true },
+          },
         ]),
       },
     });
@@ -262,13 +268,14 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
     const work = new WorkViews(db, new AgentWorkLog(join(root, "packs")));
 
     const view = await work.promises(incId);
-    expect(view.promises.map((p) => p.proven)).toEqual([true, true]);
+    expect(view.promises.map((p) => p.proven)).toEqual([true, true, true]);
     expect(view.promises[1]).toMatchObject({ bySuite: true });
+    expect(view.promises[2]).toMatchObject({ existingTest: true, test: "total sums prices" });
     expect(await work.unproven(incId)).toEqual([]);
 
     // A tests check that found nothing to run proves nothing about the suite.
     await db.gateVerdict.update({ where: { id: tests.id }, data: { outcome: "skipped" } });
-    expect(await work.unproven(incId)).toEqual(["npm test exits with code 0, and cart.test.mjs reports ok"]);
+    expect(await work.unproven(incId)).toEqual(["npm test exits with code 0, and cart.test.mjs reports ok", "total() still sums prices"]);
   });
 
   it("tells each round of checks apart, though every round shares one phase row", async () => {

@@ -78,6 +78,8 @@ export const GateVerdictViewSchema = z.object({
             codeLines: z.string().nullable(),
             /** The test already existed; this change edited its body. */
             changedTest: z.boolean().optional(),
+            /** The test already existed and was not touched; it counts once the tests check passed. */
+            existingTest: z.boolean().optional(),
           })
           .optional(),
       }),

@@ -104,6 +104,11 @@ export const PromiseProofSchema = z.object({
   bySuite: z.boolean().optional(),
   /** Proven by a test that already existed and whose body this change edited, not a new one. */
   changedTest: z.boolean().optional(),
+  /**
+   * Proven by a test that already existed and that this change did not touch: right for a
+   * promise that behaviour is KEPT. It only counts once the tests check has run and passed.
+   */
+  existingTest: z.boolean().optional(),
 });
 export type PromiseProof = z.infer<typeof PromiseProofSchema>;
 

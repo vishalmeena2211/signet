@@ -6,7 +6,7 @@
 // seal that refuses to land unproven work without an explicit choice.
 
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, normalize } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { GateVerdictView } from "@signet/contracts";
@@ -43,8 +43,12 @@ export function promisesGate(deps: { packsRoot: string }): Gate {
       // The changed test files as they now stand, so a test that already existed and was
       // edited here can be found and its body checked against the change.
       const testContents = new Map<string, string>();
-      for (const f of changes.keys()) {
-        if (!isTestFile(f)) continue;
+      // Changed test files, and any test file a claim names — an untouched one may hold
+      // the test that proves a "still works" promise. Only relative paths inside the
+      // workspace are read: a claim is the agent's word, not a path to trust.
+      const named = (claims ?? []).map((c) => c.testFile).filter((f): f is string => typeof f === "string");
+      for (const f of new Set([...changes.keys(), ...named])) {
+        if (!isTestFile(f) || isAbsolute(f) || normalize(f).startsWith("..")) continue;
         const text = await readOr(join(ctx.workspacePath, f), "");
         if (text !== "") testContents.set(f, text);
       }
@@ -57,7 +61,7 @@ export function promisesGate(deps: { packsRoot: string }): Gate {
           dimension: p.proven ? "proven" : "unproven",
           message: p.promise,
           ...(p.reason ? { location: p.reason } : p.test ? { location: `test “${p.test}”` } : {}),
-          proof: { test: p.test, testFile: p.testFile, codeFile: p.codeFile, codeLines: p.codeLines, ...(p.changedTest ? { changedTest: true } : {}) },
+          proof: { test: p.test, testFile: p.testFile, codeFile: p.codeFile, codeLines: p.codeLines, ...(p.changedTest ? { changedTest: true } : {}), ...(p.existingTest ? { existingTest: true } : {}) },
         })),
       };
     },
