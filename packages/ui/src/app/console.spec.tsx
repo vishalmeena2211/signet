@@ -207,6 +207,18 @@ describe("the Desk", () => {
     expect(screen.getByText("Building").parentElement?.className).not.toContain("yours");
   });
 
+  it("offers to dismiss a failure, and only a failure, and says so to the server", async () => {
+    body = desk([base, { ...base, kind: "failed", incrementId: "11111111-aaaa-4bbb-8ccc-000000000003" as Decision["incrementId"], text: "aborted by user" }]);
+    render(wrap(<Desk />));
+    const dismiss = await screen.findAllByText("Dismiss");
+    expect(dismiss).toHaveLength(1);
+    body = { dismissed: true };
+    fireEvent.click(dismiss[0]!);
+    await vi.waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url) === "/api/increments/11111111-aaaa-4bbb-8ccc-000000000003/dismiss" && init?.method === "POST")).toBe(true),
+    );
+  });
+
   it("says nothing needs you when nothing does", async () => {
     body = desk([]);
     render(wrap(<Desk />));

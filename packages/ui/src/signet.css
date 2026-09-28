@@ -103,6 +103,9 @@ button.it { width: 100%; border: 0; background: transparent; font: inherit; }
 .btn-danger-outline { background: var(--surface); color: var(--danger); border-color: var(--danger); }
 .btn-disabled { background: var(--disabled); color: var(--disabled-text); cursor: not-allowed; }
 .btn-block { width: 100%; }
+/* A move that is not waiting on you, beside one that is: no border, no colour. */
+.btn-quiet { background: transparent; color: var(--fg-3); border-color: transparent; }
+.btn-quiet:hover { color: var(--fg-2); }
 .link { color: var(--primary); font-weight: 600; }
 
 /* ════ Reimagined primitives (new concepts the PMS starter never needed) ════ */

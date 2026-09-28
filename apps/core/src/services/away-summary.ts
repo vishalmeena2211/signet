@@ -26,7 +26,7 @@ export class AwaySummaryService {
     const [runs, escalations, increments, routines, quotas, spend] = await Promise.all([
       this.db.run.findMany({
         where: { finishedAt: window },
-        include: { increment: { select: { id: true, title: true, featureId: true, status: true } } },
+        include: { increment: { select: { id: true, title: true, featureId: true, status: true, stateJson: true } } },
         orderBy: { finishedAt: "asc" },
       }),
       this.db.escalation.findMany({ where: { createdAt: window }, orderBy: { createdAt: "asc" } }),
@@ -60,7 +60,7 @@ export class AwaySummaryService {
           yours: inc.status === "AWAITING_SIGNATURE",
         });
       } else if (r.status === "FAILED") {
-        events.push({ ...common, kind: "failed", text: `“${inc.title}” failed`, yours: inc.status === "FAILED" });
+        events.push({ ...common, kind: "failed", text: `“${inc.title}” failed`, yours: inc.status === "FAILED" && !inc.stateJson.includes('"dismissedAt"') });
       }
     }
     for (const e of escalations) {

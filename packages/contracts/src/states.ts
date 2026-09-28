@@ -23,7 +23,12 @@ export const IncrementStateSchema = z.discriminatedUnion("status", [
   }),
   z.object({ status: z.literal("ESCALATED"), escalationId: EscalationIdSchema }),
   z.object({ status: z.literal("PARKED"), quotaWindowId: QuotaWindowIdSchema, resumeAt: z.iso.datetime() }),
-  z.object({ status: z.literal("FAILED"), reason: z.string() }),
+  z.object({
+    status: z.literal("FAILED"),
+    reason: z.string(),
+    /** Set when a person has seen the failure and put it away. It leaves the Desk; trying again clears it. */
+    dismissedAt: z.iso.datetime().optional(),
+  }),
 ]);
 export type IncrementState = z.infer<typeof IncrementStateSchema>;
 export type IncrementStatus = IncrementState["status"];

@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "../persistence/generated/client.js";
 
-export type FeatureEventKind = "asked" | "proposed" | "initialled" | "answered" | "sent_back" | "merged" | "taken_back";
+export type FeatureEventKind = "asked" | "proposed" | "initialled" | "answered" | "sent_back" | "merged" | "taken_back" | "dismissed";
 
 export class FeatureEvents {
   constructor(private readonly db: PrismaClient) {}

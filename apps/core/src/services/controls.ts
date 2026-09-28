@@ -8,6 +8,7 @@ import {
   EscalationIdSchema,
   EscalationStateSchema,
   IncrementIdSchema,
+  IncrementStateSchema,
   RunIdSchema,
   conflict,
   type CreateFeatureRequest,
@@ -284,6 +285,23 @@ export class Controls {
       where: { id: incId },
       data: { repairAttempt: 0, freshRestarts: 0 },
     });
+  }
+
+  /**
+   * Put a failed step away. It stays FAILED, with its reason and history, and only leaves
+   * the Desk: a failure is still worth reading later, and retrying it clears the dismissal.
+   */
+  async dismiss(incrementId: string): Promise<void> {
+    const incId = IncrementIdSchema.parse(incrementId);
+    const inc = await this.db.increment.findUniqueOrThrow({ where: { id: incId } });
+    const state = IncrementStateSchema.parse(JSON.parse(inc.stateJson)); // signet-policy-allow: raw-json-parse -- validated by IncrementStateSchema immediately
+    if (state.status !== "FAILED") throw new Error("only a failed step can be dismissed");
+    if (state.dismissedAt) return;
+    await this.db.increment.update({
+      where: { id: incId },
+      data: { stateJson: JSON.stringify({ ...state, dismissedAt: new Date().toISOString() }) },
+    });
+    await this.events?.record({ incrementId: incId, kind: "dismissed", payload: { reason: state.reason } });
   }
 
   /** Abort a running increment: signal the live worker, mark run + increment. */

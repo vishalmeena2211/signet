@@ -92,6 +92,8 @@ export const ThreadStepSchema = z.object({
   surface: z.array(z.string()),
   runId: RunIdSchema.nullable(),
   repairs: z.number().int(),
+  /** A failed step that has not been dismissed yet, so the thread can offer to dismiss it. */
+  dismissable: z.boolean(),
 });
 export type ThreadStep = z.infer<typeof ThreadStepSchema>;
 

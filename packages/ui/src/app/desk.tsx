@@ -5,7 +5,7 @@
 // run out. Keyboard first — J and K move, Enter opens, E puts one aside for now.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AwaySummary, Decision, DeskView, FlowCounts } from "@signet/contracts";
 import { api } from "../api.js";
 import { Shell } from "./shell.js";
@@ -261,6 +261,11 @@ function DecisionRow({
   onOpen: () => void;
 }): ReactNode {
   const { what, why, meta, act } = decisionWords(dec, held, heldUntil);
+  const qc = useQueryClient();
+  const dismiss = useMutation({
+    mutationFn: () => api.dismiss(dec.incrementId),
+    onSuccess: () => void qc.invalidateQueries(),
+  });
   return (
     <div className={`dec ${sel ? "sel" : ""}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => e.key === "Enter" && onOpen()}>
       <span className={dec.kind === "seal" || dec.kind === "initial" || dec.kind === "question" || dec.kind === "failed" ? "dot-seal" : "dot-grey"} />
@@ -271,6 +276,20 @@ function DecisionRow({
       </div>
       <div className="acts">
         {sel && !held && <span className="kbd">↵</span>}
+        {dec.kind === "failed" && (
+          <button
+            type="button"
+            className="btn btn-quiet"
+            disabled={dismiss.isPending}
+            title="Take it off the Desk. It stays in its thread, and can still be tried again."
+            onClick={(e) => {
+              e.stopPropagation();
+              dismiss.mutate();
+            }}
+          >
+            Dismiss
+          </button>
+        )}
         <button
           type="button"
           className={`btn ${act.seal ? "btn-seal" : "btn-outline"}`}

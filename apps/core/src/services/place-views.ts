@@ -66,6 +66,8 @@ const SAID: Record<string, string> = {
   PLANNED: "not started",
 };
 const YOURS = new Set(["AWAITING_SIGNATURE", "CONTEXT_READY", "ESCALATED", "FAILED"]);
+/** A failed step someone has put away: still failed, no longer theirs to act on. */
+const dismissed = (s: { status: string; stateJson: string }): boolean => s.status === "FAILED" && s.stateJson.includes('"dismissedAt"');
 
 let identityCache: Identity | null = null;
 
@@ -110,7 +112,11 @@ export class PlaceViews {
   async desk(): Promise<DeskView> {
     const { db } = this.d;
     const rows = await db.increment.findMany({
-      where: { status: { in: ["CONTEXT_READY", "AWAITING_SIGNATURE", "ESCALATED", "FAILED"] } },
+      where: {
+        status: { in: ["CONTEXT_READY", "AWAITING_SIGNATURE", "ESCALATED", "FAILED"] },
+        // A failure you have dismissed is kept, but no longer asks for you.
+        NOT: { status: "FAILED", stateJson: { contains: '"dismissedAt"' } },
+      },
       include: { feature: { select: { id: true, title: true } } },
       orderBy: { updatedAt: "asc" },
       take: 50,
@@ -330,6 +336,9 @@ export class PlaceViews {
         case "taken_back":
           push({ at, who: "you", title: `You took back “${titleOf(e.incrementId)}”`, detail: null, incrementId: e.incrementId as never });
           break;
+        case "dismissed":
+          push({ at, who: "you", title: `You dismissed step ${stepNo(e.incrementId)}`, detail: "It stays here, and can still be tried again.", incrementId: e.incrementId as never });
+          break;
       }
     }
 
@@ -448,8 +457,9 @@ export class PlaceViews {
         id: s.id,
         title: s.title,
         status: s.status,
-        said: SAID[s.status] ?? s.status.toLowerCase(),
-        yours: YOURS.has(s.status),
+        said: dismissed(s) ? "failed · dismissed" : (SAID[s.status] ?? s.status.toLowerCase()),
+        yours: YOURS.has(s.status) && !dismissed(s),
+        dismissable: s.status === "FAILED" && !dismissed(s),
         surface: s.declaredSurface,
         // The live run, or — for a step waiting on a question — the run that asked it.
         runId:

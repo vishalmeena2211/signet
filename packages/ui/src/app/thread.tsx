@@ -115,6 +115,8 @@ function Timeline({ t, open }: { t: ThreadView; open: EscalationView | undefined
         </div>
         {open ? (
           <Question q={open} />
+        ) : !t.now && t.steps.some((s) => s.dismissable) ? (
+          <Failed t={t} />
         ) : (
           t.now && (
             <div className="now">
@@ -196,6 +198,38 @@ function Timeline({ t, open }: { t: ThreadView; open: EscalationView | undefined
           </>
         )}
       </aside>
+    </div>
+  );
+}
+
+/** A failed step, pinned where "now" would be, until it is put away. */
+function Failed({ t }: { t: ThreadView }): ReactNode {
+  const qc = useQueryClient();
+  const step = t.steps.find((s) => s.dismissable);
+  const dismiss = useMutation({
+    mutationFn: (id: string) => api.dismiss(id),
+    onSuccess: () => void qc.invalidateQueries(),
+  });
+  if (!step) return null;
+  const n = t.steps.indexOf(step) + 1;
+  return (
+    <div className="now yours">
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <span className="dot-seal" />
+        <b>
+          Step {n} · “{step.title}” stopped with a failure
+        </b>
+        <button
+          type="button"
+          className="btn btn-outline"
+          style={{ marginLeft: "auto" }}
+          disabled={dismiss.isPending}
+          onClick={() => dismiss.mutate(step.id)}
+        >
+          Dismiss
+        </button>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Dismissing takes it off your Desk. It stays in this thread, and can still be tried again.</div>
     </div>
   );
 }

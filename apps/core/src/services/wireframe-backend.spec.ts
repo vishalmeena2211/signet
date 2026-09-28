@@ -18,7 +18,9 @@ import { PlaceViews } from "./place-views.js";
 import { WorkViews } from "./work-views.js";
 import { AgentWorkLog } from "./agent-work.js";
 import { DiffReader } from "./diff-reader.js";
-import { ProposalsInFlight } from "./feature-events.js";
+import { FeatureEvents, ProposalsInFlight } from "./feature-events.js";
+import { Controls } from "./controls.js";
+import { PrismaUnitOfWork } from "../persistence/prisma-ports.js";
 
 const exec = promisify(execFile);
 
@@ -171,6 +173,56 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
     const tb = new TakeBack({ db, workspacesRoot: workspaces, configuredRepoPath: repo, baseRef: "main" });
     await tb.start(incId);
     await expect(tb.start(incId)).rejects.toMatchObject({ signet: { code: "take_back.already" } });
+  });
+
+  it("dismisses a failure off the Desk, keeps it in the thread, and a retry brings it back", async () => {
+    const featureId = randomUUID();
+    const briefId = randomUUID();
+    const incId = randomUUID();
+    await db.feature.create({ data: { id: featureId, title: "Numbers", stage: "IMPLEMENTING", repoPath: repo, repoLabel: "repo" } });
+    await db.briefVersion.create({ data: { id: briefId, featureId, version: 1, contentMd: "Add two." } });
+    await db.increment.create({
+      data: {
+        id: incId,
+        featureId,
+        title: "Add two",
+        status: "FAILED",
+        stateJson: JSON.stringify({ status: "FAILED", reason: "aborted by user" }),
+        declaredSurface: ["a.txt"],
+        briefVersionId: briefId,
+        orderIndex: 0,
+      },
+    });
+    const views = new PlaceViews({
+      db,
+      diffs: new DiffReader(workspaces, "main"),
+      work: new WorkViews(db, new AgentWorkLog(join(root, "packs"))),
+      log: new AgentWorkLog(join(root, "packs")),
+      proposals: new ProposalsInFlight(),
+      quota: async () => ({ exhausted: false, windowKind: "five_hour" }),
+      configuredRepoLabel: "repo",
+      configuredRepoPath: repo,
+      baseRef: "main",
+    });
+    const controls = new Controls(db, new PrismaUnitOfWork(db), { abort: () => false });
+    controls.events = new FeatureEvents(db);
+
+    expect((await views.desk()).decisions.map((x) => x.kind)).toEqual(["failed"]);
+    expect((await views.thread(featureId)).steps[0]).toMatchObject({ dismissable: true, yours: true });
+
+    await controls.dismiss(incId);
+    expect((await views.desk()).decisions).toEqual([]);
+    const thread = await views.thread(featureId);
+    expect(thread.steps[0]).toMatchObject({ status: "FAILED", said: "failed · dismissed", yours: false, dismissable: false });
+    expect(thread.events.map((e) => e.title)).toContain("You dismissed step 1");
+    // Dismissing twice is not an error; dismissing anything but a failure is.
+    await controls.dismiss(incId);
+
+    await controls.retry(incId);
+    const back = await db.increment.findUniqueOrThrow({ where: { id: incId } });
+    expect(back.stateJson).not.toContain("dismissedAt");
+    expect((await views.desk()).decisions.map((x) => x.kind)).toEqual(["initial"]);
+    await expect(controls.dismiss(incId)).rejects.toThrow("only a failed step can be dismissed");
   });
 
   it("puts every merge in the ledger, with its commit found in git when it was not recorded", async () => {

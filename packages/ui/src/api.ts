@@ -280,6 +280,8 @@ export const api = {
   away: (since: string): Promise<AwaySummary> =>
     get(`/api/away?since=${encodeURIComponent(since)}`, AwaySummarySchema),
   retry: act("retry"),
+  /** Put a failed step away: it leaves the Desk and stays in its thread. */
+  dismiss: act("dismiss"),
   abort: act("abort"),
 
   diff: (incrementId: string): Promise<IncrementDiffView> =>

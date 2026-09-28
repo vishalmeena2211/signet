@@ -531,6 +531,14 @@ export class ApiController {
     return { retried: true };
   }
 
+  @Post("increments/:id/dismiss")
+  async dismiss(@Param("id") id: string) {
+    const incId = IncrementIdSchema.parse(id);
+    await this.controls.dismiss(incId);
+    this.realtime.broadcast({ kind: "increment_changed", incrementId: incId });
+    return { dismissed: true };
+  }
+
   @Post("increments/:id/abort")
   async abort(@Param("id") id: string) {
     const incId = IncrementIdSchema.parse(id);
