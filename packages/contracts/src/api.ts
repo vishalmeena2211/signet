@@ -2,7 +2,7 @@
 // these; the UI client infers its types from the same schemas.
 
 import { z } from "zod";
-import { FeatureIdSchema, IncrementIdSchema } from "./ids.js";
+import { FeatureIdSchema, IncrementIdSchema, RunIdSchema } from "./ids.js";
 import { IncrementStateSchema } from "./states.js";
 
 export const FeatureSummarySchema = z.object({
@@ -59,7 +59,9 @@ export const IncrementDetailSchema = z.object({
 export type IncrementDetail = z.infer<typeof IncrementDetailSchema>;
 
 export const GateVerdictViewSchema = z.object({
-  gate: z.enum(["typecheck", "lint", "tests", "conformance", "rules"]),
+  // "promises" never blocks a run: it records which promises are proven, and it is the
+  // seal that refuses to land an unproven one without an explicit choice.
+  gate: z.enum(["typecheck", "lint", "tests", "conformance", "rules", "promises"]),
   outcome: z.enum(["pass", "fail", "warn", "skipped", "running"]),
   findings: z
     .array(
@@ -67,6 +69,15 @@ export const GateVerdictViewSchema = z.object({
         dimension: z.string(), // e.g. "fail_then_pass", "position", "color"
         message: z.string(), // specific: "diverges in these 3 ways", never walls
         location: z.string().optional(),
+        /** Structured proof, carried by the promises check only. */
+        proof: z
+          .object({
+            test: z.string().nullable(),
+            testFile: z.string().nullable(),
+            codeFile: z.string().nullable(),
+            codeLines: z.string().nullable(),
+          })
+          .optional(),
       }),
     )
     .max(20), // signal discipline: top findings only, enforced at the type level
@@ -86,6 +97,10 @@ export type QuotaStateView = z.infer<typeof QuotaStateViewSchema>;
 export const CreateFeatureRequestSchema = z.object({
   title: z.string().min(1).max(200),
   briefMd: z.string().min(1),
+  /** The person's own words and when they asked — the thread's first line. */
+  asked: z.object({ goal: z.string().min(1), at: z.iso.datetime() }).optional(),
+  /** What the proposal was built on, for the thread's second line. */
+  proposal: z.object({ at: z.iso.datetime(), filesSurveyed: z.number().int().min(0), note: z.string().nullable() }).optional(),
   /** Which repo to build into. Omitted means the configured one. */
   repoId: z.string().optional(),
   increments: z
@@ -169,8 +184,50 @@ export const ProposeFeatureRequestSchema = z.object({
    * older request shape working.
    */
   repoId: z.string().optional(),
+  /** Answers to the questions asked before proposing; they become part of the request. */
+  answers: z.array(z.object({ question: z.string(), answer: z.string() })).max(10).optional(),
 });
 export type ProposeFeatureRequest = z.infer<typeof ProposeFeatureRequestSchema>;
+
+/** A doubt the proposer could not settle, pinned to the step it affects, answerable in one tap. */
+export const DoubtSchema = z.object({
+  question: z.string().min(1),
+  options: z.array(z.string().min(1)).max(4).default([]),
+  /** Index into options: its own best guess, pre-selected. */
+  suggested: z.number().int().min(0).nullable().default(null),
+});
+export type Doubt = z.infer<typeof DoubtSchema>;
+
+// ── asking before proposing ──
+
+export const AskSurveySchema = z.object({
+  repoLabel: z.string(),
+  repoPath: z.string(),
+  branch: z.string(),
+  filesSurveyed: z.number().int(),
+  /** What the survey found worth knowing, file by file. */
+  findings: z.array(z.object({ path: z.string(), note: z.string() })),
+});
+export type AskSurvey = z.infer<typeof AskSurveySchema>;
+
+export const AskQuestionsSchema = z.object({
+  /** One sentence: what it found to build on, before the questions. */
+  lead: z.string(),
+  questions: z
+    .array(
+      z.object({
+        question: z.string().min(1),
+        options: z.array(z.string().min(1)).min(2).max(4),
+        suggested: z.number().int().min(0).default(0),
+        /** Why it suggests what it suggests, when there is a reason worth saying. */
+        note: z.string().nullable().default(null),
+      }),
+    )
+    .max(4),
+});
+export type AskQuestions = z.infer<typeof AskQuestionsSchema>;
+
+export const AskRequestSchema = z.object({ goal: z.string().min(20).max(20_000), repoId: z.string().optional() });
 
 export const ProposedStepSchema = z.object({
   title: z.string().min(1).max(200),
@@ -179,6 +236,8 @@ export const ProposedStepSchema = z.object({
   declaredSurface: z.array(z.string().min(1)).min(1),
   /** What "done" means, specifically enough to be checked. */
   acceptanceMd: z.string().min(1),
+  /** What it is still unsure of about this step. */
+  doubts: z.array(DoubtSchema).max(4).default([]),
 });
 export type ProposedStep = z.infer<typeof ProposedStepSchema>;
 
@@ -190,6 +249,8 @@ export const SurfaceWarningSchema = z.object({
    * way a proposal looks reasonable and then kills the run it produced.
    */
   reason: z.enum(["matches_nothing", "matches_everything", "outside_repo"]),
+  /** The nearest real path, offered as a one-click fix. */
+  suggestion: z.string().nullable().default(null),
 });
 export type SurfaceWarning = z.infer<typeof SurfaceWarningSchema>;
 
@@ -265,6 +326,12 @@ export const EscalationViewSchema = z.object({
   incrementId: IncrementIdSchema,
   question: z.string(),
   raisedAt: z.iso.datetime(),
+  /** Present when the question is "may I change files outside the fence". */
+  fence: z
+    .object({ outside: z.array(z.string()), reason: z.string().nullable(), surface: z.array(z.string()) })
+    .optional(),
+  options: z.array(z.string()).optional(),
+  why: z.string().optional(),
 });
 export type EscalationView = z.infer<typeof EscalationViewSchema>;
 
@@ -303,5 +370,7 @@ export const RealtimeEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("feature_changed"), featureId: FeatureIdSchema }),
   z.object({ kind: z.literal("needs_you"), featureId: FeatureIdSchema, why: z.string() }),
   z.object({ kind: z.literal("quota_changed") }),
+  // The agent did something worth redrawing "watch it work" for.
+  z.object({ kind: z.literal("run_activity"), runId: RunIdSchema, incrementId: IncrementIdSchema }),
 ]);
 export type RealtimeEvent = z.infer<typeof RealtimeEventSchema>;

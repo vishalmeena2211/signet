@@ -38,7 +38,7 @@ function proposalWithSurface(surface: string[]): FeatureProposal {
   return {
     title: "t",
     understanding: "u",
-    steps: [{ title: "step one", rationale: "r", declaredSurface: surface, acceptanceMd: "a" }],
+    steps: [{ title: "step one", rationale: "r", declaredSurface: surface, acceptanceMd: "a", doubts: [] }],
     uncertainties: [],
     noWorkNeeded: null,
   };
@@ -146,8 +146,8 @@ describe("surfaces are checked against files that actually exist", () => {
         uncertainties: [],
         noWorkNeeded: null,
         steps: [
-          { title: "good step", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "a" },
-          { title: "bad step", rationale: "r", declaredSurface: ["nope/**"], acceptanceMd: "a" },
+          { title: "good step", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "a", doubts: [] },
+          { title: "bad step", rationale: "r", declaredSurface: ["nope/**"], acceptanceMd: "a", doubts: [] },
         ],
       };
       const warnings = checkSurfaces(proposal, profile);
@@ -243,7 +243,7 @@ describe("the proposer never touches the target repository", () => {
               understanding: "Add discount support to the cart.",
               uncertainties: ["whether discounts stack"],
               steps: [
-                { title: "add helper", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "returns a new cart" },
+                { title: "add helper", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "returns a new cart", doubts: [] },
                 { title: "wire it", rationale: "r", declaredSurface: ["src/checkout/**"], acceptanceMd: "checkout applies it" },
               ],
             }),
@@ -274,7 +274,7 @@ describe("turning an approved proposal into a feature", () => {
       understanding: "Add discount support.",
       uncertainties: [],
       noWorkNeeded: null,
-      steps: [{ title: "s", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "rejects >100" }],
+      steps: [{ title: "s", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "rejects >100", doubts: [] }],
     });
     expect(req.increments[0]?.acceptanceMd).toBe("rejects >100");
   });
@@ -285,7 +285,7 @@ describe("turning an approved proposal into a feature", () => {
       understanding: "Add discount support.",
       uncertainties: ["whether discounts stack"],
       noWorkNeeded: null,
-      steps: [{ title: "s", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "a" }],
+      steps: [{ title: "s", rationale: "r", declaredSurface: ["cart.mjs"], acceptanceMd: "a", doubts: [] }],
     });
     expect(req.briefMd).toContain("Add discount support.");
     expect(req.briefMd).toContain("whether discounts stack");

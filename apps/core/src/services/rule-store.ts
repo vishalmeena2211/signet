@@ -103,6 +103,7 @@ export class RuleStore {
         trend: r.trend,
         status: r.status,
         fpCount: r.fpCount,
+        exceptions: JSON.parse(r.exceptionsJson), // signet-policy-allow: raw-json-parse -- exceptions shape written by us; RuleCardSchema validates it
       }),
     );
   }

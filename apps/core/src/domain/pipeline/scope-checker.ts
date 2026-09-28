@@ -44,3 +44,9 @@ export function compileSurfacePattern(pattern: string): RegExp {
   }
   return new RegExp(`^${re}$`);
 }
+
+/** Whether one path is inside a surface — the same matcher, for display. */
+export function matchesSurface(path: string, declaredSurface: readonly string[]): boolean {
+  const p = normalize(path);
+  return declaredSurface.some((s) => compileSurfacePattern(s).test(p));
+}

@@ -57,6 +57,15 @@ export class Signatures {
    */
   releaseWorktree?: (incrementId: string) => Promise<void>;
 
+  /**
+   * The promises in "done when" that the latest run did not prove. Optional: without it,
+   * or for a run from before promises were checked, there is nothing to hold the seal on.
+   */
+  unprovenPromises?: (incrementId: string) => Promise<string[]>;
+
+  /** The thread's record of initials and seals. Best-effort, like the other hooks. */
+  onSigned?: (event: { kind: "initialled" | "merged"; incrementId: string; payload: Record<string, unknown> }) => Promise<void>;
+
   /** Signature #1 — approve the increment; the run starts. */
   async approve(incrementId: string): Promise<{ runId: string }> {
     const incId = IncrementIdSchema.parse(incrementId);
@@ -71,6 +80,7 @@ export class Signatures {
         runId: RunIdSchema.parse(runId),
       });
     });
+    await this.onSigned?.({ kind: "initialled", incrementId: incId, payload: {} }).catch(() => {});
     return { runId };
   }
 
@@ -86,8 +96,14 @@ export class Signatures {
     return stdout.trim();
   }
 
-  /** Signature #2 — merge the increment's branch into the base. */
-  async merge(incrementId: string): Promise<void> {
+  /**
+   * Signature #2 — merge the increment's branch into the base.
+   *
+   * `onTrust` is the explicit choice to land work whose promises are not all proven. It is
+   * recorded on the step and in the merge commit, so every promise that was taken on trust
+   * can be found later — a seal on trust is allowed, but never a default.
+   */
+  async merge(incrementId: string, opts: { onTrust?: boolean } = {}): Promise<void> {
     const incId = IncrementIdSchema.parse(incrementId);
     // Check the state BEFORE touching git. The transition below also guards,
     // but it runs after the merge — so without this an increment that is not
@@ -99,6 +115,20 @@ export class Signatures {
         signet: conflict("increment.illegal_transition", `${current} -> MERGED`),
       });
     }
+    // Checked before git, like everything else here: refusing after the merge would leave
+    // unproven work on main.
+    const unproven = (await this.unprovenPromises?.(incId)) ?? [];
+    if (unproven.length > 0 && opts.onTrust !== true) {
+      throw Object.assign(new Error(`${unproven.length} promise(s) unproven`), {
+        signet: conflict(
+          "merge.unproven",
+          `${unproven.length === 1 ? "One thing you agreed to has" : `${unproven.length} things you agreed to have`} no test proving ${unproven.length === 1 ? "it" : "them"}: ` +
+            `${unproven.map((p) => `“${p}”`).join("; ")}. Ask for the missing test, or seal on trust.`,
+        ),
+      });
+    }
+    const onTrust = opts.onTrust === true && unproven.length > 0 ? unproven : null;
+
     const branch = `signet/inc-${incId}`;
     const repoPath = (await this.repoForIncrement?.(incId)) ?? this.targetRepoPath;
 
@@ -141,16 +171,25 @@ export class Signatures {
         "--no-ff",
         "-m",
         `signet: merge increment ${incId}`,
+        ...(onTrust ? ["-m", `Sealed on trust — not proven by a test:\n${onTrust.map((p) => `- ${p}`).join("\n")}`] : []),
         branch,
       ],
       { cwd: repoPath },
     );
+    // The commit it landed as — the ledger's seal carries it, and taking the step back
+    // later reverts exactly this commit.
+    const sha = await pexec("git", ["rev-parse", "HEAD"], { cwd: repoPath })
+      .then((r) => r.stdout.trim())
+      .catch(() => null);
     await this.uow.run(async (tx) => {
       await tx.increments.transition(incId, "AWAITING_SIGNATURE", {
         status: "MERGED",
         mergedAt: new Date().toISOString(),
+        ...(onTrust ? { onTrust } : {}),
+        ...(sha ? { sha } : {}),
       });
     });
+    await this.onSigned?.({ kind: "merged", incrementId: incId, payload: { sha, onTrust: onTrust ?? [] } }).catch(() => {});
 
     // After the transition, never inside it: the merge is done and recorded, and a
     // downstream automation failing is not a reason to report that it was not.

@@ -21,6 +21,7 @@ import {
   type QuotaStateView,
 } from "@signet/contracts";
 import type { PrismaClient } from "../persistence/generated/client.js";
+import { plainQuestion } from "../domain/runtime/run-machine.js";
 
 /**
  * The increments are the truth about how far a feature got, so the board
@@ -161,12 +162,15 @@ export class ConsoleViews {
       orderBy: { createdAt: "asc" },
     });
     return rows.map((r) => {
-      const st = JSON.parse(r.stateJson) as { question?: string }; // signet-policy-allow: raw-json-parse -- narrow shape read; written by us
+      const st = JSON.parse(r.stateJson) as { question?: string; fence?: unknown; options?: unknown; why?: unknown }; // signet-policy-allow: raw-json-parse -- narrow shape read; written by us; re-validated by the view schema
       return EscalationViewSchema.parse({
         id: r.id,
         incrementId: r.incrementId,
-        question: st.question ?? "(no question recorded)",
+        question: plainQuestion(st.question ?? "(no question recorded)"),
         raisedAt: r.createdAt.toISOString(),
+        ...(st.fence ? { fence: st.fence } : {}),
+        ...(Array.isArray(st.options) && st.options.length > 0 ? { options: st.options } : {}),
+        ...(typeof st.why === "string" ? { why: st.why } : {}),
       });
     });
   }

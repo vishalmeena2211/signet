@@ -9,7 +9,9 @@ import {
   nonRecoverable,
   recoverable,
   type AdapterEvent,
+  type FenceQuestion,
   type IncrementId,
+  type IncrementPlan,
   type ModelUsage,
   type RunId,
   type RunPhaseName,
@@ -17,13 +19,20 @@ import {
   type SignetError,
 } from "@signet/contracts";
 import { afterPhaseComplete, afterPhaseFailure, type RunDecision } from "../domain/runtime/run-machine.js";
+import { parseAgentQuestion } from "../domain/adapter/agent-question.js";
 import type { Logger } from "../domain/runtime/logger.js";
 import type { TxPorts, UnitOfWork } from "../domain/runtime/ports.js";
 import type { WorktreeHandle, WorktreeManager } from "../domain/runtime/worktree-manager.js";
 
 /** What the engine needs from the Claude Code adapter (implemented in domain/adapter). */
 export interface AgentDriver {
-  plan(input: { packDir: string; workspacePath: string; signal?: AbortSignal }): Promise<
+  plan(input: {
+    packDir: string;
+    workspacePath: string;
+    signal?: AbortSignal;
+    /** Optional: the planning agent reads the repo, and what it reads is worth showing. */
+    onEvent?: (ev: AdapterEvent) => Promise<void>;
+  }): Promise<
     { ok: true; plan: unknown; sessionRef: SessionRef; usage: ModelUsage[] } | { ok: false; error: SignetError }
   >;
   implement(input: {
@@ -33,7 +42,11 @@ export interface AgentDriver {
     repairFeedback: string | null;
     signal?: AbortSignal;
     onEvent: (ev: AdapterEvent) => Promise<void>;
-  }): Promise<{ ok: true; sessionRef: SessionRef } | { ok: false; error: SignetError }>;
+  }): Promise<
+    // resultText carries the agent's closing message, where it states which test proves
+    // which promise. Optional so a driver that cannot supply it still type-checks.
+    { ok: true; sessionRef: SessionRef; resultText?: string } | { ok: false; error: SignetError }
+  >;
 }
 
 /** What the engine needs from the gate executor (implemented in domain/gates). */
@@ -87,7 +100,24 @@ export type RunOutcome =
   | { outcome: "succeeded" }
   | { outcome: "failed"; error: SignetError }
   | { outcome: "parked"; resumeAt: Date | null }
-  | { outcome: "escalated"; question: string };
+  | { outcome: "escalated"; question: string; fence?: FenceQuestion; options?: string[]; why?: string };
+
+/**
+ * Where the agent's work goes besides the database. Both optional, so every existing
+ * construction of the engine keeps working.
+ */
+export interface RunEngineHooks {
+  /** Every adapter event from planning and implementing, for "watch it work". */
+  onAgentEvent?: (input: {
+    runId: RunId;
+    incrementId: IncrementId;
+    phase: "plan" | "implement";
+    workspacePath: string;
+    event: AdapterEvent;
+  }) => Promise<void>;
+  /** The agent's closing message after implementing, for the promises check. */
+  onImplementResult?: (input: { runId: RunId; packDir: string; resultText: string }) => Promise<void>;
+}
 
 export class RunEngine {
   constructor(
@@ -101,6 +131,18 @@ export class RunEngine {
     private readonly log: Logger,
     private readonly repos?: RepoResolver,
   ) {}
+
+  /** Set after construction, like the other optional wiring in this codebase. */
+  hooks: RunEngineHooks = {};
+
+  /** Hooks must never change a run's outcome: watching is not allowed to break the work. */
+  private async tellHook(fn: () => Promise<void> | undefined): Promise<void> {
+    try {
+      await fn();
+    } catch (e) {
+      this.log.warn("engine.hook_failed", { error: String(e) });
+    }
+  }
 
   /** The repo this increment builds into, and whether finishing there is possible. */
   private async repoFor(incrementId: IncrementId): Promise<{ path: string | undefined; error: SignetError | null }> {
@@ -168,6 +210,22 @@ export class RunEngine {
         },
       });
 
+      // A phase can end the run with a question directly — the fence check does, because
+      // "may I change this other file" is a decision for a person, not a failure to repair.
+      if (!result.ok && result.escalate) {
+        await this.completePhase(runId, phase, phaseAttempt);
+        await this.markStoppedToAsk(runId);
+        await this.releaseLock(handle);
+        log.warn("run.escalated", { phase });
+        return {
+          outcome: "escalated",
+          question: result.escalate.question,
+          ...(result.escalate.fence ? { fence: result.escalate.fence } : {}),
+          ...(result.escalate.options ? { options: result.escalate.options } : {}),
+          ...(result.escalate.why ? { why: result.escalate.why } : {}),
+        };
+      }
+
       let decision: RunDecision;
       if (result.ok) {
         await this.completePhase(runId, phase, phaseAttempt);
@@ -227,6 +285,7 @@ export class RunEngine {
           return { outcome: "parked", resumeAt: decision.resumeAt };
         case "escalate":
           log.warn("run.escalated", {});
+          await this.markStoppedToAsk(runId);
           await this.releaseLock(handle);
           return { outcome: "escalated", question: decision.question };
         case "fail":
@@ -246,6 +305,20 @@ export class RunEngine {
    * lock is recoverable — acquire() replaces one held by a dead pid — whereas a run that
    * reports "failed" because its cleanup threw is a lie about what happened.
    */
+  /**
+   * Ends the RUN, not the step, when it stops to ask.
+   *
+   * It was left in its last phase, which had two consequences: the console reported a run
+   * that had stopped as still running, and the boot-time completer — which re-queues every
+   * run found mid-phase — would restart a run that was waiting on a person. Answering the
+   * question starts a new run anyway, so this one is finished.
+   */
+  private async markStoppedToAsk(runId: RunId): Promise<void> {
+    await this.uow.run(async (tx) => {
+      await tx.runs.setState(runId, { status: "ABORTED", reason: "stopped to ask a question" });
+    });
+  }
+
   private async releaseLock(handle: WorktreeHandle | null): Promise<void> {
     if (!handle) return;
     await this.worktrees.release(handle, { removeWorktree: false }).catch(() => {});
@@ -264,7 +337,14 @@ export class RunEngine {
     setPack: (dir: string, surface: string[]) => void;
     setHandle: (h: WorktreeHandle) => void;
   }): Promise<
-    { ok: true } | { ok: false; error: SignetError; repairFeedback?: string; quotaResetsAt?: Date | null }
+    | { ok: true }
+    | {
+        ok: false;
+        error: SignetError;
+        repairFeedback?: string;
+        quotaResetsAt?: Date | null;
+        escalate?: { question: string; fence?: FenceQuestion; options?: string[]; why?: string };
+      }
   > {
     switch (ctx.phase) {
       case "ASSEMBLE_PACK": {
@@ -290,10 +370,22 @@ export class RunEngine {
       case "AGENT_PLAN": {
         if (!ctx.packDir || !ctx.handle) return { ok: false, error: nonRecoverable("engine.state", "no pack/workspace") };
         const planSignal = this.signals.get(ctx.runId);
+        const planWorkspace = ctx.handle.path;
         const res = await this.agent.plan({
           packDir: ctx.packDir,
-          workspacePath: ctx.handle.path,
+          workspacePath: planWorkspace,
           ...(planSignal ? { signal: planSignal } : {}),
+          onEvent: async (event) => {
+            await this.tellHook(() =>
+              this.hooks.onAgentEvent?.({
+                runId: ctx.runId,
+                incrementId: ctx.incrementId,
+                phase: "plan",
+                workspacePath: planWorkspace,
+                event,
+              }),
+            );
+          },
         });
         if (!res.ok) return { ok: false, error: res.error };
         const parsed = IncrementPlanSchema.safeParse(res.plan);
@@ -304,20 +396,35 @@ export class RunEngine {
           await tx.runs.setSessionRef(ctx.runId, res.sessionRef);
           await tx.runs.recordUsage(ctx.runId, res.usage);
         });
-        // Stash plan files in memory for SCOPE_CHECK via declaredSurface comparison.
-        this.lastPlanFiles.set(ctx.runId, parsed.data.filesToTouch);
+        // Stash the plan in memory for SCOPE_CHECK's declaredSurface comparison.
+        this.lastPlans.set(ctx.runId, parsed.data);
         return { ok: true };
       }
       case "SCOPE_CHECK": {
-        const planFiles = this.lastPlanFiles.get(ctx.runId) ?? [];
+        const plan = this.lastPlans.get(ctx.runId);
+        const planFiles = plan?.filesToTouch ?? [];
         const verdict = this.scope.check(planFiles, ctx.declaredSurface);
         if (!verdict.inScope) {
+          // A question, not a death. This used to be non-recoverable: the run was killed
+          // and everything it had worked out was thrown away, when the honest situation is
+          // that the agent found a real reason to touch another file and a person should
+          // decide whether it may. The fence is still absolute — nothing outside it is
+          // changed without that person saying so.
+          const reasons = plan?.outsideReasons ?? {};
+          const given = verdict.outside.map((f) => reasons[f]).filter((r): r is string => Boolean(r));
+          const reason = given.length > 0 ? given.join(" ") : null;
           return {
             ok: false,
             error: nonRecoverable(
               "scope.outside_surface",
               `plan touches files outside the declared surface: ${verdict.outside.join(", ")}`,
             ),
+            escalate: {
+              question:
+                `It wants to change ${verdict.outside.join(", ")}, outside what this step may change.` +
+                (reason ? ` Its reason: ${reason}` : " It did not say why."),
+              fence: { outside: verdict.outside, reason, surface: ctx.declaredSurface },
+            },
           };
         }
         return { ok: true };
@@ -334,6 +441,16 @@ export class RunEngine {
           repairFeedback: ctx.repairFeedback,
           ...(implSignal ? { signal: implSignal } : {}),
           onEvent: async (ev) => {
+            const workspacePath = ctx.handle?.path ?? "";
+            await this.tellHook(() =>
+              this.hooks.onAgentEvent?.({
+                runId: ctx.runId,
+                incrementId: ctx.incrementId,
+                phase: "implement",
+                workspacePath,
+                event: ev,
+              }),
+            );
             if (ev.type === "usage_update" || ev.type === "completed") {
               await this.uow.run(async (tx) => {
                 await tx.runs.recordUsage(ctx.runId, ev.perModel, ev.type === "completed" ? ev.totalCostUsd : undefined);
@@ -350,7 +467,22 @@ export class RunEngine {
           },
         });
         if (!res.ok) return { ok: false, error: res.error, quotaResetsAt };
+        if (res.resultText) {
+          const packDir = ctx.packDir;
+          const resultText = res.resultText;
+          await this.tellHook(() => this.hooks.onImplementResult?.({ runId: ctx.runId, packDir, resultText }));
+        }
         await this.worktrees.commitAll(ctx.handle, `signet: increment ${ctx.incrementId} implement`);
+        // The agent stopped to ask. What it wrote so far is kept, committed, in the
+        // workspace; the person's answer becomes part of the request and it carries on.
+        const asked = res.resultText ? parseAgentQuestion(res.resultText) : null;
+        if (asked) {
+          return {
+            ok: false,
+            error: recoverable("agent.asked", asked.question),
+            escalate: { question: asked.question, options: asked.options, ...(asked.why ? { why: asked.why } : {}) },
+          };
+        }
         return { ok: true };
       }
       case "GATES": {
@@ -384,7 +516,7 @@ export class RunEngine {
 
   // ── persistence helpers (journal-before-act lives in the repos) ───────────
 
-  private lastPlanFiles = new Map<RunId, string[]>();
+  private lastPlans = new Map<RunId, IncrementPlan>();
   private signals = new Map<RunId, AbortSignal | undefined>();
 
   private async enterPhase(runId: RunId, phase: RunPhaseName, attempt: number): Promise<void> {

@@ -13,7 +13,14 @@ export const IncrementStateSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("RUNNING"), runId: RunIdSchema }),
   z.object({ status: z.literal("VERIFYING"), runId: RunIdSchema }),
   z.object({ status: z.literal("AWAITING_SIGNATURE"), runId: RunIdSchema, prUrl: z.string().optional() }),
-  z.object({ status: z.literal("MERGED"), mergedAt: z.iso.datetime() }),
+  z.object({
+    status: z.literal("MERGED"),
+    mergedAt: z.iso.datetime(),
+    /** Promises landed without proof, by an explicit choice at the seal. Absent means none. */
+    onTrust: z.array(z.string()).optional(),
+    /** The merge commit on main. Absent for merges from before it was recorded. */
+    sha: z.string().optional(),
+  }),
   z.object({ status: z.literal("ESCALATED"), escalationId: EscalationIdSchema }),
   z.object({ status: z.literal("PARKED"), quotaWindowId: QuotaWindowIdSchema, resumeAt: z.iso.datetime() }),
   z.object({ status: z.literal("FAILED"), reason: z.string() }),
@@ -90,7 +97,18 @@ export const ALLOWED_RULE_TRANSITIONS: Record<RuleStatus, readonly RuleStatus[]>
 // ── Escalation ───────────────────────────────────────────────────────────────
 
 export const EscalationStateSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("RAISED"), question: z.string().min(1) }),
+  z.object({
+    status: z.literal("RAISED"),
+    question: z.string().min(1),
+    /** Set when the agent wanted files outside the fence; answered with a choice, not prose. */
+    fence: z
+      .object({ outside: z.array(z.string()).min(1), reason: z.string().nullable(), surface: z.array(z.string()) })
+      .optional(),
+    /** Answers to choose from, when the question has them; free text is always allowed. */
+    options: z.array(z.string()).optional(),
+    /** Why it asked rather than chose. */
+    why: z.string().optional(),
+  }),
   z.object({ status: z.literal("ANSWERED"), answer: z.string().min(1) }),
   z.object({ status: z.literal("BRIEF_AMENDED"), newBriefVersion: z.number().int().min(1) }),
 ]);

@@ -70,8 +70,8 @@ export function afterPhaseFailure(input: {
         return {
           kind: "escalate",
           question:
-            `Increment exhausted its repair budget (${input.maxRepairIterations} repairs, ` +
-            `${input.maxFreshRestarts} restart). Last failure: ${error.message}`,
+            `It tried ${input.maxRepairIterations} repairs and ${input.maxFreshRestarts === 1 ? "a fresh start" : `${input.maxFreshRestarts} fresh starts`}, ` +
+            `and the checks still fail: ${error.message}. How should it go on?`,
         };
       }
       return { kind: "fail", error };
@@ -93,4 +93,15 @@ export function recoveryDecision(state: RunState, hasSessionRef: boolean): RunDe
     return { kind: "enter_phase", phase: "AGENT_IMPLEMENT", attempt: state.attempt }; // resume path
   }
   return { kind: "enter_phase", phase: state.phase, attempt: state.attempt + 1 };
+}
+
+/**
+ * Questions stored before the wording was made plain, rewritten on the way out. The
+ * record is left as it was written; only what a person reads changes.
+ */
+export function plainQuestion(q: string): string {
+  const m = /^Increment exhausted its repair budget \((\d+) repairs?, (\d+) restarts?\)\. Last failure: (.*)$/s.exec(q);
+  if (!m) return q;
+  const restarts = Number(m[2]);
+  return `It tried ${m[1]} repairs and ${restarts === 1 ? "a fresh start" : `${restarts} fresh starts`}, and the checks still fail: ${m[3]}. How should it go on?`;
 }

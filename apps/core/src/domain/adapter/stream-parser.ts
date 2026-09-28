@@ -99,11 +99,14 @@ export function parseStreamLine(rawLine: string, now: Date): AdapterEvent[] {
         if (limit) events.push(limit);
         events.push(validate({ type: "assistant_text", text: block.text }));
       } else if (block.type === "tool_use" && "name" in block) {
+        const input = "input" in block ? block.input : null;
+        const detail = toolDetail(input);
         events.push(
           validate({
             type: "tool_use",
             toolName: String(block.name),
-            inputPreview: JSON.stringify("input" in block ? block.input : null).slice(0, 2000),
+            inputPreview: JSON.stringify(input).slice(0, 2000),
+            ...(detail ? { detail } : {}),
           }),
         );
       }
@@ -174,6 +177,49 @@ export function parseStreamLine(rawLine: string, now: Date): AdapterEvent[] {
   }
 
   return [validate({ type: "unrecognized", rawLine: line.slice(0, 4000) })];
+}
+
+// The fields a person watching would want, read from the FULL input. Every field is
+// optional and independently validated: one odd field must not cost the others, and a
+// tool this parser has never heard of simply yields nothing.
+const ToolInput = z
+  .object({
+    file_path: z.string().optional(),
+    notebook_path: z.string().optional(),
+    path: z.string().optional(),
+    command: z.string().optional(),
+    description: z.string().optional(),
+    pattern: z.string().optional(),
+    todos: z.array(z.unknown()).optional(),
+  })
+  .loose();
+const Todo = z.object({
+  content: z.string(),
+  status: z.enum(["pending", "in_progress", "completed"]),
+  activeForm: z.string().optional(),
+});
+
+type ToolDetail = NonNullable<Extract<AdapterEvent, { type: "tool_use" }>["detail"]>;
+
+function toolDetail(input: unknown): ToolDetail | null {
+  const parsed = ToolInput.safeParse(input);
+  if (!parsed.success) return null;
+  const i = parsed.data;
+  const detail: ToolDetail = {};
+  const filePath = i.file_path ?? i.notebook_path;
+  if (filePath) detail.filePath = filePath;
+  else if (i.path && i.pattern === undefined) detail.filePath = i.path;
+  if (i.command) detail.command = i.command.slice(0, 500);
+  if (i.description) detail.description = i.description.slice(0, 300);
+  if (i.pattern) detail.pattern = i.pattern.slice(0, 300);
+  if (i.todos) {
+    const todos = i.todos.flatMap((t) => {
+      const ok = Todo.safeParse(t);
+      return ok.success ? [ok.data] : [];
+    });
+    if (todos.length > 0) detail.todos = todos;
+  }
+  return Object.keys(detail).length > 0 ? detail : null;
 }
 
 function limitEventFromText(text: string, now: Date): AdapterEvent | null {

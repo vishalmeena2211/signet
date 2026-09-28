@@ -56,6 +56,7 @@ export const RuleCardSchema = RuleSchema.pick({
   trend: true,
   status: true,
   fpCount: true,
+  exceptions: true,
 });
 export type RuleCard = z.infer<typeof RuleCardSchema>;
 

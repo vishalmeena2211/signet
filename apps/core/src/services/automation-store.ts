@@ -104,17 +104,21 @@ export class AutomationStore {
   }
 
   async saveWorkflow(req: SaveWorkflowRequest): Promise<{ id: string }> {
-    const id = randomUUID();
+    const id = req.id ?? randomUUID();
     await this.deps.db.$transaction(async (tx) => {
-      await tx.workflow.create({
-        data: {
-          id,
-          name: req.name,
-          enabled: req.enabled,
-          maxDepth: req.maxDepth,
-          triggerJson: JSON.stringify(WorkflowTriggerSchema.parse(req.trigger)),
-        },
-      });
+      const data = {
+        name: req.name,
+        enabled: req.enabled,
+        maxDepth: req.maxDepth,
+        triggerJson: JSON.stringify(WorkflowTriggerSchema.parse(req.trigger)),
+      };
+      if (req.id) {
+        // Changing a slot in the sentence edits the routine in place: its history stays.
+        await tx.workflow.update({ where: { id }, data });
+        await tx.workflowStep.deleteMany({ where: { workflowId: id } });
+      } else {
+        await tx.workflow.create({ data: { id, ...data } });
+      }
       let order = 0;
       for (const recipeId of req.recipeIds) {
         await tx.workflowStep.create({ data: { id: randomUUID(), workflowId: id, recipeId, orderIndex: order++ } });

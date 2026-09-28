@@ -29,7 +29,21 @@ import {
   DispatcherStateSchema,
   GithubRepoListSchema,
   RunIdSchema,
+  MergeRequestSchema,
+  SendBackRequestSchema,
+  FenceAnswerRequestSchema,
+  BaselineRequestSchema,
+  AskRequestSchema,
+  conflict,
 } from "@signet/contracts";
+import type { WorkViews } from "../services/work-views.js";
+import type { BaselineChecks } from "../services/baseline-checks.js";
+import type { AwaySummaryService } from "../services/away-summary.js";
+import type { PlaceViews, StepViews } from "../services/place-views.js";
+import type { ProposalsInFlight } from "../services/feature-events.js";
+import type { TakeBack } from "../services/take-back.js";
+import { healthLines, type HealthDeps } from "../services/health-lines.js";
+import { glance, portrait, type RepoNotes } from "../services/portrait.js";
 import type { ConsoleViews } from "../services/console-views.js";
 import type { Signatures } from "../services/signatures.js";
 import type { Controls } from "../services/controls.js";
@@ -63,6 +77,16 @@ export const TOKENS = {
   repos: "signet.repos",
   automation: "signet.automation",
   workflows: "signet.workflows",
+  work: "signet.work",
+  baseline: "signet.baseline",
+  away: "signet.away",
+  events: "signet.events",
+  inFlight: "signet.inFlight",
+  places: "signet.places",
+  steps: "signet.steps",
+  takeBack: "signet.takeBack",
+  health: "signet.healthDeps",
+  notes: "signet.repoNotes",
 } as const;
 
 @Controller("api")
@@ -88,7 +112,182 @@ export class ApiController {
     @Inject(TOKENS.repos) private readonly repos: RepoDiscovery,
     @Inject(TOKENS.automation) private readonly automation: AutomationStore,
     @Inject(TOKENS.workflows) private readonly workflowEngine: WorkflowEngine,
+    @Inject(TOKENS.work) private readonly work: WorkViews,
+    @Inject(TOKENS.baseline) private readonly baseline: BaselineChecks,
+    @Inject(TOKENS.away) private readonly away: AwaySummaryService,
+    @Inject(TOKENS.places) private readonly places: PlaceViews,
+    @Inject(TOKENS.inFlight) private readonly inFlight: ProposalsInFlight,
+    @Inject(TOKENS.steps) private readonly steps: StepViews,
+    @Inject(TOKENS.takeBack) private readonly takeBack: TakeBack,
+    @Inject(TOKENS.health) private readonly healthDeps: HealthDeps,
+    @Inject(TOKENS.notes) private readonly notes: RepoNotes,
   ) {}
+
+  /** First run: the repo, as Signet read it. Free — no model call. */
+  @Get("repos/portrait")
+  async repoPortrait(@Query("repoId") repoId?: string) {
+    const repo = this.repos.resolve(repoId);
+    return portrait({ id: repoId ?? repo.path, label: repo.label, path: repo.path }, this.notes);
+  }
+
+  /** One line about a repo, for the first-run list. */
+  @Get("repos/glance")
+  async repoGlance(@Query("repoId") repoId?: string) {
+    return glance(this.repos.resolve(repoId).path);
+  }
+
+  /** A correction to the portrait, kept with the repo. */
+  @Post("repos/notes")
+  async repoNote(@Body() body: unknown) {
+    const req = z.object({ repoId: z.string().optional(), note: z.string().min(1).max(500) }).parse(body);
+    await this.notes.set(this.repos.resolve(req.repoId).path, req.note);
+    return { saved: true };
+  }
+
+  /** Workshop · Health: one fact per line, and the fix for a failing one. */
+  @Get("health/lines")
+  async healthView() {
+    return healthLines(this.healthDeps);
+  }
+
+  /** Take a landed step back: a revert, as a new step waiting for your seal. */
+  @Post("increments/:id/take-back")
+  async startTakeBack(@Param("id") id: string) {
+    const res = await this.takeBack.start(IncrementIdSchema.parse(id));
+    this.realtime.broadcast({ kind: "increment_changed", incrementId: IncrementIdSchema.parse(res.incrementId) });
+    return res;
+  }
+
+  // ── asking ──
+
+  /** What the survey found in the repo — free, and shown while anything else is worked out. */
+  @Post("ask/survey")
+  async askSurvey(@Body() body: unknown) {
+    const req = z.object({ repoId: z.string().optional() }).parse(body ?? {});
+    return this.proposer.survey(req.repoId);
+  }
+
+  /** The questions worth asking before a plan exists. */
+  @Post("ask/questions")
+  async askQuestions(@Body() body: unknown) {
+    const req = AskRequestSchema.parse(body);
+    const done = this.inFlight.begin(req.goal, this.repos.resolve(req.repoId).label);
+    const res = await this.proposer.questions(req.goal, req.repoId).finally(done);
+    if (!res.ok) throw res.error;
+    return res.questions;
+  }
+
+  /** Every file in the repo, for pointing at one with @. */
+  @Get("repos/files")
+  async repoFiles(@Query("repoId") repoId?: string) {
+    return { files: await this.proposer.files(repoId) };
+  }
+
+  /** What a step in this repo usually costs, from the last twelve built here. */
+  @Get("estimate")
+  async estimate(@Query("repoId") repoId?: string) {
+    return this.steps.likelyCost(this.repos.resolve(repoId).path);
+  }
+
+  /** Everything a signing sheet shows about one step. */
+  @Get("increments/:id/sheet")
+  async sheet(@Param("id") id: string) {
+    return this.steps.sheet(IncrementIdSchema.parse(id));
+  }
+
+  /** Which branch the step's repo is on — watched while a seal sheet is open. */
+  @Get("increments/:id/checkout")
+  async checkout(@Param("id") id: string) {
+    return this.steps.checkout(IncrementIdSchema.parse(id));
+  }
+
+  // ── the three places ──
+
+  /** The Desk: every decision waiting on a person, and the six flow counts. */
+  @Get("desk")
+  async desk() {
+    return this.places.desk();
+  }
+
+  /** A feature as one timeline. */
+  @Get("features/:id/thread")
+  async thread(@Param("id") id: string) {
+    return this.places.thread(FeatureIdSchema.parse(id));
+  }
+
+  @Get("flow/canal")
+  async canal() {
+    return this.places.canal();
+  }
+
+  @Get("flow/ledger")
+  async ledger() {
+    return this.places.ledger();
+  }
+
+  // ── watching and judging a step ──
+
+  /** What the agent is doing: its own to-do list, its actions, and the map of where it has been. */
+  @Get("runs/:id/work")
+  async runWork(@Param("id") id: string) {
+    const view = await this.work.runWork(RunIdSchema.parse(id));
+    if (!view) throw new NotFoundException();
+    return view;
+  }
+
+  /** Each promise in "done when", with the test that proves it or why nothing does. */
+  @Get("increments/:id/promises")
+  async promises(@Param("id") id: string) {
+    return this.work.promises(IncrementIdSchema.parse(id));
+  }
+
+  /** Notes on lines of the change: back to the agent instead of landing. */
+  @Post("increments/:id/send-back")
+  async sendBack(@Param("id") id: string, @Body() body: unknown) {
+    const incId = IncrementIdSchema.parse(id);
+    const req = SendBackRequestSchema.parse(body);
+    const res = await this.controls.sendBack(incId, req.notes);
+    this.realtime.broadcast({ kind: "increment_changed", incrementId: incId });
+    return res;
+  }
+
+  /** "May I change files outside the fence" — answered with a choice. */
+  @Post("escalations/:id/fence")
+  async answerFence(@Param("id") id: string, @Body() body: unknown) {
+    const req = FenceAnswerRequestSchema.parse(body);
+    const { startNow } = await this.controls.answerFence(id, req);
+    // Widening the fence or staying inside it carries on: the answer is the new initial.
+    const started = startNow ? await this.signatures.approve(startNow) : null;
+    if (startNow) this.realtime.broadcast({ kind: "increment_changed", incrementId: IncrementIdSchema.parse(startNow) });
+    return { answered: true, runId: started?.runId ?? null };
+  }
+
+  /** The checks run once against main: can they run here, and do they pass before any change. */
+  @Post("repos/baseline")
+  async runBaseline(@Body() body: unknown) {
+    const req = BaselineRequestSchema.parse(body ?? {});
+    const repo = this.repos.resolve(req.repoId);
+    if (repo.origin === "github") {
+      throw Object.assign(new Error("github repo"), {
+        signet: conflict("baseline.github", "Checks run against a local clone. Clone the repository and pick it by path."),
+      });
+    }
+    return this.baseline.run({ path: repo.path, label: repo.label }, this.signatures.base);
+  }
+
+  @Get("repos/baseline")
+  async lastBaseline(@Query("repoId") repoId?: string) {
+    const repo = this.repos.resolve(repoId);
+    return { report: await this.baseline.last(repo.path) };
+  }
+
+  /** What happened since the person last looked. */
+  @Get("away")
+  async awaySummary(@Query("since") since?: string) {
+    // Validated like every other input, so a malformed date is a 400 with a reason.
+    const iso = z.iso.datetime().optional().parse(since);
+    return this.away.summary(iso ? new Date(iso) : new Date(Date.now() - 12 * 60 * 60_000));
+  }
 
   @Get("health")
   async health() {
@@ -296,7 +495,9 @@ export class ApiController {
   @Post("propose")
   async propose(@Body() body: unknown) {
     const req = ProposeFeatureRequestSchema.parse(body);
-    const result = await this.proposer.propose(req);
+    // Visible in the canal's first reach while it is being worked out.
+    const done = this.inFlight.begin(req.goal, this.repos.resolve(req.repoId).label);
+    const result = await this.proposer.propose(req).finally(done);
     // Thrown so the error filter maps it to a status and a sentence, rather than
     // returning 200 with a failure inside — the console would have to learn a second
     // way of discovering something went wrong.
@@ -315,8 +516,11 @@ export class ApiController {
   @Post("escalations/:id/answer")
   async answerEscalation(@Param("id") id: string, @Body() body: unknown) {
     const req = AnswerEscalationRequestSchema.parse(body);
-    await this.controls.answerEscalation(id, req.answer);
-    return { answered: true };
+    const incrementId = await this.controls.answerEscalation(id, req.answer);
+    // Answering is agreeing to carry on: the step starts again from where it stopped.
+    const started = await this.signatures.approve(incrementId);
+    this.realtime.broadcast({ kind: "increment_changed", incrementId: IncrementIdSchema.parse(incrementId) });
+    return { answered: true, runId: started.runId };
   }
 
   @Post("increments/:id/retry")
@@ -441,9 +645,10 @@ export class ApiController {
   }
 
   @Post("increments/:id/merge")
-  async merge(@Param("id") id: string) {
+  async merge(@Param("id") id: string, @Body() body: unknown) {
     const incId = IncrementIdSchema.parse(id);
-    await this.signatures.merge(incId);
+    const req = MergeRequestSchema.parse(body ?? {});
+    await this.signatures.merge(incId, { onTrust: req.onTrust });
     this.realtime.broadcast({ kind: "increment_changed", incrementId: incId });
     return { merged: true };
   }

@@ -9,5 +9,10 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    // Many suites make real repos and spawn git and test runners. At the default (one
+    // worker per core, less one) those children starve each other and tests that take
+    // under a second alone pass 5s. Capped here rather than raising every timeout, which
+    // would hide a genuine hang.
+    maxWorkers: 4,
   },
 });

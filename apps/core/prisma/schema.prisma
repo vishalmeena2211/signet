@@ -31,8 +31,27 @@ model Feature {
   updatedAt  DateTime    @updatedAt @map("updated_at")
   increments Increment[]
   briefs     BriefVersion[]
+  events     FeatureEvent[]
 
   @@map("features")
+}
+
+// What happened to a feature, in order: the things a person did and the things
+// Signet did that no other table records with their time — when it was asked for and
+// in whose words, what was proposed, what was merged as which commit, what was taken
+// back. The thread reads these beside runs, questions and request versions.
+model FeatureEvent {
+  id          String   @id @db.Uuid
+  featureId   String   @map("feature_id") @db.Uuid
+  incrementId String?  @map("increment_id") @db.Uuid
+  kind        String // asked | proposed | initialled | answered | sent_back | merged | taken_back
+  at          DateTime @default(now()) @db.Timestamptz(3)
+  payloadJson String   @default("{}") @map("payload_json")
+  feature     Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@index([featureId, at])
+  @@index([at])
+  @@map("feature_events")
 }
 
 model BriefVersion {
@@ -63,6 +82,9 @@ model Increment {
   repairAttempt   Int      @default(0) @map("repair_attempt")
   freshRestarts   Int      @default(0) @map("fresh_restarts")
   orderIndex      Int      @map("order_index")
+  // Set on a step that takes back an earlier one: its change is the revert of that
+  // step's merge. Null for every ordinary step.
+  revertsIncrementId String? @map("reverts_increment_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   feature         Feature  @relation(fields: [featureId], references: [id])

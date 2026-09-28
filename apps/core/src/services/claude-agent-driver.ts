@@ -13,6 +13,8 @@ import {
   type SignetError,
 } from "@signet/contracts";
 import { ClaudeAdapter, extractJsonBlock } from "../domain/adapter/claude-adapter.js";
+import { extractPromises, proofInstruction } from "../domain/gates/promises.js";
+import { ASK_INSTRUCTION } from "../domain/adapter/agent-question.js";
 import type { AgentDriver } from "./run-engine.js";
 
 export interface ClaudeAgentDriverOptions {
@@ -34,7 +36,12 @@ export class ClaudeAgentDriver implements AgentDriver {
     }
   }
 
-  async plan(input: { packDir: string; workspacePath: string; signal?: AbortSignal }) {
+  async plan(input: {
+    packDir: string;
+    workspacePath: string;
+    signal?: AbortSignal;
+    onEvent?: (ev: AdapterEvent) => Promise<void>;
+  }) {
     const brief = await this.packSection(input.packDir, "brief.md");
     const acceptance = await this.packSection(input.packDir, "acceptance.md");
     const surface = await this.packSection(input.packDir, "surface.txt");
@@ -44,9 +51,13 @@ export class ClaudeAgentDriver implements AgentDriver {
       "You are planning ONE small implementation increment. Do not write any code yet.",
       "Read the brief and acceptance criteria, inspect the code if needed, then output",
       "ONLY a JSON object (no prose) of the shape:",
-      '{ "approach": string, "filesToTouch": string[], "risks": string[] }',
-      "filesToTouch must be paths relative to the repository root, and must stay inside",
-      "the declared surface below. If the brief is ambiguous, list the ambiguity in risks.",
+      '{ "approach": string, "filesToTouch": string[], "risks": string[],',
+      '  "outsideReasons": { "<path>": "why this file is needed" } }',
+      "filesToTouch must be paths relative to the repository root. Stay inside the declared",
+      "surface below. If the work genuinely cannot be done without a file outside it, list",
+      "that file anyway and explain why in outsideReasons — a person will decide whether",
+      "it may be changed. Do not work around a real need silently. If the brief is",
+      "ambiguous, list the ambiguity in risks.",
       "",
       "## Brief",
       brief,
@@ -66,6 +77,7 @@ export class ClaudeAgentDriver implements AgentDriver {
       ...(input.signal ? { signal: input.signal } : {}),
       onEvent: async (ev: AdapterEvent) => {
         if (ev.type === "usage_update" || ev.type === "completed") usage.push(...ev.perModel);
+        await input.onEvent?.(ev);
       },
     });
 
@@ -96,12 +108,17 @@ export class ClaudeAgentDriver implements AgentDriver {
     onEvent: (ev: AdapterEvent) => Promise<void>;
   }) {
     let prompt: string;
+    // The promises are restated on every attempt, repairs included: the closing proof
+    // block is read from the LAST reply, so a repair that forgot it would lose the proof.
+    const promises = extractPromises(await this.packSection(input.packDir, "acceptance.md"));
+    const proof = proofInstruction(promises);
     if (input.repairFeedback) {
       prompt = [
         "The gates rejected your previous attempt. Fix ONLY what the findings below",
         "describe, keeping within the declared surface. Findings:",
         "",
         input.repairFeedback,
+        ...(proof ? ["", proof] : []),
       ].join("\n");
     } else {
       const brief = await this.packSection(input.packDir, "brief.md");
@@ -122,6 +139,9 @@ export class ClaudeAgentDriver implements AgentDriver {
         ...(design ? ["## Design of record (approved)", design] : []),
         "## Declared surface",
         surface,
+        ...(proof ? ["", proof] : []),
+        "",
+        ASK_INSTRUCTION,
       ].join("\n");
     }
 
@@ -141,6 +161,6 @@ export class ClaudeAgentDriver implements AgentDriver {
         error: result.error ?? nonRecoverable("implement.no_session", "no session"),
       };
     }
-    return { ok: true as const, sessionRef: result.sessionRef };
+    return { ok: true as const, sessionRef: result.sessionRef, resultText: result.resultText };
   }
 }

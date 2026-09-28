@@ -119,6 +119,8 @@ export const WorkflowSchema = z.object({
 export type Workflow = z.infer<typeof WorkflowSchema>;
 
 export const SaveWorkflowRequestSchema = z.object({
+  /** Present to change an existing routine in place; absent to make a new one. */
+  id: z.string().optional(),
   name: z.string().min(1).max(120),
   trigger: WorkflowTriggerSchema,
   /** At least one: a workflow with no steps is a scheduled no-op. */

@@ -178,10 +178,15 @@ d("crash/replay (live DB, scripted driver)", () => {
     async () => {
       let implementCalls = 0;
       let crashNext = true;
+      // A dead process polls no more. Without this the live dispatcher re-claims the
+      // released message on its next tick and finishes the run before the test can stop
+      // it, so "the state a SIGKILL leaves" was a race against the poll interval.
+      let die = (): void => {};
       const driver = scriptedDriver({
         implementShouldCrash: () => {
           const c = crashNext;
           crashNext = false;
+          if (c) die();
           return c;
         },
         implementCount: () => {
@@ -201,6 +206,7 @@ d("crash/replay (live DB, scripted driver)", () => {
           outcomes.push(o);
         },
       );
+      die = () => void dispatcher.stop();
 
       const runId = await enqueueRun(uow, INC);
 

@@ -20,6 +20,7 @@ const INC = IncrementIdSchema.parse("11111111-aaaa-4bbb-8ccc-00000000ff01");
 /** A unit of work that answers with one increment state and records writes. */
 function fakeUow(status: IncrementStatus | null) {
   const transitions: string[] = [];
+  const written: IncrementState[] = [];
   const enqueued: string[] = [];
   const tx = {
     increments: {
@@ -27,6 +28,7 @@ function fakeUow(status: IncrementStatus | null) {
         status === null ? null : { id: INC, state: { status } as IncrementState, declaredSurface: [], repairAttempt: 0, freshRestarts: 0 },
       transition: async (_id: unknown, from: string, to: IncrementState) => {
         transitions.push(`${from}->${to.status}`);
+        written.push(to);
       },
     },
     runs: {
@@ -37,7 +39,7 @@ function fakeUow(status: IncrementStatus | null) {
     outbox: { enqueue: async () => {} },
   };
   const uow = { run: async (fn: (t: unknown) => unknown) => fn(tx) } as unknown as UnitOfWork;
-  return { uow, transitions, enqueued };
+  return { uow, transitions, written, enqueued };
 }
 
 /** A repo path that would fail loudly if git were ever invoked against it. */
@@ -102,7 +104,8 @@ describe("signatures", () => {
   });
 });
 
-describe("the merge refuses to land on the wrong branch", () => {
+// Each of these makes a real repo and a real merge; under a loaded machine that passes 5s.
+describe("the merge refuses to land on the wrong branch", { timeout: 20_000 }, () => {
   it("refuses when the repo is on a different branch than the base ref", async () => {
     // `git merge` merges into whatever is checked out, and there is no checkout in this
     // path. A repo sitting on a feature branch would receive the work THERE — silently,
@@ -154,5 +157,50 @@ describe("the merge refuses to land on the wrong branch", () => {
     await expect(sigs.merge(INC)).rejects.not.toMatchObject({
       signet: { code: "merge.wrong_branch" },
     });
+  });
+});
+
+describe("the seal holds on promises that no test proves", { timeout: 20_000 }, () => {
+  /** A repo on main with a real increment branch that adds one commit. */
+  async function repoWithWork(): Promise<string> {
+    const repo = await repoOn("main");
+    const git = (args: string[]) => exec("git", args, { cwd: repo });
+    await git(["checkout", "-q", "-b", `signet/inc-${INC}`]);
+    await writeFile(join(repo, "b.txt"), "work\n");
+    await git(["add", "-A"]);
+    await git(["commit", "-qm", "work"]);
+    await git(["checkout", "-q", "main"]);
+    return repo;
+  }
+
+  it("refuses to land unproven work unless sealed on trust — WITHOUT running git", async () => {
+    const { uow, transitions } = fakeUow("AWAITING_SIGNATURE");
+    const sigs = new Signatures(uow, NOT_A_REPO, "main");
+    sigs.unprovenPromises = async () => ["A cluster of one draws as the marker"];
+    await expect(sigs.merge(INC)).rejects.toMatchObject({
+      signet: { kind: "conflict", code: "merge.unproven", message: expect.stringContaining("A cluster of one draws as the marker") },
+    });
+    expect(transitions).toEqual([]);
+  });
+
+  it("seals on trust when asked, and records which promises were taken on trust — on the step and in the commit", async () => {
+    const repo = await repoWithWork();
+    const { uow, written } = fakeUow("AWAITING_SIGNATURE");
+    const sigs = new Signatures(uow, repo, "main");
+    sigs.unprovenPromises = async () => ["A cluster of one draws as the marker"];
+    await sigs.merge(INC, { onTrust: true });
+    expect(written[0]).toMatchObject({ status: "MERGED", onTrust: ["A cluster of one draws as the marker"] });
+    const { stdout } = await exec("git", ["log", "-1", "--format=%B"], { cwd: repo });
+    expect(stdout).toContain("Sealed on trust");
+    expect(stdout).toContain("- A cluster of one draws as the marker");
+  });
+
+  it("does not stamp 'on trust' on work whose promises are all proven", async () => {
+    const repo = await repoWithWork();
+    const { uow, written } = fakeUow("AWAITING_SIGNATURE");
+    const sigs = new Signatures(uow, repo, "main");
+    sigs.unprovenPromises = async () => [];
+    await sigs.merge(INC, { onTrust: true });
+    expect(written[0]).not.toHaveProperty("onTrust");
   });
 });

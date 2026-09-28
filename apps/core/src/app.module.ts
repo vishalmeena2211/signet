@@ -30,6 +30,16 @@ import { GateSuite } from "./domain/gates/gate-runner.js";
 import { lintGate, testsGate, typecheckGate } from "./domain/gates/standard-gates.js";
 import { rulesGate } from "./domain/gates/rules-gate.js";
 import { conformanceGate } from "./domain/gates/conformance-gate.js";
+import { PROOFS_FILE, promisesGate } from "./domain/gates/promises-gate.js";
+import { AgentWorkLog, toAgentAction } from "./services/agent-work.js";
+import { WorkViews } from "./services/work-views.js";
+import { BaselineChecks } from "./services/baseline-checks.js";
+import { AwaySummaryService } from "./services/away-summary.js";
+import { writeFile } from "node:fs/promises";
+import { FeatureEvents, ProposalsInFlight } from "./services/feature-events.js";
+import { PlaceViews, StepViews, type PlaceDeps } from "./services/place-views.js";
+import { TakeBack } from "./services/take-back.js";
+import { RepoNotes } from "./services/portrait.js";
 import { makeRunOnBase } from "./domain/gates/base-overlay.js";
 import { DesignStore } from "./services/design-store.js";
 import { join } from "node:path";
@@ -59,6 +69,30 @@ const UOW = "signet.uow";
 export const LOGGER = "signet.logger";
 const DISPATCHER = "signet.dispatcher";
 const EVENTS = "signet.automationEvents";
+const WORKLOG = "signet.workLog";
+const PLACE_DEPS = "signet.placeDeps";
+
+function placeDeps(
+  cfg: SignetConfig,
+  db: PrismaClient,
+  diffs: DiffReader,
+  work: WorkViews,
+  log: AgentWorkLog,
+  proposals: ProposalsInFlight,
+  views: ConsoleViews,
+): PlaceDeps {
+  return {
+    db,
+    diffs,
+    work,
+    log,
+    proposals,
+    quota: () => views.quotaState(0),
+    configuredRepoLabel: cfg.targetRepoPath.split("/").filter(Boolean).pop() ?? "repo",
+    configuredRepoPath: cfg.targetRepoPath,
+    baseRef: cfg.baseRef,
+  };
+}
 
 /**
  * Left unpinned so a run uses whatever the operator's Claude Code is configured
@@ -77,6 +111,7 @@ function buildDispatcher(
   rules: RuleStore,
   designs: DesignStore,
   events: AutomationEvents,
+  workLog: AgentWorkLog,
 ): Dispatcher {
   const worktrees = new WorktreeManager(cfg.targetRepoPath, cfg.workspacesRoot);
   const adapter = new ClaudeAdapter({ binary: cfg.claudeBinary, timeoutMs: 20 * 60_000 }, log);
@@ -92,6 +127,7 @@ function buildDispatcher(
       testsGate({ runOnBase: makeRunOnBase() }),
       rulesGate({ loadConfirmedRules: () => rules.confirmedRules(targetLabel) }), // warn-first
       conformanceGate({ loadDesign: (incId) => designs.get(incId) }), // blocks: the design was signed
+      promisesGate({ packsRoot: cfg.packsRoot }), // never blocks the run; the seal holds on it
     ],
     async (runId, v) => {
       await db.gateVerdict.create({
@@ -174,6 +210,28 @@ function buildDispatcher(
       },
     },
   );
+  // Watching, not deciding: every hook is best-effort inside the engine, so a full disk
+  // or a slow socket can cost a view and never a run.
+  const lastBroadcast = new Map<string, number>();
+  engine.hooks = {
+    async onAgentEvent({ runId, incrementId, phase, workspacePath, event }) {
+      const action = toAgentAction(event, phase, workspacePath, new Date());
+      if (!action) return;
+      await workLog.append(runId, action);
+      // At most one redraw a second per run: an agent can make several calls a second,
+      // and a screen that repaints on every one is harder to read, not easier.
+      const now = Date.now();
+      if (now - (lastBroadcast.get(runId) ?? 0) > 1000) {
+        lastBroadcast.set(runId, now);
+        realtime.broadcast({ kind: "run_activity", runId, incrementId });
+      }
+    },
+    // The closing message is where the agent names the test for each promise; the
+    // promises gate reads it from beside the pack, as it reads acceptance.md.
+    async onImplementResult({ packDir, resultText }) {
+      await writeFile(join(packDir, PROOFS_FILE), resultText, "utf8");
+    },
+  };
   const quota = new PrismaQuotaStore(db);
   return new Dispatcher(
     uow,
@@ -204,7 +262,13 @@ function buildDispatcher(
                 id: escalationId,
                 incrementId: incId,
                 status: "RAISED",
-                stateJson: JSON.stringify({ status: "RAISED", question: outcome.question }),
+                stateJson: JSON.stringify({
+                  status: "RAISED",
+                  question: outcome.question,
+                  ...(outcome.fence ? { fence: outcome.fence } : {}),
+                  ...(outcome.options ? { options: outcome.options } : {}),
+                  ...(outcome.why ? { why: outcome.why } : {}),
+                }),
               },
             });
             await tx.increments.transition(incId, "RUNNING", {
@@ -251,10 +315,88 @@ function buildDispatcher(
     { provide: UOW, useFactory: (db: PrismaClient) => new PrismaUnitOfWork(db), inject: [PRISMA] },
     { provide: TOKENS.realtime, useFactory: (log: Logger) => new Realtime(log), inject: [LOGGER] },
     { provide: TOKENS.views, useFactory: (db: PrismaClient) => new ConsoleViews(db), inject: [PRISMA] },
+    { provide: WORKLOG, useFactory: (cfg: SignetConfig) => new AgentWorkLog(cfg.packsRoot), inject: [CONFIG] },
+    { provide: TOKENS.events, useFactory: (db: PrismaClient) => new FeatureEvents(db), inject: [PRISMA] },
+    { provide: TOKENS.inFlight, useFactory: () => new ProposalsInFlight() },
+    {
+      provide: PLACE_DEPS,
+      useFactory: (
+        cfg: SignetConfig,
+        db: PrismaClient,
+        diffs: DiffReader,
+        work: WorkViews,
+        log: AgentWorkLog,
+        proposals: ProposalsInFlight,
+        views: ConsoleViews,
+      ) =>
+        placeDeps(cfg, db, diffs, work, log, proposals, views),
+      inject: [CONFIG, PRISMA, TOKENS.diffs, TOKENS.work, WORKLOG, TOKENS.inFlight, TOKENS.views],
+    },
+    {
+      provide: TOKENS.places,
+      useFactory: (deps: PlaceDeps) => new PlaceViews(deps),
+      inject: [PLACE_DEPS],
+    },
+    {
+      provide: TOKENS.notes,
+      useFactory: (cfg: SignetConfig) => new RepoNotes(join(cfg.workspacesRoot, "..", "repo-notes.json")),
+      inject: [CONFIG],
+    },
+    {
+      provide: TOKENS.health,
+      useFactory: (cfg: SignetConfig, db: PrismaClient, baseline: BaselineChecks) => ({
+        db,
+        repoPath: cfg.targetRepoPath,
+        baseRef: cfg.baseRef,
+        workspacesRoot: cfg.workspacesRoot,
+        claudeBinary: cfg.claudeBinary,
+        baseline,
+      }),
+      inject: [CONFIG, PRISMA, TOKENS.baseline],
+    },
+    {
+      provide: TOKENS.takeBack,
+      useFactory: (cfg: SignetConfig, db: PrismaClient) =>
+        new TakeBack({ db, workspacesRoot: cfg.workspacesRoot, configuredRepoPath: cfg.targetRepoPath, baseRef: cfg.baseRef }),
+      inject: [CONFIG, PRISMA],
+    },
+    {
+      provide: TOKENS.steps,
+      useFactory: (deps: PlaceDeps) => new StepViews(deps),
+      inject: [PLACE_DEPS],
+    },
+    {
+      provide: TOKENS.work,
+      useFactory: (db: PrismaClient, log: AgentWorkLog) => new WorkViews(db, log),
+      inject: [PRISMA, WORKLOG],
+    },
+    {
+      provide: TOKENS.baseline,
+      // Beside operator-state.json, for the same reason: it belongs to this instance's
+      // data, not to any repository.
+      useFactory: (cfg: SignetConfig) =>
+        new BaselineChecks({
+          typecheck: typecheckGate(),
+          tests: testsGate({ runOnBase: makeRunOnBase() }),
+          storePath: join(cfg.workspacesRoot, "..", "baselines.json"),
+        }),
+      inject: [CONFIG],
+    },
+    { provide: TOKENS.away, useFactory: (db: PrismaClient) => new AwaySummaryService(db), inject: [PRISMA] },
     {
       provide: TOKENS.signatures,
-      useFactory: (uow: PrismaUnitOfWork, cfg: SignetConfig, db: PrismaClient) => {
+      useFactory: (uow: PrismaUnitOfWork, cfg: SignetConfig, db: PrismaClient, work: WorkViews, events: FeatureEvents) => {
           const signatures = new Signatures(uow, cfg.targetRepoPath, cfg.baseRef);
+          // The seal holds on unproven promises unless the person chooses to seal on trust.
+          signatures.unprovenPromises = (incrementId) => work.unproven(incrementId);
+          signatures.onSigned = async (e) => {
+            await events.record({ incrementId: e.incrementId, kind: e.kind, payload: e.payload });
+            // Sealing a take-back is what takes the earlier step back.
+            if (e.kind === "merged") {
+              const inc = await db.increment.findUnique({ where: { id: e.incrementId }, select: { revertsIncrementId: true } });
+              if (inc?.revertsIncrementId) await events.record({ incrementId: inc.revertsIncrementId, kind: "taken_back" });
+            }
+          };
           // A feature can target its own repo, so the merge has to follow it. Merging
           // into the configured repo regardless would land real commits in the wrong
           // codebase, silently.
@@ -267,7 +409,7 @@ function buildDispatcher(
           };
           return signatures;
       },
-      inject: [UOW, CONFIG, PRISMA],
+      inject: [UOW, CONFIG, PRISMA, TOKENS.work, TOKENS.events],
     },
     {
       provide: TOKENS.rules,
@@ -323,16 +465,17 @@ function buildDispatcher(
     {
       provide: DISPATCHER,
       useFactory: buildDispatcher,
-      inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime, TOKENS.rules, TOKENS.designs, EVENTS],
+      inject: [CONFIG, UOW, PRISMA, LOGGER, TOKENS.realtime, TOKENS.rules, TOKENS.designs, EVENTS, WORKLOG],
     },
     {
       provide: TOKENS.controls,
-      useFactory: (db: PrismaClient, uow: PrismaUnitOfWork, dispatcher: Dispatcher, repos: RepoDiscovery) => {
+      useFactory: (db: PrismaClient, uow: PrismaUnitOfWork, dispatcher: Dispatcher, repos: RepoDiscovery, events: FeatureEvents) => {
         const controls = new Controls(db, uow, dispatcher);
         controls.resolveRepo = (repoId) => repos.resolve(repoId);
+        controls.events = events;
         return controls;
       },
-      inject: [PRISMA, UOW, DISPATCHER, TOKENS.repos],
+      inject: [PRISMA, UOW, DISPATCHER, TOKENS.repos, TOKENS.events],
     },
     {
       provide: TOKENS.activeWorkers,
@@ -397,9 +540,10 @@ function buildDispatcher(
       // Its own adapter instance with a shorter leash than an implementation run:
       // proposing is one question with no code to write, so a long timeout here would
       // only ever mean something has hung.
-      useFactory: (cfg: SignetConfig, log: Logger, repos: RepoDiscovery, github: GithubConnector) => {
+      useFactory: (cfg: SignetConfig, log: Logger, repos: RepoDiscovery, github: GithubConnector, notes: RepoNotes) => {
         const adapter = new ClaudeAdapter({ binary: cfg.claudeBinary, timeoutMs: 5 * 60_000 }, log);
         return new FeatureProposer({
+          repoNote: (path) => notes.get(path),
           // A github repo has no local path until somebody asks for one, so the clone
           // happens here, on demand, into the cache the learner already uses. Nothing
           // is fetched to populate a dropdown.
@@ -418,7 +562,7 @@ function buildDispatcher(
           ...(AGENT_MODEL !== null ? { model: AGENT_MODEL } : {}),
         });
       },
-      inject: [CONFIG, LOGGER, TOKENS.repos, TOKENS.github],
+      inject: [CONFIG, LOGGER, TOKENS.repos, TOKENS.github, TOKENS.notes],
     },
   ],
   exports: [],
@@ -435,6 +579,7 @@ export class AppModule implements OnApplicationBootstrap, OnApplicationShutdown 
     @Inject(EVENTS) private readonly events: AutomationEvents,
     @Inject(CONFIG) private readonly cfg: SignetConfig,
     @Inject(TOKENS.views) private readonly views: ConsoleViews,
+    @Inject(TOKENS.baseline) private readonly baseline: BaselineChecks,
   ) {}
 
   /**
@@ -471,6 +616,7 @@ export class AppModule implements OnApplicationBootstrap, OnApplicationShutdown 
       void (async () => {
         await this.workflows.tick(new Date());
         await this.detectQuotaReset();
+        await this.morningChecks();
       })().catch((e: unknown) => {
         this.log.error("automation.tick_failed", { error: String(e) });
       });
@@ -504,6 +650,26 @@ export class AppModule implements OnApplicationBootstrap, OnApplicationShutdown 
     this.events.subscribe(async (event, cause) => {
       await this.workflows.onEvent(event, cause);
     });
+  }
+
+  /**
+   * The checks run again on main each morning, so a check that stops working on its own
+   * is caught before it blames a step. At most once in twenty hours, and never twice at
+   * the same time.
+   */
+  private checkingMain = false;
+  private async morningChecks(): Promise<void> {
+    if (this.checkingMain) return;
+    const last = await this.baseline.last(this.cfg.targetRepoPath);
+    if (last && Date.now() - Date.parse(last.checkedAt) < 20 * 3600_000) return;
+    this.checkingMain = true;
+    try {
+      await this.baseline.run({ path: this.cfg.targetRepoPath, label: this.cfg.targetRepoPath.split("/").pop() ?? "repo" }, this.cfg.baseRef);
+    } catch (e) {
+      this.log.warn("baseline.morning_failed", { error: String(e) });
+    } finally {
+      this.checkingMain = false;
+    }
   }
 
   /** Publishes quota_reset on the exhausted -> healthy edge, never on the level. */

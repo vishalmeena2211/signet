@@ -119,6 +119,9 @@ export class Dispatcher {
     const free = this.maxWorkers - this.active;
     if (free <= 0) return;
 
+    // Checked again: stop() may have landed while the quota read was in flight, and a
+    // stopped dispatcher must not claim work it will then run anyway.
+    if (this.stopped || this.paused) return;
     const claimed = await this.uow.run(async (tx) => tx.outbox.claimDue(free));
     for (const msg of claimed) {
       void this.handle(msg);

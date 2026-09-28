@@ -185,6 +185,7 @@ function makeHarness(opts: {
   agentImplement: AgentDriver["implement"];
   gateResults: Array<{ passed: boolean; feedback?: string }>;
   planFiles?: string[];
+  outsideReasons?: Record<string, string>;
   /** Called once per gate round, so a test can COUNT them rather than infer the bound. */
   onGateRound?: () => void;
 }) {
@@ -216,6 +217,7 @@ function makeHarness(opts: {
           approach: "edit feature.ts",
           filesToTouch: opts.planFiles ?? ["feature.ts"],
           risks: [],
+          ...(opts.outsideReasons ? { outsideReasons: opts.outsideReasons } : {}),
         },
         sessionRef: SESSION,
         usage: [{ model: "claude-opus-5", inputTokens: 100, cachedInputTokens: 0, outputTokens: 50 }],
@@ -330,16 +332,46 @@ describe("run engine — full loop", () => {
     expect(implementPhases.length).toBe(2);
   });
 
-  it("out-of-scope plan → failed with scope.outside_surface (escalation upstream)", async () => {
+  it("out-of-scope plan → a question about the fence, not a dead run", async () => {
+    // It used to fail non-recoverably and throw away everything the plan worked out.
+    // Now the person decides whether the file may be changed — and nothing outside the
+    // fence has been touched while they decide.
+    let implemented = false;
+    const h = makeHarness({
+      agentImplement: async (input) => {
+        implemented = true;
+        return writingImplement("v3")(input);
+      },
+      gateResults: [{ passed: true }],
+      planFiles: ["feature.ts", "tiles.ts"],
+      outsideReasons: { "tiles.ts": "Tile coordinates are rounded there, so edge markers double-count." },
+    });
+    const outcome = await h.engine.execute(RUN, INC, "ASSEMBLE_PACK", 1);
+    expect(outcome.outcome).toBe("escalated");
+    if (outcome.outcome !== "escalated") return;
+    expect(outcome.fence).toEqual({
+      outside: ["tiles.ts"],
+      reason: "Tile coordinates are rounded there, so edge markers double-count.",
+      surface: ["app.ts", "feature.ts"],
+    });
+    expect(outcome.question).toContain("tiles.ts");
+    expect(outcome.question).toContain("double-count");
+    expect(implemented).toBe(false);
+  });
+
+  it("a run that stops to ask is ended, so a restart does not resurrect it", async () => {
+    // Left in its phase, the boot-time completer re-queued it and the console called it
+    // running. Answering starts a fresh run, so this one is over.
     const h = makeHarness({
       agentImplement: writingImplement("v3"),
       gateResults: [{ passed: true }],
       planFiles: ["secrets/prod.env"],
     });
     const outcome = await h.engine.execute(RUN, INC, "ASSEMBLE_PACK", 1);
-    expect(outcome.outcome).toBe("failed");
-    if (outcome.outcome !== "failed") return;
-    expect(outcome.error.code).toBe("scope.outside_surface");
+    expect(outcome.outcome).toBe("escalated");
+    if (outcome.outcome !== "escalated") return;
+    expect(outcome.question).toContain("did not say why");
+    expect(h.runs.states.get(RUN)).toEqual({ status: "ABORTED", reason: "stopped to ask a question" });
   });
 
   it("quota limit mid-implement → parked with the reset time, no repair burned", async () => {
@@ -370,7 +402,8 @@ describe("run engine — full loop", () => {
     const outcome = await h.engine.execute(RUN, INC, "ASSEMBLE_PACK", 1);
     expect(outcome.outcome).toBe("escalated");
     if (outcome.outcome !== "escalated") return;
-    expect(outcome.question).toMatch(/repair budget/);
+    // Plain words, and the last failure, so the person knows what it gave up on.
+    expect(outcome.question).toMatch(/^It tried \d+ repairs and .*, and the checks still fail: .*\. How should it go on\?$/);
   }, BUDGET_TEST_TIMEOUT);
 
   it("PERSISTS the repair counter, so the budget can actually run out", async () => {

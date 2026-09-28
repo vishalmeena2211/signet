@@ -15,5 +15,7 @@ export * from "./rules.js";
 export * from "./design.js";
 export * from "./graph.js";
 export * from "./automation.js";
+export * from "./work.js";
+export * from "./places.js";
 
 export const CONTRACTS_VERSION = "0.0.1" as const;

@@ -28,10 +28,16 @@
 //     a plan that produces a dead run.
 
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AskQuestionsSchema,
+  AskSurveySchema,
+  type AskQuestions,
+  type AskSurvey,
   ValidatedFeatureProposalSchema,
   ProposeFeatureRequestSchema,
   nonRecoverable,
@@ -74,6 +80,8 @@ export interface ProposerDeps {
   resolveRepo?: (repoId: string | undefined) => Promise<{ path: string; label: string; origin: "local" | "github" }>;
   model?: string;
   maxTurns?: number;
+  /** What the person told us about this repo on first run, handed to the planner. */
+  repoNote?: (repoPath: string) => Promise<string | null>;
 }
 
 /**
@@ -91,13 +99,13 @@ export function checkSurfaces(proposal: FeatureProposal, profile: RepoProfile): 
   for (const step of proposal.steps) {
     for (const pattern of step.declaredSurface) {
       if (pattern.startsWith("/") || pattern.includes("..")) {
-        warnings.push({ stepTitle: step.title, pattern, reason: "outside_repo" });
+        warnings.push({ stepTitle: step.title, pattern, reason: "outside_repo", suggestion: null });
         continue;
       }
       // A bare ** hands the agent the entire repository, which is the same as having
       // no surface at all — the guard is nominally present and enforcing nothing.
       if (pattern === "**" || pattern === "**/*" || pattern === "*") {
-        warnings.push({ stepTitle: step.title, pattern, reason: "matches_everything" });
+        warnings.push({ stepTitle: step.title, pattern, reason: "matches_everything", suggestion: null });
         continue;
       }
       const re = compileSurfacePattern(pattern);
@@ -122,10 +130,32 @@ export function checkSurfaces(proposal: FeatureProposal, profile: RepoProfile): 
       const isConcretePath = !pattern.includes("*");
       if (isConcretePath && dirExists && looksLikeAFile) continue;
 
-      warnings.push({ stepTitle: step.title, pattern, reason: "matches_nothing" });
+      warnings.push({ stepTitle: step.title, pattern, reason: "matches_nothing", suggestion: nearestPath(pattern, paths) });
     }
   }
   return warnings;
+}
+
+/**
+ * The real file a mistaken surface most likely meant: one whose name shares the pattern's
+ * most specific word (`src/clustering/**` → `src/cluster.ts`). Shortest wins; tests lose
+ * to sources. Null when nothing is close, rather than a guess.
+ */
+export function nearestPath(pattern: string, paths: readonly string[]): string | null {
+  const words = pattern
+    .replace(/\*+/g, " ")
+    .split(/[/\s._-]+/)
+    .filter((w) => w.length >= 4 && !["src", "lib", "test", "tests", "spec", "index"].includes(w.toLowerCase()));
+  const word = words.at(-1)?.toLowerCase();
+  if (!word) return null;
+  const stem = word.replace(/(ing|ers|er|s)$/, "");
+  const hits = paths.filter((p) => {
+    const base = p.slice(p.lastIndexOf("/") + 1).toLowerCase();
+    return base.includes(stem);
+  });
+  if (hits.length === 0) return null;
+  const isTest = (p: string) => /\.(spec|test)\./.test(p);
+  return [...hits].sort((a, b) => Number(isTest(a)) - Number(isTest(b)) || a.length - b.length)[0] ?? null;
 }
 
 function buildPrompt(goal: string, profileText: string): string {
@@ -137,7 +167,8 @@ function buildPrompt(goal: string, profileText: string): string {
     "{",
     '  "title": string,',
     '  "understanding": string,',
-    '  "steps": [{ "title": string, "rationale": string, "declaredSurface": string[], "acceptanceMd": string }],',
+    '  "steps": [{ "title": string, "rationale": string, "declaredSurface": string[], "acceptanceMd": string,',
+    '             "doubts": [{ "question": string, "options": string[], "suggested": number }] }],',
     '  "noWorkNeeded": string | null,',
     '  "uncertainties": string[]',
     "}",
@@ -149,10 +180,10 @@ function buildPrompt(goal: string, profileText: string): string {
     "",
     "Rules that matter more than elegance:",
     "",
-    "1. declaredSurface is a HARD boundary, not a hint. The step will be killed outright",
-    "   if its implementation touches a file outside it, with no chance to recover. So",
-    "   list every file the step will need, including the test file and any file it must",
-    "   read-and-edit. Prefer naming concrete files over broad globs.",
+    "1. declaredSurface is a HARD boundary, not a hint. If the implementation needs a file",
+    "   outside it, the step stops and waits for a person to decide. So list every file the",
+    "   step will need, including the test file and any file it must read-and-edit. Prefer",
+    "   naming concrete files over broad globs.",
     "2. Use paths that exist in the survey below, or new files that sit beside existing",
     "   ones. A surface matching nothing is worse than a surface that is too wide.",
     "3. Follow the repository's own test-naming convention exactly as reported. Inventing",
@@ -160,11 +191,16 @@ function buildPrompt(goal: string, profileText: string): string {
     "4. Each step must be independently mergeable — it leaves the repo working. If two",
     "   pieces of work cannot be merged separately, they are one step, not two.",
     "5. acceptanceMd states what done means specifically enough to check. Not 'works',",
-    "   but the observable behaviour, including edge cases the request implies.",
+    "   but the observable behaviour, including edge cases the request implies. Write it",
+    "   as a short bulleted list, one promise per '- ' line, each one something a single",
+    "   test can prove — every bullet is later paired with the test that proves it.",
     "6. Prefer FEWER steps. Two solid steps beat five speculative ones. One step is a",
     "   perfectly good answer for a small request.",
-    "7. Put anything you are guessing in uncertainties. A guess recorded there is useful;",
-    "   the same guess buried silently in a surface is how runs die.",
+    "7. Pin anything you are guessing to the step it affects, as that step's doubts:",
+    '   { "question": string, "options": string[], "suggested": number }. Give two to four',
+    "   options and the index of the one you would pick. A guess recorded there is useful;",
+    "   the same guess buried silently in a surface is how runs die. Use uncertainties only",
+    "   for doubts that belong to no single step.",
     "8. Returning no steps is a real answer, not a failure. Prefer it over a step you do",
     "   not believe in.",
     "",
@@ -177,6 +213,31 @@ function buildPrompt(goal: string, profileText: string): string {
 
 export class FeatureProposer {
   constructor(private readonly deps: ProposerDeps) {}
+
+  private async repoOf(repoId: string | undefined) {
+    return this.deps.resolveRepo
+      ? await this.deps.resolveRepo(repoId)
+      : { path: this.deps.targetRepoPath, label: this.deps.targetRepoPath, origin: "local" as const };
+  }
+
+  /** What the survey found, before any model is asked anything. */
+  async survey(repoId: string | undefined): Promise<AskSurvey> {
+    const repo = await this.repoOf(repoId);
+    return surveyFindings(repo.path, repo.label);
+  }
+
+  /** The questions worth asking before proposing. One model call. */
+  async questions(goal: string, repoId: string | undefined) {
+    const repo = await this.repoOf(repoId);
+    return askQuestions({ adapter: this.deps.adapter, ...(this.deps.model !== undefined ? { model: this.deps.model } : {}) }, repo.path, goal);
+  }
+
+  /** Every file the survey sees, for pointing at one with @. */
+  async files(repoId: string | undefined): Promise<string[]> {
+    const repo = await this.repoOf(repoId);
+    const profile = await profileRepo(repo.path);
+    return profile.files.map((f) => f.path);
+  }
 
   /**
    * Surveys the repo, asks for a breakdown, and validates it. Returns a typed error
@@ -211,12 +272,16 @@ export class FeatureProposer {
     // accident — the survey it needs is handed to it as text.
     const scratch = await mkdtemp(join(tmpdir(), "signet-propose-"));
     try {
-      const profileText = renderProfile(profile);
+      const note = (await this.deps.repoNote?.(repo.path)) ?? null;
+      const profileText = renderProfile(profile) + (note ? `\n\n## What the person told us about this repo\n${note}\n` : "");
       await writeFile(join(scratch, "SURVEY.md"), profileText);
 
+      const goal = req.answers?.length
+        ? `${req.goal}\n\nAnswers the person gave before this proposal:\n${req.answers.map((a) => `- ${a.question} → ${a.answer}`).join("\n")}`
+        : req.goal;
       const result = await this.deps.adapter.execute({
         workspacePath: scratch,
-        prompt: buildPrompt(req.goal, profileText),
+        prompt: buildPrompt(goal, profileText),
         maxTurns: this.deps.maxTurns ?? 6,
         ...(this.deps.model !== undefined ? { model: this.deps.model } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
@@ -256,6 +321,84 @@ export class FeatureProposer {
     } finally {
       await rm(scratch, { recursive: true, force: true });
     }
+  }
+}
+
+const pexec = promisify(execFile);
+
+export interface AskDeps {
+  resolve: (repoId: string | undefined) => Promise<{ path: string; label: string; origin: "local" | "github" }>;
+}
+
+/**
+ * What the survey found worth knowing, before anything is proposed: the entry points and
+ * the largest modules, each with what it exports. Deterministic and free — this is the
+ * part of "reading your repo" that needs no model.
+ */
+export async function surveyFindings(repoPath: string, label: string): Promise<AskSurvey> {
+  const profile = await profileRepo(repoPath);
+  const branch = await pexec("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoPath })
+    .then((r) => r.stdout.trim())
+    .catch(() => "unknown");
+  const isTest = (p: string) => /\.(spec|test)\./.test(p) || /(^|\/)(__tests__|tests?)\//.test(p);
+  const code = profile.files.filter((f) => /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|rb)$/.test(f.path) && !isTest(f.path));
+  const picked = [
+    ...profile.entryPoints.filter((e) => code.some((c) => c.path === e)),
+    ...[...code].sort((a, b) => b.bytes - a.bytes).map((f) => f.path),
+  ].filter((p, i, all) => all.indexOf(p) === i).slice(0, 4);
+  const findings = await Promise.all(
+    picked.map(async (path) => {
+      const text = await readFile(`${repoPath}/${path}`, "utf8").then((t) => t.slice(0, 40_000)).catch(() => "");
+      const names = [...text.matchAll(/export\s+(?:default\s+)?(?:async\s+)?(?:function|const|class|let|interface|type)\s+([A-Za-z_$][\w$]*)/g)]
+        .map((m) => m[1])
+        .filter((n, i, all) => n && all.indexOf(n) === i)
+        .slice(0, 4);
+      const lines = text.split("\n").length;
+      return { path, note: names.length > 0 ? `exports ${names.join(", ")}` : `${lines} lines` };
+    }),
+  );
+  return AskSurveySchema.parse({ repoLabel: label, repoPath, branch, filesSurveyed: profile.files.length, findings });
+}
+
+/** The questions whose answers would change the plan, asked before proposing it. */
+export async function askQuestions(
+  deps: { adapter: ProposerAdapter; model?: string },
+  repoPath: string,
+  goal: string,
+): Promise<{ ok: true; questions: AskQuestions } | { ok: false; error: SignetError }> {
+  const profile = await profileRepo(repoPath);
+  const scratch = await mkdtemp(join(tmpdir(), "signet-ask-"));
+  try {
+    const profileText = renderProfile(profile);
+    const prompt = [
+      "Someone wants a change made to the codebase surveyed below. Before anything is planned,",
+      "find what matters. Output ONLY a JSON object:",
+      '{ "lead": string, "questions": [ { "question": string, "options": string[], "suggested": number, "note": string | null } ] }',
+      "",
+      "- lead: ONE sentence naming what in the repo you would build on, e.g. 'I can build on the",
+      "  quad-tree in src/spatial.ts.' Then the questions follow it.",
+      "- questions: at most three, and only ones whose answer would CHANGE the plan and that the",
+      "  request does not settle. Each has two to four short options and the index of the one you",
+      "  would pick. note is a short reason for your pick when the repo gives one, else null.",
+      "- If nothing needs asking, return an empty questions list. Do not invent questions.",
+      "",
+      "## The request",
+      goal,
+      "",
+      profileText,
+    ].join("\n");
+    const result = await deps.adapter.execute({
+      workspacePath: scratch,
+      prompt,
+      maxTurns: 4,
+      ...(deps.model !== undefined ? { model: deps.model } : {}),
+    });
+    if (!result.ok) return { ok: false, error: result.error ?? nonRecoverable("ask.failed", "the question pass did not finish") };
+    const parsed = AskQuestionsSchema.safeParse(extractJsonBlock(result.resultText));
+    if (!parsed.success) return { ok: false, error: { kind: "recoverable", code: "ask.unparseable", message: "the question pass did not return questions in the expected shape" } };
+    return { ok: true, questions: parsed.data };
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
   }
 }
 

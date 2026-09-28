@@ -23,6 +23,28 @@ export const AdapterEventSchema = z.discriminatedUnion("type", [
     // Raw input intentionally opaque at this layer; specific tools are parsed
     // downstream by consumers that know their schemas.
     inputPreview: z.string().max(2000),
+    /**
+     * The few fields worth showing a person, lifted out BEFORE the preview is cut.
+     * A Write's input is mostly file content, so the path can fall past the 2000-char
+     * preview and a truncated JSON string cannot be parsed back anyway.
+     */
+    detail: z
+      .object({
+        filePath: z.string().optional(),
+        command: z.string().max(500).optional(),
+        description: z.string().max(300).optional(),
+        pattern: z.string().max(300).optional(),
+        todos: z
+          .array(
+            z.object({
+              content: z.string(),
+              status: z.enum(["pending", "in_progress", "completed"]),
+              activeForm: z.string().optional(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
   }),
   z.object({ type: z.literal("assistant_text"), text: z.string() }),
   z.object({
@@ -68,6 +90,12 @@ export const IncrementPlanSchema = z.object({
   filesToTouch: z.array(z.string().min(1)).min(1),
   risks: z.array(z.string()),
   // The mechanical scope check compares filesToTouch against the increment's
-  // declared surface; anything outside escalates.
+  // declared surface; anything outside becomes a question for the human.
+  /**
+   * Why a file outside the declared surface is needed, keyed by path. Optional: a plan
+   * that stays inside has nothing to explain. When one does not, this is what the
+   * person is shown — a reason they can judge, rather than a bare list of paths.
+   */
+  outsideReasons: z.record(z.string(), z.string()).optional(),
 });
 export type IncrementPlan = z.infer<typeof IncrementPlanSchema>;
