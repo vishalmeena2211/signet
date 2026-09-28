@@ -97,6 +97,11 @@ export const PromiseProofSchema = z.object({
   codeLines: z.string().nullable(),
   /** Why it is not proven, in a sentence. Null when proven. */
   reason: z.string().nullable(),
+  /**
+   * Proven by the tests check running the whole suite, not by one test: "npm test passes"
+   * is a promise about the suite, and the suite is what that check runs.
+   */
+  bySuite: z.boolean().optional(),
 });
 export type PromiseProof = z.infer<typeof PromiseProofSchema>;
 

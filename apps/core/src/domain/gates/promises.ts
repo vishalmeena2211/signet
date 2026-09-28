@@ -68,6 +68,38 @@ function dedupe(items: string[]): string[] {
   return out.slice(0, MAX_PROMISES);
 }
 
+/**
+ * Whether a promise is about the whole suite passing ("npm test exits with code 0", "all
+ * existing tests still pass") rather than about behaviour.
+ *
+ * No single added test can prove such a promise, yet the tests check proves it outright
+ * by running the suite. Without this, nearly every step was sealed "on trust" for a
+ * promise that had in fact been checked. Deliberately narrow: it must name a test run or
+ * the suite AND say it passes, and anything that also claims behaviour (a call, a
+ * "returns") is not credited, so a real promise cannot ride along on a green suite.
+ */
+export function isSuitePromise(promise: string): boolean {
+  const p = promise.toLowerCase();
+  const namesTheRun =
+    /\b(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.test(p) ||
+    /\b(the|whole|full|entire|existing)\s+(test\s+)?suite\b/.test(p) ||
+    /\b(all|every|the)\s+(the\s+)?(existing\s+|other\s+)?tests?\b/.test(p);
+  const saysItPasses = /\b(pass(es|ing)?|green|succeeds?|exits? (with )?(code |status )?0|exit code 0|reports? ok)\b/.test(p);
+  const claimsBehaviour = /\w\s*\(|\breturns?\b|\bthrows?\b|\brenders?\b|\bequals?\b/.test(p);
+  return namesTheRun && saysItPasses && !claimsBehaviour;
+}
+
+/**
+ * Credits suite promises to a passing tests check. Only when it PASSED: a skipped tests
+ * check (no runner found) proves nothing, and the promise stays unproven.
+ */
+export function creditSuite(proofs: readonly PromiseProof[], testsPassed: boolean): PromiseProof[] {
+  if (!testsPassed) return [...proofs];
+  return proofs.map((p) =>
+    !p.proven && isSuitePromise(p.promise) ? { ...p, proven: true, test: null, testFile: null, codeFile: null, codeLines: null, reason: null, bySuite: true } : p,
+  );
+}
+
 /** The instruction appended to the implement prompt, numbering the promises. */
 export function proofInstruction(promises: readonly string[]): string {
   if (promises.length === 0) return "";

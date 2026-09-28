@@ -3,7 +3,7 @@
 // the change must never read as proven.
 
 import { describe, expect, it } from "vitest";
-import { extractPromises, parseProofClaims, parseUnifiedDiff, proofInstruction, verifyProofs } from "./promises.js";
+import { creditSuite, extractPromises, isSuitePromise, parseProofClaims, parseUnifiedDiff, proofInstruction, verifyProofs } from "./promises.js";
 
 describe("extractPromises — what done when promises", () => {
   it("reads one promise per bullet, without markdown", () => {
@@ -159,5 +159,47 @@ describe("verifyProofs — the claim is checked, not believed", () => {
       changes,
     });
     expect(first?.proven).toBe(false);
+  });
+});
+
+describe("a promise that the suite passes is proven by the tests check", () => {
+  it("recognises the suite promises proposals actually write", () => {
+    // The first is word for word from a real proposal, which forced a seal on trust.
+    for (const p of [
+      "npm test exits with code 0, and cart.test.mjs reports ok",
+      "All existing tests still pass",
+      "The full test suite passes",
+      "pnpm test passes with the new tests included",
+      "npm run test exits 0",
+    ]) {
+      expect(isSuitePromise(p), p).toBe(true);
+    }
+  });
+
+  it("leaves promises about behaviour alone, even when they mention tests", () => {
+    for (const p of [
+      "itemCount([]) returns 0",
+      "itemCount does not change its input array or its items",
+      "The existing exports still behave as before",
+      "All tests pass and total() returns the sum",
+      "The tests cover an empty cart",
+      "Every item with a quantity field adds up that quantity",
+    ]) {
+      expect(isSuitePromise(p), p).toBe(false);
+    }
+  });
+
+  const proofs = [
+    { promise: "itemCount([]) returns 0", proven: true, test: "empty", testFile: "cart.test.mjs", codeFile: null, codeLines: null, reason: null },
+    { promise: "npm test exits with code 0", proven: false, test: null, testFile: null, codeFile: null, codeLines: null, reason: "No test proves this." },
+    { promise: "itemCount ignores a negative quantity", proven: false, test: null, testFile: null, codeFile: null, codeLines: null, reason: "No test proves this." },
+  ];
+
+  it("credits only the suite promise, and only when the tests check passed", () => {
+    const credited = creditSuite(proofs, true);
+    expect(credited.map((p) => p.proven)).toEqual([true, true, false]);
+    expect(credited[1]).toMatchObject({ bySuite: true, reason: null });
+    // A skipped or failed tests check proves nothing about the suite.
+    expect(creditSuite(proofs, false).map((p) => p.proven)).toEqual([true, false, false]);
   });
 });

@@ -11,7 +11,7 @@ import {
   type RunWorkView,
 } from "@signet/contracts";
 import type { PrismaClient } from "../persistence/generated/client.js";
-import { extractPromises } from "../domain/gates/promises.js";
+import { creditSuite, extractPromises } from "../domain/gates/promises.js";
 import { buildWorkView, type AgentWorkLog } from "./agent-work.js";
 
 export class WorkViews {
@@ -85,9 +85,16 @@ export class WorkViews {
       outcome: verdict.outcome,
       findings: JSON.parse(verdict.findingsJson), // signet-policy-allow: raw-json-parse -- schema-validated on this line
     });
+    // The tests check of the same run: when it ran the suite and it passed, a promise
+    // that only says "the suite passes" has its proof.
+    const tests = await this.db.gateVerdict.findFirst({
+      where: { runId: verdict.runId, gate: "tests" },
+      orderBy: { recordedAt: "desc" },
+      select: { outcome: true },
+    });
     return PromisesViewSchema.parse({
       checked: true,
-      promises: v.findings.map((f) => ({
+      promises: creditSuite(v.findings.map((f) => ({
         promise: f.message,
         proven: f.dimension === "proven",
         test: f.proof?.test ?? null,
@@ -95,7 +102,7 @@ export class WorkViews {
         codeFile: f.proof?.codeFile ?? null,
         codeLines: f.proof?.codeLines ?? null,
         reason: f.dimension === "proven" ? null : (f.location ?? "No test proves this."),
-      })),
+      })), tests?.outcome === "pass"),
     });
   }
 

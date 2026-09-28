@@ -194,6 +194,8 @@ function buildPrompt(goal: string, profileText: string): string {
     "   but the observable behaviour, including edge cases the request implies. Write it",
     "   as a short bulleted list, one promise per '- ' line, each one something a single",
     "   test can prove — every bullet is later paired with the test that proves it.",
+    "   Do not promise that the tests pass or that `npm test` exits 0: every step's checks",
+    "   already run the whole suite. A promise says what the code does.",
     "6. Prefer FEWER steps. Two solid steps beat five speculative ones. One step is a",
     "   perfectly good answer for a small request.",
     "7. Pin anything you are guessing to the step it affects, as that step's doubts:",

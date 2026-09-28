@@ -225,6 +225,52 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
     await expect(controls.dismiss(incId)).rejects.toThrow("only a failed step can be dismissed");
   });
 
+  it("counts 'the suite passes' as proven at the seal only when the tests check passed", async () => {
+    const featureId = randomUUID();
+    const briefId = randomUUID();
+    const incId = randomUUID();
+    const runId = randomUUID();
+    await db.feature.create({ data: { id: featureId, title: "Cart", stage: "IMPLEMENTING", repoPath: repo, repoLabel: "repo" } });
+    await db.briefVersion.create({ data: { id: briefId, featureId, version: 1, contentMd: "Count items." } });
+    await db.increment.create({
+      data: {
+        id: incId,
+        featureId,
+        title: "Add itemCount",
+        status: "AWAITING_SIGNATURE",
+        stateJson: JSON.stringify({ status: "AWAITING_SIGNATURE", runId }),
+        declaredSurface: ["cart.mjs"],
+        briefVersionId: briefId,
+        orderIndex: 0,
+      },
+    });
+    await db.run.create({ data: { id: runId, incrementId: incId, status: "SUCCEEDED", stateJson: JSON.stringify({ status: "SUCCEEDED" }) } });
+    // What the promises check stored for the real run that forced a seal on trust.
+    await db.gateVerdict.create({
+      data: {
+        id: randomUUID(),
+        runId,
+        gate: "promises",
+        outcome: "warn",
+        findingsJson: JSON.stringify([
+          { dimension: "proven", message: "itemCount([]) returns 0", proof: { test: "empty", testFile: "cart.test.mjs", codeFile: null, codeLines: null } },
+          { dimension: "unproven", message: "npm test exits with code 0, and cart.test.mjs reports ok", location: "No test proves this." },
+        ]),
+      },
+    });
+    const tests = await db.gateVerdict.create({ data: { id: randomUUID(), runId, gate: "tests", outcome: "pass", findingsJson: "[]" } });
+    const work = new WorkViews(db, new AgentWorkLog(join(root, "packs")));
+
+    const view = await work.promises(incId);
+    expect(view.promises.map((p) => p.proven)).toEqual([true, true]);
+    expect(view.promises[1]).toMatchObject({ bySuite: true });
+    expect(await work.unproven(incId)).toEqual([]);
+
+    // A tests check that found nothing to run proves nothing about the suite.
+    await db.gateVerdict.update({ where: { id: tests.id }, data: { outcome: "skipped" } });
+    expect(await work.unproven(incId)).toEqual(["npm test exits with code 0, and cart.test.mjs reports ok"]);
+  });
+
   it("puts every merge in the ledger, with its commit found in git when it was not recorded", async () => {
     await sealedStep();
     const views = new PlaceViews({

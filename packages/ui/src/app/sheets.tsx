@@ -455,6 +455,15 @@ function Promises({ all, checked, short }: { all: PromiseProof[]; checked: boole
                 <span style={{ fontSize: 12 }}>not checked</span>
               ) : short ? (
                 <span style={{ fontSize: 12 }}>proven</span>
+              ) : p.bySuite ? (
+                <>
+                  <span className="mono" style={{ fontSize: 11.5 }}>
+                    the whole suite
+                  </span>
+                  <span className="mono" style={{ fontSize: 11.5 }}>
+                    run and passed by the tests check
+                  </span>
+                </>
               ) : (
                 <>
                   <span className="mono" style={{ fontSize: 11.5 }}>
