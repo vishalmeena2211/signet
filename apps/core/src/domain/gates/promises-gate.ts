@@ -11,7 +11,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { GateVerdictView } from "@signet/contracts";
 import type { Gate, GateContext } from "./gate-runner.js";
-import { extractPromises, parseProofClaims, parseUnifiedDiff, verifyProofs } from "./promises.js";
+import { extractPromises, isTestFile, parseProofClaims, parseUnifiedDiff, verifyProofs } from "./promises.js";
 
 const pexec = promisify(execFile);
 
@@ -39,7 +39,16 @@ export function promisesGate(deps: { packsRoot: string }): Gate {
         cwd: ctx.workspacePath,
         maxBuffer: 20 * 1024 * 1024,
       });
-      const proofs = verifyProofs({ promises, claims, changes: parseUnifiedDiff(patch) });
+      const changes = parseUnifiedDiff(patch);
+      // The changed test files as they now stand, so a test that already existed and was
+      // edited here can be found and its body checked against the change.
+      const testContents = new Map<string, string>();
+      for (const f of changes.keys()) {
+        if (!isTestFile(f)) continue;
+        const text = await readOr(join(ctx.workspacePath, f), "");
+        if (text !== "") testContents.set(f, text);
+      }
+      const proofs = verifyProofs({ promises, claims, changes, testContents });
 
       return {
         gate: "promises",
@@ -48,7 +57,7 @@ export function promisesGate(deps: { packsRoot: string }): Gate {
           dimension: p.proven ? "proven" : "unproven",
           message: p.promise,
           ...(p.reason ? { location: p.reason } : p.test ? { location: `test “${p.test}”` } : {}),
-          proof: { test: p.test, testFile: p.testFile, codeFile: p.codeFile, codeLines: p.codeLines },
+          proof: { test: p.test, testFile: p.testFile, codeFile: p.codeFile, codeLines: p.codeLines, ...(p.changedTest ? { changedTest: true } : {}) },
         })),
       };
     },

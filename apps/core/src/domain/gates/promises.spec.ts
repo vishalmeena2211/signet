@@ -203,3 +203,52 @@ describe("a promise that the suite passes is proven by the tests check", () => {
     expect(creditSuite(proofs, false).map((p) => p.proven)).toEqual([true, false, false]);
   });
 });
+
+describe("a test that already existed counts when this change edited its body", () => {
+  // The shape of a real run: the palette test was extended to check every tone, and its
+  // title line did not change, so no new title appeared in the diff.
+  const file = [
+    "import test from 'node:test';", //                                     1
+    "test('badge returns label and brand purple background', () => {", //  2
+    "  assert.equal(badge('New').background, '#6609be');", //               3
+    "});", //                                                               4
+    "// badge background stays within the approved brand palette", //      5
+    "test('badge background stays within the approved brand palette', () => {", // 6
+    "  const palette = ['#6609be', '#0b62d6', '#b25e00', '#c4122f'];", //  7
+    "  for (const t of [undefined, 'info', 'warning', 'danger']) assert.ok(palette.includes(badge('x', t).background));", // 8
+    "});", //                                                               9
+  ].join("\n");
+  const promises = ["The palette test checks the default badge and each tone against the palette"];
+  const claims = [{ promise: 1, test: "badge background stays within the approved brand palette", testFile: "badge.test.mjs" }];
+  const diffAt = (from: number, to: number) =>
+    parseUnifiedDiff(
+      [
+        "--- a/badge.test.mjs",
+        "+++ b/badge.test.mjs",
+        `@@ -${from},1 +${from},${to - from + 1} @@`,
+        ...Array.from({ length: to - from + 1 }, (_, i) => `+${file.split("\n")[from - 1 + i]}`),
+      ].join("\n"),
+    );
+  const contents = new Map([["badge.test.mjs", file]]);
+
+  it("is proven, and marked as a changed test, when a hunk falls inside its body", () => {
+    const [proof] = verifyProofs({ promises, claims, changes: diffAt(7, 8), testContents: contents });
+    expect(proof).toMatchObject({ proven: true, changedTest: true, testFile: "badge.test.mjs" });
+  });
+
+  it("is not proven when the change edited a different test", () => {
+    const [proof] = verifyProofs({ promises, claims, changes: diffAt(3, 3), testContents: contents });
+    expect(proof?.proven).toBe(false);
+  });
+
+  it("is not proven by a comment that only repeats the title", () => {
+    const commentOnly = file.replace("test('badge background stays within the approved brand palette'", "test('something else'");
+    const [proof] = verifyProofs({ promises, claims, changes: diffAt(7, 8), testContents: new Map([["badge.test.mjs", commentOnly]]) });
+    expect(proof?.proven).toBe(false);
+  });
+
+  it("is not proven without the file's contents to look in", () => {
+    const [proof] = verifyProofs({ promises, claims, changes: diffAt(7, 8) });
+    expect(proof?.proven).toBe(false);
+  });
+});

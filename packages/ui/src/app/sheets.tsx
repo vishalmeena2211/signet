@@ -467,7 +467,7 @@ function Promises({ all, checked, short }: { all: PromiseProof[]; checked: boole
               ) : (
                 <>
                   <span className="mono" style={{ fontSize: 11.5 }}>
-                    test · “{p.test}”
+                    {p.changedTest ? "changed test" : "test"} · “{p.test}”
                   </span>
                   <span className="mono" style={{ fontSize: 11.5 }}>
                     {p.codeFile && p.codeLines ? `${p.codeFile}:${p.codeLines}` : p.testFile}

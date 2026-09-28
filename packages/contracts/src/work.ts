@@ -102,6 +102,8 @@ export const PromiseProofSchema = z.object({
    * is a promise about the suite, and the suite is what that check runs.
    */
   bySuite: z.boolean().optional(),
+  /** Proven by a test that already existed and whose body this change edited, not a new one. */
+  changedTest: z.boolean().optional(),
 });
 export type PromiseProof = z.infer<typeof PromiseProofSchema>;
 

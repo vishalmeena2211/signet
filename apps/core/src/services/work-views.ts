@@ -101,6 +101,7 @@ export class WorkViews {
         testFile: f.proof?.testFile ?? null,
         codeFile: f.proof?.codeFile ?? null,
         codeLines: f.proof?.codeLines ?? null,
+        ...(f.proof?.changedTest ? { changedTest: true } : {}),
         reason: f.dimension === "proven" ? null : (f.location ?? "No test proves this."),
       })), tests?.outcome === "pass"),
     });

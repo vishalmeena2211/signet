@@ -271,6 +271,64 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
     expect(await work.unproven(incId)).toEqual(["npm test exits with code 0, and cart.test.mjs reports ok"]);
   });
 
+  it("tells each round of checks apart, though every round shares one phase row", async () => {
+    const featureId = randomUUID();
+    const briefId = randomUUID();
+    const incId = randomUUID();
+    const runId = randomUUID();
+    const t = (s: number) => new Date(Date.UTC(2026, 8, 28, 12, 21, s));
+    await db.feature.create({ data: { id: featureId, title: "Badge tones", stage: "IMPLEMENTING", repoPath: repo, repoLabel: "repo" } });
+    await db.briefVersion.create({ data: { id: briefId, featureId, version: 1, contentMd: "Tones." } });
+    await db.increment.create({
+      data: {
+        id: incId,
+        featureId,
+        title: "Support tones",
+        status: "AWAITING_SIGNATURE",
+        stateJson: JSON.stringify({ status: "AWAITING_SIGNATURE", runId }),
+        declaredSurface: ["badge.mjs"],
+        briefVersionId: briefId,
+        repairAttempt: 2,
+        orderIndex: 0,
+      },
+    });
+    await db.run.create({ data: { id: runId, incrementId: incId, status: "SUCCEEDED", stateJson: JSON.stringify({ status: "SUCCEEDED" }), startedAt: t(0), finishedAt: t(50) } });
+    // What a real run left: ONE gates row for all three rounds, the first implement row
+    // overwritten by the first repair.
+    await db.runPhase.createMany({
+      data: [
+        { id: randomUUID(), runId, phase: "AGENT_IMPLEMENT", attempt: 1, enteredAt: t(1), completedAt: t(25) },
+        { id: randomUUID(), runId, phase: "GATES", attempt: 1, enteredAt: t(10), completedAt: t(48) },
+        { id: randomUUID(), runId, phase: "AGENT_IMPLEMENT", attempt: 2, enteredAt: t(27), completedAt: t(46) },
+      ],
+    });
+    const fail = JSON.stringify([{ dimension: "fail_then_pass", message: "new tests PASS on the unchanged base code" }]);
+    const round = (s: number, tests: "fail" | "pass") => [
+      { id: randomUUID(), runId, gate: "lint", outcome: "pass", findingsJson: "[]", recordedAt: t(s) },
+      { id: randomUUID(), runId, gate: "tests", outcome: tests, findingsJson: tests === "fail" ? fail : "[]", recordedAt: t(s) },
+    ];
+    await db.gateVerdict.createMany({ data: [...round(10, "fail"), ...round(26, "fail"), ...round(47, "pass")] });
+
+    const thread = await new PlaceViews({
+      db,
+      diffs: new DiffReader(workspaces, "main"),
+      work: new WorkViews(db, new AgentWorkLog(join(root, "packs"))),
+      log: new AgentWorkLog(join(root, "packs")),
+      proposals: new ProposalsInFlight(),
+      quota: async () => ({ exhausted: false, windowKind: "five_hour" }),
+      configuredRepoLabel: "repo",
+      configuredRepoPath: repo,
+      baseRef: "main",
+    }).thread(featureId);
+    const titles = thread.events.map((e) => e.title);
+    expect(titles.filter((x) => x === "Tests failed · 1 finding")).toHaveLength(2);
+    expect(titles.filter((x) => x.startsWith("Sent back to the agent"))).toHaveLength(2);
+    expect(titles).toContain("Checks passed");
+    expect(thread.events.find((e) => e.title.startsWith("Step 1 built"))?.detail).toBe("Checks sent it back twice; fixed.");
+    // The code was written before the first round of checks, not after the first repair.
+    expect(titles.indexOf("Step 1 · wrote the code")).toBeLessThan(titles.indexOf("Tests failed · 1 finding"));
+  });
+
   it("puts every merge in the ledger, with its commit found in git when it was not recorded", async () => {
     await sealedStep();
     const views = new PlaceViews({

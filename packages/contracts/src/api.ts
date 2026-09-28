@@ -76,6 +76,8 @@ export const GateVerdictViewSchema = z.object({
             testFile: z.string().nullable(),
             codeFile: z.string().nullable(),
             codeLines: z.string().nullable(),
+            /** The test already existed; this change edited its body. */
+            changedTest: z.boolean().optional(),
           })
           .optional(),
       }),

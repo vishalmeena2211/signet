@@ -190,7 +190,7 @@ export function parseUnifiedDiff(patch: string): Map<string, FileChange> {
   return files;
 }
 
-const isTestFile = (f: string): boolean => /\.(spec|test)\.(c|m)?[jt]sx?$/.test(f) || /(^|\/)(__tests__|tests?)\//.test(f);
+export const isTestFile = (f: string): boolean => /\.(spec|test)\.(c|m)?[jt]sx?$/.test(f) || /(^|\/)(__tests__|tests?)\//.test(f);
 
 /** Quotes and whitespace differ between how an agent writes a title and how code does. */
 function norm(s: string): string {
@@ -205,14 +205,35 @@ function parseRange(lines: string): [number, number] | null {
   return a <= b ? [a, b] : [b, a];
 }
 
+/** A line that declares a test: test(...), it(...), and their .only/.skip/.each forms. */
+const TEST_DECLARATION = /^\s*(?:test|it)(?:\.\w+)*\s*\(/;
+
 /**
- * Checks each promise's claim against the change. Pure: the diff is passed in, so this
- * is testable without git.
+ * Where an EXISTING test was edited by this change: the named test is declared in the
+ * file as it now stands, and one of the change's hunks falls inside its body (from its
+ * declaration to the next test's). A promise about an existing test ("the palette test
+ * now checks every tone") is kept by changing that test, and no new title appears in
+ * the diff — so looking only at added titles called a kept promise unproven.
+ */
+function editedTestIn(content: string, change: FileChange, wanted: string): boolean {
+  const lines = content.split("\n");
+  const at = lines.findIndex((l) => TEST_DECLARATION.test(l) && norm(l).includes(wanted));
+  if (at === -1) return false;
+  const next = lines.findIndex((l, i) => i > at && TEST_DECLARATION.test(l));
+  const [from, to] = [at + 1, next === -1 ? lines.length : next];
+  return change.hunks.some(([a, b]) => a <= to && b >= from);
+}
+
+/**
+ * Checks each promise's claim against the change. Pure: the diff and the changed test
+ * files' contents are passed in, so this is testable without git.
  */
 export function verifyProofs(input: {
   promises: readonly string[];
   claims: readonly ProofClaim[] | null;
   changes: Map<string, FileChange>;
+  /** The current text of changed test files, so an edited existing test can count. */
+  testContents?: Map<string, string>;
 }): PromiseProof[] {
   const testFiles = [...input.changes.keys()].filter(isTestFile);
 
@@ -233,11 +254,19 @@ export function verifyProofs(input: {
 
     const wanted = norm(claim.test);
     const candidates = claim.testFile && input.changes.has(claim.testFile) ? [claim.testFile] : testFiles;
-    const where = candidates.find((f) =>
+    const added = candidates.find((f) =>
       [...(input.changes.get(f)?.added.values() ?? [])].some((l) => norm(l).includes(wanted)),
     );
+    const edited = added
+      ? undefined
+      : candidates.find((f) => {
+          const content = input.testContents?.get(f);
+          const change = input.changes.get(f);
+          return content !== undefined && change !== undefined && editedTestIn(content, change, wanted);
+        });
+    const where = added ?? edited;
     if (!where) {
-      return unproven(`It named the test “${claim.test}”, but no test with that title was added in this change.`);
+      return unproven(`It named the test “${claim.test}”, but no test with that title was added or changed in this change.`);
     }
 
     // The lines are a pointer for the reviewer, not the proof. Kept only when they land
@@ -253,6 +282,6 @@ export function verifyProofs(input: {
       }
     }
 
-    return { promise, proven: true, test: claim.test, testFile: where, codeFile, codeLines, reason: null };
+    return { promise, proven: true, test: claim.test, testFile: where, codeFile, codeLines, reason: null, ...(edited ? { changedTest: true } : {}) };
   });
 }
