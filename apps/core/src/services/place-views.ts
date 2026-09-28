@@ -347,39 +347,50 @@ export class PlaceViews {
       const n = stepNo(run.incrementId);
       const title = titleOf(run.incrementId);
       const implement = run.phases.filter((p) => p.phase === "AGENT_IMPLEMENT");
-      const gates = run.phases.filter((p) => p.phase === "GATES");
+      // Rounds of checks, read from the verdicts themselves. The phase table keeps ONE row
+      // per phase and attempt, so every round after a repair lands in the same GATES row;
+      // grouping by it merged two failed rounds into "Tests and Tests failed" and then
+      // called the step "passed first time". Each round records each check once, so a
+      // check appearing again is where the next round starts.
+      const rounds: Array<typeof verdicts> = [];
+      for (const v of verdicts.filter((x) => x.runId === run.id).sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime())) {
+        const current = rounds.at(-1);
+        if (!current || current.some((x) => x.gate === v.gate)) rounds.push([v]);
+        else current.push(v);
+      }
       const firstImpl = implement[0];
-      if (firstImpl?.completedAt) {
+      // When the code was first written: the first round of checks starts right after it.
+      const wroteAt = rounds[0]?.[0]?.recordedAt ?? firstImpl?.completedAt;
+      if (firstImpl && wroteAt) {
         const edited = [...new Set((await this.d.log.read(run.id)).filter((a) => a.kind === "edit" && a.path).map((a) => a.path as string))];
         push({
-          at: firstImpl.completedAt.toISOString(),
+          at: wroteAt.toISOString(),
           who: "signet",
           title: `Step ${n} · wrote the code`,
           detail: edited.length > 0 ? edited.join(", ") : null,
           incrementId: run.incrementId as never,
         });
       }
-      gates.forEach((g, i) => {
-        const next = gates[i + 1];
-        const round = verdicts.filter((v) => v.runId === run.id && v.recordedAt >= g.enteredAt && (!next || v.recordedAt < next.enteredAt));
+      rounds.forEach((round, i) => {
         const failed = round.filter((v) => v.outcome === "fail");
-        if (failed.length === 0 || !g.completedAt) return;
+        const at = round.at(-1)?.recordedAt;
+        if (failed.length === 0 || !at) return;
         const findings = failed.flatMap((v) => {
           const f = readJson(`{"f":${v.findingsJson}}`)["f"];
           return Array.isArray(f) ? f.map((x) => str((x as Record<string, unknown>)["message"]) ?? "").filter(Boolean) : [];
         });
-        const names = failed.map((v) => (v.gate === "typecheck" ? "Types" : v.gate === "tests" ? "Tests" : v.gate[0]?.toUpperCase() + v.gate.slice(1)));
+        const names = [...new Set(failed.map((v) => (v.gate === "typecheck" ? "Types" : v.gate === "tests" ? "Tests" : v.gate[0]?.toUpperCase() + v.gate.slice(1))))];
         push({
-          at: g.completedAt.toISOString(),
+          at: at.toISOString(),
           who: "signet",
           title: `${names.join(" and ")} failed · ${findings.length} ${findings.length === 1 ? "finding" : "findings"}`,
           detail: null,
           lines: findings.slice(0, 4),
           incrementId: run.incrementId as never,
         });
-        if (next) {
+        if (i < rounds.length - 1) {
           push({
-            at: g.completedAt.toISOString(),
+            at: at.toISOString(),
             who: "signet",
             title: `Sent back to the agent with ${findings.length === 1 ? "the finding" : findings.length === 2 ? "both findings" : "the findings"}`,
             detail: `Repair ${i + 1} of 3. You were not asked — this is the checks doing their job.`,
@@ -387,18 +398,20 @@ export class PlaceViews {
           });
         }
       });
-      const lastGate = gates.at(-1);
-      if (gates.length > 1 && lastGate?.completedAt && run.status === "SUCCEEDED") {
-        push({ at: lastGate.completedAt.toISOString(), who: "signet", title: "Checks passed", detail: "Every finding fixed.", incrementId: run.incrementId as never });
+      const lastRound = rounds.at(-1);
+      const lastAt = lastRound?.at(-1)?.recordedAt;
+      if (rounds.length > 1 && lastAt && run.status === "SUCCEEDED" && lastRound?.every((v) => v.outcome !== "fail")) {
+        push({ at: lastAt.toISOString(), who: "signet", title: "Checks passed", detail: "Every finding fixed.", incrementId: run.incrementId as never });
       }
       if (run.finishedAt && run.status === "SUCCEEDED") {
         const inc = steps.find((s) => s.id === run.incrementId);
         const merged = inc?.status === "MERGED";
+        const repairs = Math.max(0, rounds.length - 1);
         push({
           at: run.finishedAt.toISOString(),
           who: "signet",
           title: `Step ${n} ${merged ? "landed" : "built"} · ${title}`,
-          detail: gates.length <= 1 ? "Checks passed first time." : `Checks sent it back ${gates.length - 1 === 1 ? "once" : `${gates.length - 1} times`}; fixed.`,
+          detail: repairs === 0 ? "Checks passed first time." : `Checks sent it back ${repairs === 1 ? "once" : repairs === 2 ? "twice" : `${repairs} times`}; fixed.`,
           incrementId: run.incrementId as never,
         });
       }
