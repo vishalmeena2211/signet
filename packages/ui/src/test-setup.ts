@@ -14,13 +14,8 @@ afterEach(() => {
 });
 
 /**
- * ResizeObserver, which jsdom does not implement.
- *
- * React Flow measures the DOM to lay a graph out, so without this every canvas render
- * throws ReferenceError before the component is reached. A no-op is the honest stub:
- * jsdom has no layout to observe, so nothing it reported would be true. Tests around the
- * canvas therefore assert on its accessible description rather than on node geometry —
- * measuring a fake layout would only ever be testing this stub.
+ * ResizeObserver, which jsdom does not implement. A no-op is the honest stub: jsdom has
+ * no layout to observe, so nothing it reported would be true.
  */
 if (!("ResizeObserver" in globalThis)) {
   globalThis.ResizeObserver = class {

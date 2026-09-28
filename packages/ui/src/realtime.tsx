@@ -13,7 +13,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RealtimeEventSchema } from "@signet/contracts";
-import { useToast } from "./ui/feedback.js";
 
 export type ConnectionState = "connecting" | "live" | "reconnecting" | "offline";
 
@@ -34,7 +33,6 @@ function backoffMs(attempt: number): number {
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const toast = useToast();
   const [state, setState] = useState<ConnectionState>("connecting");
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
   // Refs so the effect can run once and never resubscribe on every render.
@@ -57,7 +55,6 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         if (hadConnection.current) {
           // We were away. Anything could have changed, so trust nothing cached.
           void qc.invalidateQueries();
-          toast.push("Reconnected to core", "ok");
         }
         hadConnection.current = true;
       };
@@ -76,20 +73,17 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         switch (ev.kind) {
           case "increment_changed":
           case "feature_changed":
-            // Everything that could have moved: the boards, the detail, the
-            // aggregate screens that count states.
-            for (const key of ["features", "feature", "overview", "runs", "activity"]) {
-              void qc.invalidateQueries({ queryKey: [key] });
-            }
-            break;
           case "needs_you":
-            void qc.invalidateQueries();
-            toast.push(ev.why, "warn");
-            break;
           case "quota_changed":
-            for (const key of ["health", "overview", "dispatcher"]) {
-              void qc.invalidateQueries({ queryKey: [key] });
-            }
+            // A step moved: every place that counts or lists steps may have changed.
+            void qc.invalidateQueries({
+              predicate: (q) => !["work", "diff", "baseline", "portrait"].includes(String(q.queryKey[0])),
+            });
+            break;
+          case "run_activity":
+            // Only that run's view, and the thread's "now" line.
+            void qc.invalidateQueries({ queryKey: ["work", ev.runId] });
+            void qc.invalidateQueries({ queryKey: ["thread"] });
             break;
         }
       };
@@ -117,7 +111,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         ws.close();
       }
     };
-  }, [qc, toast]);
+  }, [qc]);
 
   const value = useMemo(() => ({ state, lastEventAt }), [state, lastEventAt]);
   return <RealtimeCtx.Provider value={value}>{children}</RealtimeCtx.Provider>;

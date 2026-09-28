@@ -125,8 +125,8 @@ describe("the console speaks plainly", () => {
     // The point is not to purge the word — the API says "increment" and so should
     // the variables that carry it. This asserts the internal name survives, so a
     // later cleanup does not rename the model to match the interface.
-    const feature = readFileSync(join(SRC, "screens", "Feature.tsx"), "utf8");
-    expect(feature).toContain("incrementId");
-    expect(feature).toContain("IncrementDetail");
+    const sheets = readFileSync(join(SRC, "app", "sheets.tsx"), "utf8");
+    expect(sheets).toContain("incrementId");
+    expect(sheets).toContain("StepSheet");
   });
 });

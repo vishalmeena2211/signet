@@ -63,6 +63,36 @@ import {
   type Workflow,
   type SaveWorkflowRequest,
   type WorkflowRunView,
+  RunWorkViewSchema,
+  PromisesViewSchema,
+  BaselineReportSchema,
+  AwaySummarySchema,
+  type RunWorkView,
+  type PromisesView,
+  type BaselineReport,
+  type AwaySummary,
+  type LineNote,
+  type FenceAnswerRequest,
+  DeskViewSchema,
+  ThreadViewSchema,
+  CanalViewSchema,
+  LedgerViewSchema,
+  type DeskView,
+  type ThreadView,
+  type CanalView,
+  type LedgerView,
+  StepSheetSchema,
+  CheckoutViewSchema,
+  type StepSheet,
+  type CheckoutView,
+  HealthViewSchema,
+  type HealthView,
+  AskSurveySchema,
+  AskQuestionsSchema,
+  type AskSurvey,
+  type AskQuestions,
+  PortraitSchema,
+  type Portrait,
 } from "@signet/contracts";
 
 /** An API failure with the server's reason attached, ready to render. */
@@ -193,7 +223,62 @@ export const api = {
   },
 
   approve: act("approve"),
-  merge: act("merge"),
+  /** Signature 2. `onTrust` lands work whose promises are not all proven — an explicit choice. */
+  merge: async (incrementId: string, opts: { onTrust?: boolean } = {}): Promise<void> => {
+    await send(`/api/increments/${incrementId}/merge`, { onTrust: opts.onTrust ?? false }, Ack);
+  },
+
+  // ── watching and judging a step ──
+
+  runWork: (runId: string): Promise<RunWorkView> => get(`/api/runs/${runId}/work`, RunWorkViewSchema),
+
+  promises: (incrementId: string): Promise<PromisesView> =>
+    get(`/api/increments/${incrementId}/promises`, PromisesViewSchema),
+
+  sendBack: (incrementId: string, notes: LineNote[]): Promise<{ runId: string }> =>
+    send(`/api/increments/${incrementId}/send-back`, { notes }, z.object({ runId: z.string() })),
+
+  answerFence: (escalationId: string, choice: FenceAnswerRequest["choice"]): Promise<{ runId: string | null }> =>
+    send(`/api/escalations/${escalationId}/fence`, { choice }, z.object({ answered: z.boolean(), runId: z.string().nullable() })),
+
+  /** Runs the checks on main. Takes as long as the repo's own test suite. */
+  runBaseline: (repoId?: string): Promise<BaselineReport> =>
+    send("/api/repos/baseline", repoId ? { repoId } : {}, BaselineReportSchema),
+
+  lastBaseline: (repoId?: string): Promise<BaselineReport | null> =>
+    get(
+      `/api/repos/baseline${repoId ? `?repoId=${encodeURIComponent(repoId)}` : ""}`,
+      z.object({ report: BaselineReportSchema.nullable() }),
+    ).then((r) => r.report),
+
+  desk: (): Promise<DeskView> => get("/api/desk", DeskViewSchema),
+  portrait: (repoId?: string): Promise<Portrait> =>
+    get(`/api/repos/portrait${repoId ? `?repoId=${encodeURIComponent(repoId)}` : ""}`, PortraitSchema),
+  glance: (repoId: string): Promise<{ branch: string; files: number; tests: boolean; changed: string | null }> =>
+    get(
+      `/api/repos/glance?repoId=${encodeURIComponent(repoId)}`,
+      z.object({ branch: z.string(), files: z.number(), tests: z.boolean(), changed: z.string().nullable() }),
+    ),
+  repoNote: (note: string, repoId?: string): Promise<void> =>
+    send("/api/repos/notes", { note, ...(repoId ? { repoId } : {}) }, Ack).then(() => undefined),
+  askSurvey: (repoId?: string): Promise<AskSurvey> => send("/api/ask/survey", repoId ? { repoId } : {}, AskSurveySchema),
+  askQuestions: (goal: string, repoId?: string): Promise<AskQuestions> =>
+    send("/api/ask/questions", { goal, ...(repoId ? { repoId } : {}) }, AskQuestionsSchema),
+  repoFiles: (repoId?: string): Promise<string[]> =>
+    get(`/api/repos/files${repoId ? `?repoId=${encodeURIComponent(repoId)}` : ""}`, z.object({ files: z.array(z.string()) })).then((r) => r.files),
+  estimate: (repoId?: string): Promise<{ usd: number | null; sample: number }> =>
+    get(`/api/estimate${repoId ? `?repoId=${encodeURIComponent(repoId)}` : ""}`, z.object({ usd: z.number().nullable(), sample: z.number() })),
+  healthLines: (): Promise<HealthView> => get("/api/health/lines", HealthViewSchema),
+  sheet: (incrementId: string): Promise<StepSheet> => get(`/api/increments/${incrementId}/sheet`, StepSheetSchema),
+  checkout: (incrementId: string): Promise<CheckoutView> => get(`/api/increments/${incrementId}/checkout`, CheckoutViewSchema),
+  thread: (featureId: string): Promise<ThreadView> => get(`/api/features/${featureId}/thread`, ThreadViewSchema),
+  canal: (): Promise<CanalView> => get("/api/flow/canal", CanalViewSchema),
+  ledger: (): Promise<LedgerView> => get("/api/flow/ledger", LedgerViewSchema),
+  takeBack: (incrementId: string): Promise<{ incrementId: string; featureId: string }> =>
+    send(`/api/increments/${incrementId}/take-back`, undefined, z.object({ incrementId: z.string(), featureId: z.string() })),
+
+  away: (since: string): Promise<AwaySummary> =>
+    get(`/api/away?since=${encodeURIComponent(since)}`, AwaySummarySchema),
   retry: act("retry"),
   abort: act("abort"),
 
