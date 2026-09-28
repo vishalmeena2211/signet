@@ -407,11 +407,14 @@ export class PlaceViews {
         const inc = steps.find((s) => s.id === run.incrementId);
         const merged = inc?.status === "MERGED";
         const repairs = Math.max(0, rounds.length - 1);
+        const checks = repairs === 0 ? "Checks passed first time." : `Checks sent it back ${repairs === 1 ? "once" : repairs === 2 ? "twice" : `${repairs} times`}; fixed.`;
+        // A run that began from your send-back is a rebuild from your note, and says so.
+        const fromNote = events.some((e) => e.kind === "sent_back" && e.incrementId === run.incrementId && e.at <= run.startedAt && run.startedAt.getTime() - e.at.getTime() < 60_000);
         push({
           at: run.finishedAt.toISOString(),
           who: "signet",
-          title: `Step ${n} ${merged ? "landed" : "built"} · ${title}`,
-          detail: repairs === 0 ? "Checks passed first time." : `Checks sent it back ${repairs === 1 ? "once" : repairs === 2 ? "twice" : `${repairs} times`}; fixed.`,
+          title: `Step ${n} ${fromNote ? "rebuilt from your note" : merged ? "landed" : "built"} · ${title}`,
+          detail: checks,
           incrementId: run.incrementId as never,
         });
       }
@@ -663,6 +666,21 @@ export class StepViews {
         removed = diff.files.reduce((n, f) => n + f.removed, 0);
       }
     }
+    // The last send-back, once the step has come back from it: its notes, and what the
+    // rebuild changed after them, so the note can be read against the lines it produced.
+    let heard: StepSheet["heard"] = null;
+    const sentBack = await db.featureEvent.findFirst({ where: { incrementId, kind: "sent_back" }, orderBy: { at: "desc" } });
+    if (sentBack && inc.status === "AWAITING_SIGNATURE" && latest && latest.startedAt >= sentBack.at) {
+      const p = readJson(sentBack.payloadJson);
+      const before = str(p["before"]);
+      const notes = Array.isArray(p["all"]) ? (p["all"] as Array<Record<string, unknown>>) : [];
+      heard = {
+        at: sentBack.at.toISOString(),
+        notes: notes.map((n) => ({ file: str(n["file"]), line: typeof n["line"] === "number" ? n["line"] : null, text: str(n["text"]) ?? "" })).filter((n) => n.text !== ""),
+        changed: before ? await this.d.diffs.changedSince(incrementId, before) : [],
+      };
+      if (heard.notes.length === 0 && str(p["first"])) heard.notes = [{ file: null, line: null, text: str(p["first"]) ?? "" }];
+    }
     const likely = await this.likelyCost(repo.path);
     const idx = peers.findIndex((p) => p.id === incrementId);
     const next = peers[idx + 1];
@@ -697,6 +715,7 @@ export class StepViews {
       onTrust: Array.isArray(st["onTrust"]) ? (st["onTrust"] as unknown[]).map(String) : [],
       takenBack: (await db.increment.count({ where: { revertsIncrementId: incrementId, status: "MERGED" } })) > 0,
       next: next ? { title: next.title, status: next.status } : null,
+      heard,
     });
   }
 

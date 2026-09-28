@@ -217,6 +217,18 @@ export const StepSheetSchema = z.object({
   takenBack: z.boolean(),
   /** The next step of the same feature, and whether it is already initialled. */
   next: z.object({ title: z.string(), status: z.string() }).nullable(),
+  /**
+   * The notes it was last sent back with, and the lines the rebuild changed after them,
+   * so the person can check the note was heard. Null when it was never sent back, or has
+   * not come back yet.
+   */
+  heard: z
+    .object({
+      at: z.iso.datetime(),
+      notes: z.array(z.object({ file: z.string().nullable(), line: z.number().int().nullable(), text: z.string() })),
+      changed: z.array(z.object({ file: z.string(), from: z.number().int(), to: z.number().int() })),
+    })
+    .nullable(),
 });
 export type StepSheet = z.infer<typeof StepSheetSchema>;
 

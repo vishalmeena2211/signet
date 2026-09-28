@@ -5,6 +5,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import { parseUnifiedDiff } from "../domain/gates/promises.js";
 
 const pexec = promisify(execFile);
 
@@ -25,6 +26,32 @@ export class DiffReader {
     private readonly workspacesRoot: string,
     private readonly baseRef: string,
   ) {}
+
+  /** The commit the step's work stands at, or null when it has no workspace. */
+  async head(incrementId: string): Promise<string | null> {
+    try {
+      const { stdout } = await pexec("git", ["rev-parse", "HEAD"], { cwd: join(this.workspacesRoot, `inc-${incrementId}`) });
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The new-side line ranges changed since a commit, per file: what a rebuild did after
+   * it was sent back, so the note can be shown against the lines it produced.
+   */
+  async changedSince(incrementId: string, sha: string): Promise<Array<{ file: string; from: number; to: number }>> {
+    try {
+      const { stdout } = await pexec("git", ["diff", "-U0", sha], {
+        cwd: join(this.workspacesRoot, `inc-${incrementId}`),
+        maxBuffer: MAX_DIFF_BYTES * 4,
+      });
+      return [...parseUnifiedDiff(stdout).entries()].flatMap(([file, change]) => change.hunks.map(([from, to]) => ({ file, from, to })));
+    } catch {
+      return [];
+    }
+  }
 
   async read(incrementId: string): Promise<IncrementDiff> {
     const cwd = join(this.workspacesRoot, `inc-${incrementId}`);

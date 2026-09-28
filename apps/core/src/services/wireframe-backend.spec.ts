@@ -14,7 +14,7 @@ import { plainQuestion } from "../domain/runtime/run-machine.js";
 import { nearestPath } from "./feature-proposer.js";
 import { glance, portrait, RepoNotes } from "./portrait.js";
 import { TakeBack } from "./take-back.js";
-import { PlaceViews } from "./place-views.js";
+import { PlaceViews, StepViews } from "./place-views.js";
 import { WorkViews } from "./work-views.js";
 import { AgentWorkLog } from "./agent-work.js";
 import { DiffReader } from "./diff-reader.js";
@@ -334,6 +334,81 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
     expect(thread.events.find((e) => e.title.startsWith("Step 1 built"))?.detail).toBe("Checks sent it back twice; fixed.");
     // The code was written before the first round of checks, not after the first repair.
     expect(titles.indexOf("Step 1 · wrote the code")).toBeLessThan(titles.indexOf("Tests failed · 1 finding"));
+  });
+
+  it("sends a step back as one repair, and shows the note against what the rebuild changed", async () => {
+    const featureId = randomUUID();
+    const briefId = randomUUID();
+    const incId = randomUUID();
+    // The step's own copy of the repo, as a worktree would be: main, then the step's work.
+    const ws = join(workspaces, `inc-${incId}`);
+    await mkdir(ws, { recursive: true });
+    const wgit = (...a: string[]) => exec("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: ws });
+    await wgit("init", "-q", "-b", "main");
+    await writeFile(join(ws, "cart.mjs"), "export const total = (xs) => xs.length;\n");
+    await wgit("add", "-A");
+    await wgit("commit", "-qm", "base");
+    await wgit("checkout", "-qb", `signet/inc-${incId}`);
+    await writeFile(join(ws, "cart.test.mjs"), "// one test\n");
+    await wgit("add", "-A");
+    await wgit("commit", "-qm", "work");
+
+    await db.feature.create({ data: { id: featureId, title: "Totals", stage: "IMPLEMENTING", repoPath: repo, repoLabel: "repo" } });
+    await db.briefVersion.create({ data: { id: briefId, featureId, version: 1, contentMd: "Format the total." } });
+    const runId = randomUUID();
+    await db.increment.create({
+      data: {
+        id: incId,
+        featureId,
+        title: "Add formatTotal",
+        status: "AWAITING_SIGNATURE",
+        stateJson: JSON.stringify({ status: "AWAITING_SIGNATURE", runId }),
+        declaredSurface: ["cart.mjs", "cart.test.mjs"],
+        briefVersionId: briefId,
+        orderIndex: 0,
+      },
+    });
+    await db.run.create({ data: { id: runId, incrementId: incId, status: "SUCCEEDED", stateJson: JSON.stringify({ status: "SUCCEEDED" }), startedAt: new Date(Date.now() - 60_000) } });
+
+    const diffs = new DiffReader(workspaces, "main");
+    const controls = new Controls(db, new PrismaUnitOfWork(db), { abort: () => false });
+    controls.events = new FeatureEvents(db);
+    controls.diffs = diffs;
+    const note = { file: "cart.mjs", line: 1, text: "Nothing tests a negative total." };
+    const { runId: rebuild } = await controls.sendBack(incId, [note]);
+
+    // One repair spent, and the rebuild starts at writing: the plan still stands.
+    expect((await db.increment.findUniqueOrThrow({ where: { id: incId } })).repairAttempt).toBe(1);
+    const msg = await db.outboxMessage.findFirstOrThrow({ where: { payloadJson: { contains: rebuild } } });
+    expect(JSON.parse(msg.payloadJson)).toMatchObject({ startPhase: "AGENT_IMPLEMENT", attempt: 1 });
+
+    // The rebuild writes two lines, and comes back for the seal.
+    await writeFile(join(ws, "cart.test.mjs"), "// one test\nif (f(-1) !== '-1') throw new Error('negative');\nif (f(0) !== '0') throw new Error('zero');\n");
+    await wgit("commit", "-qam", "rebuild");
+    await db.run.update({ where: { id: rebuild }, data: { status: "SUCCEEDED", finishedAt: new Date() } });
+    await db.increment.update({ where: { id: incId }, data: { status: "AWAITING_SIGNATURE", stateJson: JSON.stringify({ status: "AWAITING_SIGNATURE", runId: rebuild }) } });
+
+    const views = {
+      db,
+      diffs,
+      work: new WorkViews(db, new AgentWorkLog(join(root, "packs"))),
+      log: new AgentWorkLog(join(root, "packs")),
+      proposals: new ProposalsInFlight(),
+      quota: async () => ({ exhausted: false, windowKind: "five_hour" }),
+      configuredRepoLabel: "repo",
+      configuredRepoPath: repo,
+      baseRef: "main",
+    };
+    const sheet = await new StepViews(views).sheet(incId);
+    expect(sheet.repairs).toBe(1);
+    expect(sheet.heard?.notes).toEqual([note]);
+    expect(sheet.heard?.changed).toEqual([{ file: "cart.test.mjs", from: 2, to: 3 }]);
+    const thread = await new PlaceViews(views).thread(featureId);
+    expect(thread.events.map((e) => e.title)).toContain("Step 1 rebuilt from your note · Add formatTotal");
+
+    // With the budget spent, it says so instead of sending back again.
+    await db.increment.update({ where: { id: incId }, data: { repairAttempt: 3 } });
+    await expect(controls.sendBack(incId, [note])).rejects.toMatchObject({ signet: { code: "send_back.no_repairs" } });
   });
 
   it("puts every merge in the ledger, with its commit found in git when it was not recorded", async () => {

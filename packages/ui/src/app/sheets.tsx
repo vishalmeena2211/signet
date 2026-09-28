@@ -5,7 +5,7 @@
 //
 // The sheet slides over the thread, so what you asked for stays visible behind it.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LineNote, PromiseProof, StepSheet } from "@signet/contracts";
 import { api } from "../api.js";
@@ -269,7 +269,13 @@ function DeskSeal({ d, tab, setTab }: { d: StepSheet; tab: "promises" | "change"
   });
   const sendBack = useMutation({
     mutationFn: (n: LineNote[]) => api.sendBack(d.incrementId, n),
-    onSuccess: () => void qc.invalidateQueries(),
+    // It is building again, so there is nothing here to seal: back to the Desk, where it
+    // returns when rebuilt with the note shown against what changed.
+    onSuccess: () => {
+      setNotes([]);
+      navigate({ view: "desk" });
+      void qc.invalidateQueries();
+    },
   });
 
   // C starts a note on the change.
@@ -343,6 +349,12 @@ function DeskSeal({ d, tab, setTab }: { d: StepSheet; tab: "promises" | "change"
 
         {(offBranch || tab === "promises") && (
           <>
+            {!offBranch && d.heard && (
+              <button type="button" className="heard-pointer" onClick={() => setTab("change")}>
+                Sent back with your {d.heard.notes.length === 1 ? "note" : "notes"} at {clock(d.heard.at)}. <u>The change</u> shows{" "}
+                {d.heard.notes.length === 1 ? "it" : "them"} against the lines it rewrote.
+              </button>
+            )}
             <Promises all={all} checked={checked} short={offBranch !== null} />
             {!offBranch && unproven.length > 0 && (
               <div className="now yours" style={{ marginTop: 0 }}>
@@ -397,7 +409,9 @@ function DeskSeal({ d, tab, setTab }: { d: StepSheet; tab: "promises" | "change"
             )}
           </>
         )}
-        {!offBranch && tab === "change" && <Change incrementId={d.incrementId} notes={notes} setNotes={setNotes} sending={sendBack.isPending} onSend={() => sendBack.mutate(notes)} />}
+        {!offBranch && tab === "change" && (
+          <Change incrementId={d.incrementId} heard={d.heard} notes={notes} setNotes={setNotes} sending={sendBack.isPending} onSend={() => sendBack.mutate(notes)} />
+        )}
         {!offBranch && tab === "story" && <Story featureId={d.featureId} incrementId={d.incrementId} />}
         {(merge.error || sendBack.error) && (
           <div style={{ color: "var(--seal)", fontSize: 12 }}>That did not go through: {((merge.error ?? sendBack.error) as Error).message}</div>
@@ -485,12 +499,14 @@ function Promises({ all, checked, short }: { all: PromiseProof[]; checked: boole
 /** The change, where clicking a line starts a note on it. */
 function Change({
   incrementId,
+  heard,
   notes,
   setNotes,
   sending,
   onSend,
 }: {
   incrementId: string;
+  heard: StepSheet["heard"];
   notes: LineNote[];
   setNotes: (n: LineNote[]) => void;
   sending: boolean;
@@ -509,9 +525,29 @@ function Change({
   }
   const stat = new Map(diff.data.files.map((f) => [f.path, f]));
   const noteAt = (file: string, line: number) => notes.filter((n) => n.file === file && n.line === line);
+  // What the rebuild changed after your note, and where each note is shown: beside the
+  // file it was written on when that file changed, otherwise beside the first change.
+  const rewrote = (file: string, line: number | null) => line !== null && (heard?.changed ?? []).some((c) => c.file === file && line >= c.from && line <= c.to);
+  const changedFiles = [...byFile.keys()].filter((f) => byFile.get(f)?.some((r) => r.kind === "add" && rewrote(f, r.line)));
+  const heardFor = (file: string) => {
+    if (!heard) return [];
+    const own = heard.notes.filter((n) => n.file === file);
+    const placed = heard.notes.filter((n) => n.file !== null && changedFiles.includes(n.file));
+    const loose = heard.notes.filter((n) => !placed.includes(n));
+    return file === changedFiles[0] ? [...own, ...loose.filter((n) => !own.includes(n))] : own;
+  };
 
   return (
     <>
+      {heard && changedFiles.length === 0 && (
+        <div className="mnote">
+          <div className="by">YOUR NOTE · SENT BACK {clock(heard.at).toUpperCase()}</div>
+          {heard.notes.map((n, i) => (
+            <div key={i}>{n.text}</div>
+          ))}
+          <div style={{ color: "var(--fg-3)", fontSize: 12 }}>It came back without changing any lines after this note.</div>
+        </div>
+      )}
       {[...byFile.entries()].map(([file, lines]) => (
         <div key={file} className="diff">
           <div className="dfile">
@@ -523,13 +559,22 @@ function Change({
           </div>
           {lines
             .filter((r) => r.kind !== "hunk")
-            .map((r, i) => {
+            .map((r, i, all) => {
               const noted = r.line !== null && noteAt(file, r.line).length > 0;
               const drafting = draft?.file === file && draft.line === r.line;
+              const isRewrite = r.kind === "add" && rewrote(file, r.line);
+              const firstRewrite = isRewrite && !all.slice(0, i).some((p) => p.kind === "add" && rewrote(file, p.line));
+              const said = firstRewrite && heard ? heardFor(file) : [];
               return (
+                <Fragment key={i}>
+                {firstRewrite && heard && (
+                  <div className="mnote heard-note">
+                    <div className="by">YOUR NOTE · SENT BACK {clock(heard.at).toUpperCase()} · IT REWROTE THE MARKED LINES</div>
+                    {said.length > 0 ? said.map((n, j) => <div key={j}>{n.text}</div>) : <div style={{ color: "var(--fg-3)" }}>Changed after your notes.</div>}
+                  </div>
+                )}
                 <div
-                  key={i}
-                  className={`dl ${r.kind === "add" ? "add" : r.kind === "del" ? "del" : ""} ${noted || drafting ? "sel" : ""}`}
+                  className={`dl ${r.kind === "add" ? "add" : r.kind === "del" ? "del" : ""} ${noted || drafting ? "sel" : ""} ${isRewrite ? "heard" : ""}`}
                   onClick={() => r.line !== null && (setDraft({ file, line: r.line }), setText(""))}
                   style={{ cursor: r.line !== null ? "pointer" : "default" }}
                 >
@@ -537,6 +582,7 @@ function Change({
                   <span className="s">{r.kind === "add" ? "+" : r.kind === "del" ? "−" : ""}</span>
                   <span className="code">{r.text.slice(1)}</span>
                 </div>
+                </Fragment>
               );
             })}
         </div>

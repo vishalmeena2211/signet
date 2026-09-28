@@ -376,6 +376,10 @@ svg[viewBox="0 0 24 24"] { width: 15px; height: 15px; stroke: currentColor; flex
 .dl.del { color: var(--fg-3); }
 .dl.del .code { text-decoration: line-through; }
 .dl.sel { background: var(--seal-quiet); box-shadow: inset 2px 0 0 var(--seal); }
+/* Lines rewritten after your note: marked with the seal edge, so the note can be checked against them. */
+.dl.heard { box-shadow: inset 2px 0 0 var(--seal); }
+.heard-note { margin: 8px 0; }
+.heard-pointer { border: 0; background: transparent; color: var(--seal); font: inherit; font-size: 13px; text-align: left; padding: 0; cursor: pointer; line-height: 1.55; }
 .mnote { border: 1px solid var(--seal-line); background: var(--ink-2); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.55; }
 .mnote .by { font-size: 11px; color: var(--seal); letter-spacing: .04em; }
 .stabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line-1); font-size: 13px; }
