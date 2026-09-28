@@ -41,6 +41,22 @@ export class Signatures {
    */
   onMerged?: (incrementId: string) => Promise<void>;
 
+  /**
+   * Removes the increment's worktree once the work has landed.
+   *
+   * Nothing reaped them before, so they accumulated indefinitely — fourteen on the pilot
+   * machine, the oldest two days old. That was tolerable while a worktree was 40kB of
+   * tracked files. It stopped being tolerable the moment worktrees started carrying a
+   * clone of node_modules so the gates could run: the one against a real package was
+   * 67MB on its own, which is over a gigabyte after twenty runs.
+   *
+   * Merged is the right moment and the only safe one. The commits are in the repository,
+   * the diff reads from git rather than the worktree, and DiffView already has a sentence
+   * for a worktree that was removed after a merge. An escalated, parked or failed step
+   * keeps its worktree, because that is where the evidence is.
+   */
+  releaseWorktree?: (incrementId: string) => Promise<void>;
+
   /** Signature #1 — approve the increment; the run starts. */
   async approve(incrementId: string): Promise<{ runId: string }> {
     const incId = IncrementIdSchema.parse(incrementId);
@@ -142,6 +158,12 @@ export class Signatures {
       await this.onMerged?.(incId);
     } catch {
       /* automation is best-effort; the merge stands */
+    }
+    try {
+      await this.releaseWorktree?.(incId);
+    } catch {
+      /* tidying up is best-effort too: a merge that happened must not report failure
+         because a directory could not be deleted */
     }
   }
 

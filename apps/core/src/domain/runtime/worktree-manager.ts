@@ -26,6 +26,37 @@ export interface WorktreeHandle {
 
 export type WorktreeResult<T> = { ok: true; value: T } | { ok: false; error: SignetError };
 
+/**
+ * Removes one increment's worktree without needing a handle.
+ *
+ * `release()` needs the handle it was given at acquire time, which the merge path does not
+ * have — the merge happens long after the run that created the worktree finished, often in
+ * a different process. This is the same three-step teardown: ask git, fall back to deleting
+ * the directory, prune the stale registration either way.
+ *
+ * Every failure is swallowed. This is called after a merge that has already landed, and a
+ * directory that will not delete is not a reason to report that the merge did not happen.
+ */
+export async function removeWorktreeFor(input: {
+  workspacesRoot: string;
+  repoPath: string;
+  incrementId: string;
+}): Promise<void> {
+  const path = join(input.workspacesRoot, `inc-${input.incrementId}`);
+  const lockPath = join(input.workspacesRoot, `inc-${input.incrementId}.lock`);
+  const git = (args: string[]) => exec("git", args, { cwd: input.repoPath });
+
+  try {
+    await git(["worktree", "remove", "--force", path]);
+  } catch {
+    await rm(path, { recursive: true, force: true }).catch(() => {});
+    // Without the prune, git keeps the registration and reports the worktree as
+    // "prunable" forever — visible in `git worktree list` and confusing to read.
+    await git(["worktree", "prune"]).catch(() => {});
+  }
+  await rm(lockPath, { force: true }).catch(() => {});
+}
+
 export class WorktreeManager {
   constructor(
     private readonly repoPath: string, // the target project's main checkout

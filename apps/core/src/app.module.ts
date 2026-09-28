@@ -19,7 +19,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "./persistence/generated/client.js";
 import { PrismaQuotaStore, PrismaUnitOfWork } from "./persistence/prisma-ports.js";
-import { WorktreeManager } from "./domain/runtime/worktree-manager.js";
+import { WorktreeManager, removeWorktreeFor } from "./domain/runtime/worktree-manager.js";
 import { ClaudeAdapter } from "./domain/adapter/claude-adapter.js";
 import { FeatureProposer, proposalToCreateRequest } from "./services/feature-proposer.js";
 import { RepoDiscovery } from "./services/repo-discovery.js";
@@ -433,6 +433,7 @@ export class AppModule implements OnApplicationBootstrap, OnApplicationShutdown 
     @Inject(TOKENS.workflows) private readonly workflows: WorkflowEngine,
     @Inject(TOKENS.signatures) private readonly signatures: Signatures,
     @Inject(EVENTS) private readonly events: AutomationEvents,
+    @Inject(CONFIG) private readonly cfg: SignetConfig,
     @Inject(TOKENS.views) private readonly views: ConsoleViews,
   ) {}
 
@@ -481,6 +482,21 @@ export class AppModule implements OnApplicationBootstrap, OnApplicationShutdown 
     // construction. Connecting them once both exist breaks it without a lazy getter.
     this.signatures.onMerged = async (incrementId) => {
       await this.workflows.onEvent("step_merged", { runId: incrementId, depth: 0 });
+    };
+
+    // Reap the worktree once the work has landed. Nothing did this before, so they
+    // accumulated — and once they started carrying a clone of node_modules so the gates
+    // could run, one against a real package was 67MB by itself.
+    this.signatures.releaseWorktree = async (incrementId) => {
+      const inc = await this.prisma.increment.findUnique({
+        where: { id: incrementId },
+        select: { feature: { select: { repoPath: true } } },
+      });
+      await removeWorktreeFor({
+        workspacesRoot: this.cfg.workspacesRoot,
+        repoPath: inc?.feature.repoPath ?? this.cfg.targetRepoPath,
+        incrementId,
+      });
     };
 
     // Everything else publishes through the bus, so one subscription covers run_failed

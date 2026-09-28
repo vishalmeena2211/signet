@@ -215,16 +215,40 @@ export class RunEngine {
           return { outcome: "succeeded" };
         case "park":
           log.warn("run.parked", { resumeAt: decision.resumeAt?.toISOString() });
+          // The lock, not the worktree. Only FINALIZE released it before, so every
+          // non-success ending left a lock file behind holding a pid that had exited —
+          // five of them had accumulated on the pilot machine. The stale-pid check in
+          // acquire() meant nothing was actually blocked, which is precisely why it went
+          // unnoticed: litter that never breaks anything is litter nobody looks at.
+          //
+          // The worktree STAYS. A parked run resumes into it, and an escalated or failed
+          // one is the only place the evidence lives.
+          await this.releaseLock(handle);
           return { outcome: "parked", resumeAt: decision.resumeAt };
         case "escalate":
           log.warn("run.escalated", {});
+          await this.releaseLock(handle);
           return { outcome: "escalated", question: decision.question };
         case "fail":
+          await this.releaseLock(handle);
           return this.fail(runId, decision.error);
         default:
           return this.fail(runId, nonRecoverable("engine.unknown_decision", "unreachable"));
       }
     }
+  }
+
+  /**
+   * Releases the execution lock while keeping the worktree.
+   *
+   * Errors are swallowed: this runs on the way out of a run that is already ending, and
+   * a failure to tidy up must not change the outcome that is being reported. A leaked
+   * lock is recoverable — acquire() replaces one held by a dead pid — whereas a run that
+   * reports "failed" because its cleanup threw is a lie about what happened.
+   */
+  private async releaseLock(handle: WorktreeHandle | null): Promise<void> {
+    if (!handle) return;
+    await this.worktrees.release(handle, { removeWorktree: false }).catch(() => {});
   }
 
   // ── phase bodies ──────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@
 // with no database and no real agent.
 
 import { beforeEach, afterAll, beforeAll, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -411,4 +411,26 @@ describe("run engine — full loop", () => {
 afterAll(async () => {
   // worktrees for INC may remain (FINALIZE keeps them for review) — clean.
   await rm(join(workspaces, `inc-${INC}`), { recursive: true, force: true }).catch(() => {});
+});
+
+describe("cleanup on the way out", () => {
+  it("releases the LOCK but keeps the worktree when it escalates", async () => {
+    // Only FINALIZE released the lock before, so every non-success ending left one behind
+    // holding a pid that had exited — five had piled up on the pilot machine. Nothing was
+    // blocked, because acquire() replaces a lock held by a dead pid, and that is exactly
+    // why nobody noticed: litter that never breaks anything is litter nobody looks at.
+    const h = makeHarness({
+      agentImplement: writingImplement("v8"),
+      gateResults: [{ passed: false }],
+    });
+    const outcome = await h.engine.execute(RUN, INC, "ASSEMBLE_PACK", 1);
+    expect(outcome.outcome).toBe("escalated");
+
+    const lock = join(workspaces, `inc-${INC}.lock`);
+    await expect(access(lock)).rejects.toThrow();
+
+    // The worktree STAYS: an escalated step is the only place the evidence lives, and a
+    // parked one resumes into it.
+    await expect(access(join(workspaces, `inc-${INC}`))).resolves.toBeUndefined();
+  }, BUDGET_TEST_TIMEOUT);
 });
