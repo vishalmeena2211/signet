@@ -1,6 +1,7 @@
 {
   "name": "@signet/typescript-config",
   "version": "0.0.0",
+  "description": "The shared strict TypeScript settings every Signet package builds with.",
   "private": true,
   "license": "MIT",
   "publishConfig": {

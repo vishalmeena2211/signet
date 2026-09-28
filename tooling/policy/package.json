@@ -1,7 +1,7 @@
 {
   "name": "@signet/policy",
   "version": "0.0.1",
-  "description": "The enforcement arm: dependency boundaries, tsconfig-drift, contracts-only-parse, any-ban, no-console. Every repo invariant worth having is a check here that fails.",
+  "description": "Checks that fail the build when a rule of the codebase is broken: one-way layering, strict TypeScript everywhere, no raw JSON parsing outside the contracts, no `any`, no console logging.",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",

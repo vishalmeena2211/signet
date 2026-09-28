@@ -1,6 +1,7 @@
 {
   "name": "@signet/eslint-config",
   "version": "0.0.0",
+  "description": "Shared lint settings for the Signet packages.",
   "type": "module",
   "private": true,
   "exports": {

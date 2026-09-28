@@ -1,5 +1,6 @@
 {
   "name": "signet",
+  "description": "Say what you want built. Signet plans it, writes it and checks it with your own Claude Code, and nothing reaches your main branch until you seal it.",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
@@ -21,5 +22,10 @@
   "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=24.11"
+  },
+  "homepage": "https://github.com/vishalmeena2211/signet#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vishalmeena2211/signet.git"
   }
 }

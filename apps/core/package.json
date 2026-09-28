@@ -1,7 +1,7 @@
 {
   "name": "@signet/core",
   "version": "0.0.1",
-  "description": "Signet orchestrator core — the master: runtime, gates, learner, adapter, API",
+  "description": "Signet's core: runs each step in its own copy of the repo, runs the checks, merges on your seal, and serves the API and the console.",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
