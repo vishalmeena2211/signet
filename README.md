@@ -146,7 +146,6 @@ One **master** and many **ephemeral workers** that never talk to each other.
 
 ```
 apps/core            the master — runtime, gates, learner, API, serves the console
-apps/desktop         Electron shell (a stub; not built yet)
 packages/contracts   the spine: every cross-boundary shape as a zod schema
 packages/ui          the console, a React app
 tooling/policy       boundary and invariant checks that fail the build

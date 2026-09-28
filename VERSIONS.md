@@ -18,7 +18,6 @@ Each entry is the version the repo is built and tested against. "Floor" means th
 | Prisma | pin at persistence task | apps/core package.json |
 | React | 19.x — pin at packages/ui adaptation | packages/ui package.json |
 | Vite | pin at packages/ui adaptation | packages/ui package.json |
-| Electron | pin at Phase 2 | apps/desktop package.json |
 | Playwright | pin at gates task | apps/core package.json |
 | zod | pin at contracts task | packages/contracts package.json |
 
