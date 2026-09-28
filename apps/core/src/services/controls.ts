@@ -17,6 +17,7 @@ import {
 } from "@signet/contracts";
 import { enqueueRun } from "./dispatcher.js";
 import type { FeatureEvents } from "./feature-events.js";
+import type { DiffReader } from "./diff-reader.js";
 import type { PrismaClient } from "../persistence/generated/client.js";
 import type { UnitOfWork } from "../domain/runtime/ports.js";
 
@@ -33,6 +34,12 @@ export class Controls {
 
   /** Where the thread's events are written. Optional so existing callers keep working. */
   events?: FeatureEvents;
+
+  /** A step's repair budget: a send-back spends one, as a failed check does. */
+  maxRepairs = 3;
+
+  /** Where the step's work stands, recorded at a send-back so its note can be shown against what changed. */
+  diffs?: Pick<DiffReader, "head">;
 
   constructor(
     private readonly db: PrismaClient,
@@ -239,6 +246,19 @@ export class Controls {
         signet: conflict("increment.illegal_transition", `Only a step waiting for your seal can be sent back; this one is ${inc.status.toLowerCase().replace(/_/g, " ")}.`),
       });
     }
+    // A send-back is a repair, and spends one from the same budget a failed check does.
+    // With none left it would run with no room to fix a check it then fails.
+    if (inc.repairAttempt >= this.maxRepairs) {
+      throw Object.assign(new Error(`increment ${incId} has no repairs left`), {
+        signet: conflict(
+          "send_back.no_repairs",
+          `This step has used all ${this.maxRepairs} of its repairs, so it cannot be sent back again. Seal it as it is, or ask for the change again.`,
+        ),
+      });
+    }
+    const before = (await this.diffs?.head(incId)) ?? null;
+    // Stamped now, before the rebuild's run exists, so the run reads as coming after it.
+    const sentAt = new Date();
     const oldBrief = await this.db.briefVersion.findUniqueOrThrow({ where: { id: inc.briefVersionId } });
     const newBriefId = randomUUID();
     const newVersion = oldBrief.version + 1;
@@ -256,10 +276,12 @@ export class Controls {
       await tx.briefVersion.create({
         data: { id: newBriefId, featureId: inc.featureId, version: newVersion, contentMd: amended },
       });
-      await tx.increment.update({ where: { id: incId }, data: { briefVersionId: newBriefId } });
+      await tx.increment.update({ where: { id: incId }, data: { briefVersionId: newBriefId, repairAttempt: inc.repairAttempt + 1 } });
     });
 
-    const runId = await enqueueRun(this.uow, incId);
+    // Straight to writing, like any repair: the plan and its fence still stand, and the
+    // notes are in the brief the agent is given.
+    const runId = await enqueueRun(this.uow, incId, { startPhase: "AGENT_IMPLEMENT", attempt: inc.repairAttempt + 1 });
     await this.uow.run(async (tx) => {
       await tx.increments.transition(incId, "AWAITING_SIGNATURE", {
         status: "RUNNING",
@@ -270,7 +292,8 @@ export class Controls {
       featureId: inc.featureId,
       incrementId: incId,
       kind: "sent_back",
-      payload: { notes: notes.length, first: notes[0]?.text ?? null },
+      at: sentAt,
+      payload: { notes: notes.length, first: notes[0]?.text ?? null, all: notes, before },
     });
     return { runId };
   }

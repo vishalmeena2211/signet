@@ -215,7 +215,12 @@ export async function recoverOrphanedRuns(uow: UnitOfWork, log: Logger): Promise
 }
 
 /** Enqueue a fresh run for an increment (the API calls this on human approval). */
-export async function enqueueRun(uow: UnitOfWork, incrementId: string): Promise<string> {
+export async function enqueueRun(
+  uow: UnitOfWork,
+  incrementId: string,
+  /** Where to start. A send-back starts at writing, as a repair does: the plan still stands. */
+  from: { startPhase: "ASSEMBLE_PACK" | "AGENT_IMPLEMENT"; attempt: number } = { startPhase: "ASSEMBLE_PACK", attempt: 1 },
+): Promise<string> {
   const runId = RunIdSchema.parse(randomUUID());
   const incId = IncrementIdSchema.parse(incrementId);
   await uow.run(async (tx) => {
@@ -225,8 +230,8 @@ export async function enqueueRun(uow: UnitOfWork, incrementId: string): Promise<
       payloadJson: JSON.stringify({
         runId,
         incrementId: incId,
-        startPhase: "ASSEMBLE_PACK",
-        attempt: 1,
+        startPhase: from.startPhase,
+        attempt: from.attempt,
       } satisfies DispatchPayloadT),
       availableAt: new Date().toISOString(),
     });

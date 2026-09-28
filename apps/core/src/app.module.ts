@@ -469,13 +469,23 @@ function buildDispatcher(
     },
     {
       provide: TOKENS.controls,
-      useFactory: (db: PrismaClient, uow: PrismaUnitOfWork, dispatcher: Dispatcher, repos: RepoDiscovery, events: FeatureEvents) => {
+      useFactory: (
+        db: PrismaClient,
+        uow: PrismaUnitOfWork,
+        dispatcher: Dispatcher,
+        repos: RepoDiscovery,
+        events: FeatureEvents,
+        diffs: DiffReader,
+        cfg: SignetConfig,
+      ) => {
         const controls = new Controls(db, uow, dispatcher);
         controls.resolveRepo = (repoId) => repos.resolve(repoId);
         controls.events = events;
+        controls.diffs = diffs;
+        controls.maxRepairs = cfg.maxRepairIterations;
         return controls;
       },
-      inject: [PRISMA, UOW, DISPATCHER, TOKENS.repos, TOKENS.events],
+      inject: [PRISMA, UOW, DISPATCHER, TOKENS.repos, TOKENS.events, TOKENS.diffs, CONFIG],
     },
     {
       provide: TOKENS.activeWorkers,
