@@ -160,6 +160,22 @@ export function nearestPath(pattern: string, paths: readonly string[]): string |
   return [...hits].sort((a, b) => Number(isTest(a)) - Number(isTest(b)) || a.length - b.length)[0] ?? null;
 }
 
+/**
+ * How input really arrives. A plan for `by=<name>` in a Slack bot was built, checked and
+ * sealed with every promise proven, and still did the wrong thing on the first real use:
+ * people type `by=@ankit`, Slack turns the mention into an id, the bot strips mentions
+ * before parsing, and the filter was silently dropped. The code that strips mentions was
+ * in the files the question pass read. Nobody asked what reaches the parser.
+ */
+export const REAL_INPUT = [
+  "When the request adds something a person types or sends (a command word, a flag, a form",
+  "field, a query parameter), look at how it actually arrives. Read the code that receives it",
+  "before the new code sees it: what it strips, rewrites or splits. Then think about what",
+  "people will really type there: a mention instead of a name, a name with a space in it,",
+  "capitals, a unit spelled out. Input that cannot be used must be said back to the person,",
+  "never silently dropped so the command quietly does something else.",
+].join("\n");
+
 function buildPrompt(goal: string, profileText: string): string {
   return [
     "You are breaking a request down into an ordered sequence of pull-request-sized steps",
@@ -210,6 +226,9 @@ function buildPrompt(goal: string, profileText: string): string {
     "   for doubts that belong to no single step.",
     "8. Returning no steps is a real answer, not a failure. Prefer it over a step you do",
     "   not believe in.",
+    "9. Real input. Promise how the step handles the forms people will actually type, and",
+    "   what it tells them when the input cannot be used:",
+    REAL_INPUT,
     "",
     "## What the user wants built",
     goal,
@@ -368,7 +387,6 @@ export async function surveyFindings(repoPath: string, label: string): Promise<A
   return AskSurveySchema.parse({ repoLabel: label, repoPath, branch, filesSurveyed: profile.files.length, findings });
 }
 
-/** The questions whose answers would change the plan, asked before proposing it. */
 /**
  * The repo itself, for reading. The survey is a summary; on anything bigger than a few
  * files the answer to a question is usually in a file the summary only names.
@@ -382,6 +400,7 @@ function readTheRepo(path: string): string {
   ].join("\n");
 }
 
+/** The questions whose answers would change the plan, asked before proposing it. */
 export async function askQuestions(
   deps: { adapter: ProposerAdapter; model?: string },
   repoPath: string,
@@ -402,6 +421,9 @@ export async function askQuestions(
       "  request does not settle. Each has two to four short options and the index of the one you",
       "  would pick. note is a short reason for your pick when the repo gives one, else null.",
       "- If nothing needs asking, return an empty questions list. Do not invent questions.",
+      "- A question about real input is worth one of the three when the code you read shows",
+      "  the input will not arrive the way the request writes it:",
+      REAL_INPUT,
       "",
       "## The request",
       goal,

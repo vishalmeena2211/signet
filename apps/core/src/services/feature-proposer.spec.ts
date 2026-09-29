@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FeatureProposal } from "@signet/contracts";
 import { profileRepo, type RepoProfile } from "../domain/learner/repo-profiler.js";
-import { FeatureProposer, checkSurfaces, proposalToCreateRequest } from "./feature-proposer.js";
+import { FeatureProposer, REAL_INPUT, askQuestions, checkSurfaces, proposalToCreateRequest } from "./feature-proposer.js";
 
 /** The pilot's demo repo in miniature: flat, .mjs, tests named *.test.mjs. */
 async function flatRepo(): Promise<{ root: string; profile: RepoProfile; cleanup: () => Promise<void> }> {
@@ -352,6 +352,31 @@ describe("a proposal may say there is nothing to do", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.error.message).toContain("noWorkNeeded");
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe("planning looks at how input really arrives", () => {
+  // A Slack command's by=<name> filter was sealed with every promise proven and still
+  // failed on first use: people type by=@name, the bot strips mentions before parsing,
+  // and the filter was silently dropped. Both planning passes carry the same guidance.
+  it("puts the real-input guidance in the questions and the proposal", async () => {
+    const { root, cleanup } = await flatRepo();
+    try {
+      const prompts: string[] = [];
+      const adapter = {
+        execute: async (input: { prompt: string }) => {
+          prompts.push(input.prompt);
+          return { ok: true as const, resultText: "not json" };
+        },
+      };
+      await askQuestions({ adapter }, root, "accept by=<name> in the cart command");
+      await new FeatureProposer({ targetRepoPath: root, adapter }).propose({ goal: "accept by=<name> in the cart command" });
+      expect(prompts).toHaveLength(2);
+      for (const prompt of prompts) expect(prompt).toContain(REAL_INPUT);
+      expect(REAL_INPUT).toContain("never silently dropped");
     } finally {
       await cleanup();
     }
