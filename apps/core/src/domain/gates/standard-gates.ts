@@ -23,11 +23,20 @@ export function typecheckGate(): Gate {
   return {
     name: "typecheck",
     async run(ctx: GateContext): Promise<GateVerdictView> {
-      try {
-        await access(join(ctx.workspacePath, "tsconfig.json"));
-      } catch {
-        return { gate: "typecheck", outcome: "skipped", findings: [] };
+      const hasTs = await access(join(ctx.workspacePath, "tsconfig.json")).then(() => true, () => false);
+      const hasGo = !hasTs && (await access(join(ctx.workspacePath, "go.mod")).then(() => true, () => false));
+      if (hasGo) {
+        // Go's own check: `go vet` type-checks every package and flags the usual mistakes.
+        const vet = await runCommand("go", ["vet", "./..."], ctx.workspacePath, TIMEOUT);
+        if (vet.code === 0) return { gate: "typecheck", outcome: "pass", findings: [] };
+        const found = topLines(vet.stdout + vet.stderr, /\.go:\d+/, 8);
+        return {
+          gate: "typecheck",
+          outcome: "fail",
+          findings: (found.length ? found : [`go vet exited ${vet.code}`]).map((l) => ({ dimension: "type_error", message: l })),
+        };
       }
+      if (!hasTs) return { gate: "typecheck", outcome: "skipped", findings: [] };
       const res = await runCommand("npx", ["tsc", "--noEmit"], ctx.workspacePath, TIMEOUT);
       if (res.code === 0) return { gate: "typecheck", outcome: "pass", findings: [] };
       const lines = topLines(res.stdout + res.stderr, /error TS\d+/, 8);
@@ -44,6 +53,22 @@ export function lintGate(): Gate {
   return {
     name: "lint",
     async run(ctx: GateContext): Promise<GateVerdictView> {
+      // Go: changed files must be gofmt-formatted, the one style every Go repo shares.
+      // Only files still there: a deleted file is in the change, and gofmt fails on it.
+      const goFiles: string[] = [];
+      for (const f of ctx.changedFiles.filter((x) => x.endsWith(".go"))) {
+        if (await access(join(ctx.workspacePath, f)).then(() => true, () => false)) goFiles.push(f);
+      }
+      if (goFiles.length > 0) {
+        const fmt = await runCommand("gofmt", ["-l", ...goFiles], ctx.workspacePath, TIMEOUT);
+        const unformatted = fmt.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+        if (fmt.code === 0 && unformatted.length === 0) return { gate: "lint", outcome: "pass", findings: [] };
+        return {
+          gate: "lint",
+          outcome: "fail",
+          findings: (unformatted.length ? unformatted : [`gofmt exited ${fmt.code}`]).slice(0, 8).map((f) => ({ dimension: "lint", message: `${f} is not gofmt-formatted: run gofmt -w ${f}` })),
+        };
+      }
       // Diff-scoped: lint only changed JS/TS files; absent config = skip.
       const targets = ctx.changedFiles.filter((f) => /\.(ts|tsx|js|jsx|mjs)$/.test(f));
       if (targets.length === 0) return { gate: "lint", outcome: "skipped", findings: [] };

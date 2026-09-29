@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { RunIdSchema } from "@signet/contracts";
 import { detectEcosystem, isTestFile, runnerMissing, suitePassed, TEST_DECLARATION } from "./ecosystems.js";
-import { testsGate } from "./standard-gates.js";
+import { lintGate, testsGate, typecheckGate } from "./standard-gates.js";
+import { portrait, testedBy } from "../../services/portrait.js";
 import { makeRunOnBase } from "./base-overlay.js";
 
 const exec = promisify(execFile);
@@ -136,5 +137,45 @@ describe("the tests check on real repos in other languages", { timeout: 120_000 
     const v = await gate.run(ctx(dir, changed));
     if (withPytest) expect(v).toMatchObject({ outcome: "pass" });
     else expect(v).toMatchObject({ outcome: "fail", findings: [{ dimension: "environment", message: expect.stringContaining("pytest is not installed") }] });
+  });
+});
+
+describe("Go's own checks for types and format, and a portrait in Go's terms", { timeout: 120_000 }, () => {
+  const mod = { "go.mod": "module calc\n\ngo 1.21\n" };
+
+  it("go vet passes clean code and catches a real mistake", async (t) => {
+    if (!(await has("go", ["version"]))) return t.skip();
+    const clean = await repo({ ...mod, "calc.go": 'package calc\n\nimport "fmt"\n\nfunc Show(n int) string { return fmt.Sprintf("%d", n) }\n' });
+    expect(await typecheckGate().run(ctx(clean, ["calc.go"]))).toMatchObject({ outcome: "pass" });
+    const wrong = await repo({ ...mod, "calc.go": 'package calc\n\nimport "fmt"\n\nfunc Show(s string) string { return fmt.Sprintf("%d", s) }\n' });
+    const v = await typecheckGate().run(ctx(wrong, ["calc.go"]));
+    expect(v.outcome).toBe("fail");
+    expect(v.findings[0]?.message).toContain("calc.go");
+  });
+
+  it("gofmt flags a changed file that is not formatted, and names the fix", async (t) => {
+    if (!(await has("go", ["version"]))) return t.skip(); // gofmt ships with Go
+    const messy = await repo({ ...mod, "calc.go": "package calc\nfunc Add(a,b int) int {return a+b}\n" });
+    const v = await lintGate().run(ctx(messy, ["calc.go"]));
+    expect(v).toMatchObject({ outcome: "fail", findings: [{ message: "calc.go is not gofmt-formatted: run gofmt -w calc.go" }] });
+    const tidy = await repo({ ...mod, "calc.go": "package calc\n\nfunc Add(a, b int) int { return a + b }\n" });
+    expect(await lintGate().run(ctx(tidy, ["calc.go"]))).toMatchObject({ outcome: "pass" });
+  });
+
+  it("describes a Go repo's tests in Go's terms, and knows a _test.go covers its file", async () => {
+    const dir = await repo({ ...mod, "calc.go": "package calc\n\nfunc Add(a, b int) int { return a + b }\n", "calc_test.go": 'package calc\n\nimport "testing"\n\nfunc TestAdd(t *testing.T) {}\n' });
+    const p = await portrait({ id: dir, label: "calc", path: dir }, { get: async () => null, set: async () => {} } as never);
+    const text = JSON.stringify(p);
+    expect(text).toContain("Go’s own testing package");
+    expect(text).not.toContain("a test script");
+    expect(p.asks.some((a) => a.includes("without a test"))).toBe(false);
+  });
+
+  it("pairs each ecosystem's tests with the files they test", () => {
+    expect(testedBy("src/cart.test.ts")).toEqual(["src/cart.ts"]);
+    expect(testedBy("pkg/calc_test.go")).toEqual(["pkg/calc.go"]);
+    expect(testedBy("tests/test_cart.py")).toContain("cart.py");
+    expect(testedBy("cart_test.py")).toEqual(["cart.py"]);
+    expect(testedBy("tests/sub.rs")).toEqual(["src/sub.rs"]);
   });
 });
