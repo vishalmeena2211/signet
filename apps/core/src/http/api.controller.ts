@@ -24,6 +24,7 @@ import {
   WorkflowSchema,
   SaveWorkflowRequestSchema,
   WorkflowRunViewSchema,
+  RoutineFiringSchema,
   ApproveDesignRequestSchema,
   DispatcherControlRequestSchema,
   DispatcherStateSchema,
@@ -472,6 +473,19 @@ export class ApiController {
   @Get("workflow-runs")
   async workflowRuns() {
     return z.array(WorkflowRunViewSchema).parse(await this.automation.listRuns());
+  }
+
+  /** One routine's recent firings, for drawing over its canvas. */
+  @Get("workflows/:id/firings")
+  async routineFirings(@Param("id") id: string) {
+    return z.array(RoutineFiringSchema).parse(await this.automation.firings(id));
+  }
+
+  /** Takes a stopped routine off the Desk; its firing and reason stay in the history. */
+  @Post("workflow-runs/:id/dismiss")
+  async dismissRoutineStop(@Param("id") id: string) {
+    await this.automation.dismissStop(id);
+    return { dismissed: true };
   }
 
   /**

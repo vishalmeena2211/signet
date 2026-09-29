@@ -20,6 +20,7 @@ import { AgentWorkLog } from "./agent-work.js";
 import { DiffReader } from "./diff-reader.js";
 import { FeatureEvents, ProposalsInFlight } from "./feature-events.js";
 import { Controls } from "./controls.js";
+import { AutomationStore } from "./automation-store.js";
 import { PrismaUnitOfWork } from "../persistence/prisma-ports.js";
 
 const exec = promisify(execFile);
@@ -409,6 +410,95 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
     // With the budget spent, it says so instead of sending back again.
     await db.increment.update({ where: { id: incId }, data: { repairAttempt: 3 } });
     await expect(controls.sendBack(incId, [note])).rejects.toMatchObject({ signet: { code: "send_back.no_repairs" } });
+  });
+
+  it("draws a routine's firings with what each recipe did, and puts a stopped routine on the Desk", async () => {
+    const recipeA = randomUUID();
+    const recipeB = randomUUID();
+    const wfId = randomUUID();
+    const stepA = randomUUID();
+    const stepB = randomUUID();
+    await db.recipe.createMany({
+      data: [
+        { id: recipeA, name: "Cover an untested module", goalMd: "Find one module with no test file and add one." },
+        { id: recipeB, name: "Tidy what lint flags", goalMd: "Fix what the linter reports, without changing behaviour." },
+      ],
+    });
+    await db.workflow.create({ data: { id: wfId, name: "Nightly coverage", enabled: true, triggerJson: JSON.stringify({ kind: "manual" }) } });
+    await db.workflowStep.createMany({
+      data: [
+        { id: stepA, workflowId: wfId, recipeId: recipeA, orderIndex: 0 },
+        { id: stepB, workflowId: wfId, recipeId: recipeB, orderIndex: 1 },
+      ],
+    });
+    // The work the first recipe started: a feature whose first step waits at the seal.
+    const featureId = randomUUID();
+    const briefId = randomUUID();
+    const incId = randomUUID();
+    const runId = randomUUID();
+    await db.feature.create({ data: { id: featureId, title: "Cover src/tiles.ts", stage: "IMPLEMENTING" } });
+    await db.briefVersion.create({ data: { id: briefId, featureId, version: 1, contentMd: "Cover it." } });
+    await db.increment.create({
+      data: { id: incId, featureId, title: "Test tiles", status: "AWAITING_SIGNATURE", stateJson: JSON.stringify({ status: "AWAITING_SIGNATURE", runId }), declaredSurface: [], briefVersionId: briefId, orderIndex: 0 },
+    });
+    await db.run.create({ data: { id: runId, incrementId: incId, status: "SUCCEEDED", stateJson: JSON.stringify({ status: "SUCCEEDED" }) } });
+    await db.usageLedgerEntry.create({ data: { id: randomUUID(), runId, model: "m", inputTokens: 1, outputTokens: 1, costUsd: 0.38 } });
+
+    const lastNight = randomUUID();
+    const tonight = randomUUID();
+    await db.workflowRun.create({
+      data: {
+        id: lastNight,
+        workflowId: wfId,
+        triggeredBy: "schedule",
+        status: "succeeded",
+        startedAt: new Date(Date.now() - 86_400_000),
+        finishedAt: new Date(Date.now() - 86_400_000 + 240_000),
+        outcomeJson: JSON.stringify({
+          outcomes: [
+            { recipeName: "Cover an untested module", stepId: stepA, featureId, stepsQueued: 1, error: null, nothingNeeded: null },
+            { recipeName: "Tidy what lint flags", stepId: stepB, featureId: null, stepsQueued: 0, error: null, nothingNeeded: "Lint reports no warnings." },
+          ],
+        }),
+      },
+    });
+    await db.workflowRun.create({
+      data: {
+        id: tonight,
+        workflowId: wfId,
+        triggeredBy: "schedule",
+        status: "failed",
+        finishedAt: new Date(),
+        outcomeJson: JSON.stringify({ outcomes: [{ recipeName: "Cover an untested module", stepId: stepA, featureId: null, stepsQueued: 0, error: "the repo could not be read", nothingNeeded: null }] }),
+      },
+    });
+
+    const store = new AutomationStore({ db } as never);
+    const [latest, previous] = await store.firings(wfId);
+    expect(latest).toMatchObject({ id: tonight, status: "failed", steps: [{ stepId: stepA, error: "the repo could not be read", yours: false }] });
+    expect(previous).toMatchObject({ id: lastNight, costUsd: 0.38 });
+    expect(previous?.steps[0]).toMatchObject({ stepId: stepA, featureTitle: "Cover src/tiles.ts", incrementId: incId, now: "at your seal", yours: true, costUsd: 0.38 });
+    expect(previous?.steps[1]).toMatchObject({ stepId: stepB, nothingNeeded: "Lint reports no warnings.", yours: false });
+    // The routine list now says which step is which.
+    expect((await store.listWorkflows())[0]?.steps.map((s) => s.id)).toEqual([stepA, stepB]);
+
+    // A stopped routine needs a person: it is on the Desk until dismissed.
+    const views = new PlaceViews({
+      db,
+      diffs: new DiffReader(workspaces, "main"),
+      work: new WorkViews(db, new AgentWorkLog(join(root, "packs"))),
+      log: new AgentWorkLog(join(root, "packs")),
+      proposals: new ProposalsInFlight(),
+      quota: async () => ({ exhausted: false, windowKind: "five_hour" }),
+      configuredRepoLabel: "repo",
+      configuredRepoPath: repo,
+      baseRef: "main",
+    });
+    expect((await views.desk()).stopped).toMatchObject([{ runId: tonight, routineName: "Nightly coverage", recipeName: "Cover an untested module", reason: "the repo could not be read" }]);
+    await store.dismissStop(tonight);
+    expect((await views.desk()).stopped).toEqual([]);
+    // Dismissed, not forgotten: the firing keeps its outcome.
+    expect((await store.firings(wfId))[0]?.steps[0]?.error).toBe("the repo could not be read");
   });
 
   it("puts every merge in the ledger, with its commit found in git when it was not recorded", async () => {

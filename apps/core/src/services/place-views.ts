@@ -28,6 +28,7 @@ import type { WorkViews } from "./work-views.js";
 import type { AgentWorkLog } from "./agent-work.js";
 import type { ProposalsInFlight } from "./feature-events.js";
 import { plainQuestion } from "../domain/runtime/run-machine.js";
+import { readRoutineStops } from "./automation-store.js";
 
 const pexec = promisify(execFile);
 
@@ -190,6 +191,7 @@ export class PlaceViews {
       status: await this.statusLine(),
       flow: await this.flowCounts(),
       decisions,
+      stopped: await readRoutineStops(db),
       lastLandedAt: lastMerged[0]?.mergedAt.toISOString() ?? null,
     });
   }

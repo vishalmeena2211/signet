@@ -176,7 +176,8 @@ export class WorkflowEngine {
           ...(repoId ? { repoId } : {}),
         });
         if (!proposal.ok) {
-          outcomes.push({ recipeName: recipe.name, featureId: null, stepsQueued: 0, error: proposal.reason, nothingNeeded: null });
+          outcomes.push({ recipeName: recipe.name,
+          stepId: step.id, featureId: null, stepsQueued: 0, error: proposal.reason, nothingNeeded: null });
           failed = true;
           // Stop the workflow: later recipes usually assume the earlier ones landed, and
           // carrying on would build on something that is not there.
@@ -189,6 +190,7 @@ export class WorkflowEngine {
           // automation that correctly finds nothing does not read as broken.
           outcomes.push({
             recipeName: recipe.name,
+          stepId: step.id,
             featureId: null,
             stepsQueued: 0,
             error: null,
@@ -217,6 +219,7 @@ export class WorkflowEngine {
 
         outcomes.push({
           recipeName: recipe.name,
+          stepId: step.id,
           featureId: created.featureId,
           stepsQueued: increments.length,
           error: null,
@@ -225,6 +228,7 @@ export class WorkflowEngine {
       } catch (e) {
         outcomes.push({
           recipeName: recipe.name,
+          stepId: step.id,
           featureId: null,
           stepsQueued: 0,
           error: e instanceof Error ? e.message : String(e),

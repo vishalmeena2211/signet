@@ -58,12 +58,25 @@ export const DecisionSchema = z.object({
 });
 export type Decision = z.infer<typeof DecisionSchema>;
 
+/** A routine that stopped because a recipe could not start: it needs you, so it is on the Desk. */
+export const RoutineStopSchema = z.object({
+  runId: z.string(),
+  workflowId: z.string(),
+  routineName: z.string(),
+  recipeName: z.string(),
+  reason: z.string(),
+  at: z.iso.datetime(),
+});
+export type RoutineStop = z.infer<typeof RoutineStopSchema>;
+
 export const DeskViewSchema = z.object({
   identity: IdentitySchema,
   repoLabel: z.string(),
   status: StatusLineSchema,
   flow: FlowCountsSchema,
   decisions: z.array(DecisionSchema),
+  /** Routines that stopped and have not been dismissed. */
+  stopped: z.array(RoutineStopSchema).default([]),
   lastLandedAt: z.iso.datetime().nullable(),
 });
 export type DeskView = z.infer<typeof DeskViewSchema>;

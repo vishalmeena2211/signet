@@ -15,6 +15,8 @@ import {
   type AutomationState,
   type CreateRecipeRequest,
   type Recipe,
+  type RoutineFiring,
+  type RoutineStop,
   type SaveWorkflowRequest,
   type Workflow,
   type WorkflowRunView,
@@ -94,6 +96,7 @@ export class AutomationStore {
       trigger: safeTrigger(w.triggerJson),
       maxDepth: w.maxDepth,
       steps: w.steps.map((s) => ({
+        id: s.id,
         recipeId: s.recipeId,
         recipeName: s.recipe.name,
         orderIndex: s.orderIndex,
@@ -162,6 +165,83 @@ export class AutomationStore {
     });
   }
 
+  /**
+   * One routine's recent firings, newest first, with what each recipe did, what the work
+   * it started has cost, and where that work stands now: the canvas draws these over its
+   * cards.
+   */
+  async firings(workflowId: string, limit = 7): Promise<RoutineFiring[]> {
+    const { db } = this.deps;
+    const rows = await db.workflowRun.findMany({ where: { workflowId }, orderBy: { startedAt: "desc" }, take: limit });
+    const featureIds = [...new Set(rows.flatMap((r) => safeOutcome(r.outcomeJson).outcomes.map((o) => o.featureId)).filter((f): f is string => !!f))];
+    const features = await db.feature.findMany({
+      where: { id: { in: featureIds } },
+      include: { increments: { orderBy: { orderIndex: "asc" }, select: { id: true, status: true, stateJson: true } } },
+    });
+    const spend = await db.usageLedgerEntry.groupBy({
+      by: ["runId"],
+      where: { run: { increment: { featureId: { in: featureIds } } } },
+      _sum: { costUsd: true },
+    });
+    const runsOf = await db.run.findMany({ where: { increment: { featureId: { in: featureIds } } }, select: { id: true, increment: { select: { featureId: true } } } });
+    const costOf = (featureId: string): number | null => {
+      const ids = new Set(runsOf.filter((r) => r.increment.featureId === featureId).map((r) => r.id));
+      const sum = spend.filter((s) => ids.has(s.runId)).reduce((n, s) => n + Number(s._sum.costUsd ?? 0), 0);
+      return ids.size === 0 ? null : Math.round(sum * 100) / 100;
+    };
+    return rows.map((r) => {
+      const parsed = safeOutcome(r.outcomeJson);
+      const steps = parsed.outcomes.map((o) => {
+        const f = o.featureId ? features.find((x) => x.id === o.featureId) : undefined;
+        const first = f?.increments[0];
+        const dismissed = first?.status === "FAILED" && first.stateJson.includes('"dismissedAt"');
+        return {
+          stepId: o.stepId ?? null,
+          recipeName: o.recipeName,
+          featureId: o.featureId,
+          featureTitle: f?.title ?? null,
+          incrementId: first?.id ?? null,
+          now: first ? (NOW_WORDS[first.status] ?? first.status.toLowerCase()) : null,
+          yours: !!first && YOURS.has(first.status) && !dismissed,
+          costUsd: o.featureId ? costOf(o.featureId) : null,
+          nothingNeeded: o.nothingNeeded ?? null,
+          error: o.error,
+        };
+      });
+      const costs = steps.map((s) => s.costUsd).filter((c): c is number => c !== null);
+      return {
+        id: r.id,
+        triggeredBy: r.triggeredBy === "schedule" || r.triggeredBy === "event" ? r.triggeredBy : ("manual" as const),
+        status: r.status === "running" || r.status === "succeeded" || r.status === "failed" || r.status === "skipped" ? r.status : ("failed" as const),
+        skipReason: parsed.skipReason,
+        startedAt: r.startedAt.toISOString(),
+        finishedAt: r.finishedAt?.toISOString() ?? null,
+        costUsd: costs.length === 0 ? null : Math.round(costs.reduce((a, b) => a + b, 0) * 100) / 100,
+        steps,
+      };
+    });
+  }
+
+  /** Routines that stopped and still need a person. */
+  async stops(): Promise<RoutineStop[]> {
+    return readRoutineStops(this.deps.db);
+  }
+
+  /** Takes a stopped routine off the Desk. The firing and its reason stay in the history. */
+  async dismissStop(runId: string): Promise<void> {
+    const row = await this.deps.db.workflowRun.findUniqueOrThrow({ where: { id: runId } });
+    let record: Record<string, unknown> = {};
+    try {
+      record = JSON.parse(row.outcomeJson ?? "{}") as Record<string, unknown>; // signet-policy-allow: raw-json-parse -- our own record, extended with one field
+    } catch {
+      record = {};
+    }
+    await this.deps.db.workflowRun.update({
+      where: { id: runId },
+      data: { outcomeJson: JSON.stringify({ ...record, dismissedAt: new Date().toISOString() }) },
+    });
+  }
+
   async state(): Promise<AutomationState> {
     const [recipes, total, enabled] = await Promise.all([
       this.deps.db.recipe.count(),
@@ -180,6 +260,45 @@ function safeTrigger(json: string): Workflow["trigger"] {
     return { kind: "manual" };
   }
 }
+
+/**
+ * Routines that stopped because a recipe could not start, not yet dismissed. A stop
+ * needs a person, so it belongs on the Desk rather than only in the history.
+ */
+export async function readRoutineStops(db: PrismaClient): Promise<RoutineStop[]> {
+  const rows = await db.workflowRun.findMany({
+    where: { status: "failed", NOT: { outcomeJson: { contains: '"dismissedAt"' } } },
+    include: { workflow: { select: { name: true } } },
+    orderBy: { startedAt: "asc" },
+    take: 20,
+  });
+  return rows.flatMap((r) => {
+    const failed = safeOutcome(r.outcomeJson).outcomes.find((o) => o.error);
+    if (!failed) return [];
+    return [{
+      runId: r.id,
+      workflowId: r.workflowId,
+      routineName: r.workflow.name,
+      recipeName: failed.recipeName,
+      reason: failed.error ?? "It could not start.",
+      at: (r.finishedAt ?? r.startedAt).toISOString(),
+    }];
+  });
+}
+
+/** Where a step's work stands, in the words the console uses. */
+const NOW_WORDS: Record<string, string> = {
+  MERGED: "sealed",
+  AWAITING_SIGNATURE: "at your seal",
+  CONTEXT_READY: "waiting for your initials",
+  RUNNING: "building",
+  VERIFYING: "checking",
+  ESCALATED: "asked you a question",
+  PARKED: "waiting for your Claude quota",
+  FAILED: "failed",
+  PLANNED: "not started",
+};
+const YOURS = new Set(["AWAITING_SIGNATURE", "CONTEXT_READY", "ESCALATED", "FAILED"]);
 
 function safeOutcome(json: string | null): { outcomes: WorkflowStepOutcome[]; skipReason: string | null } {
   if (!json) return { outcomes: [], skipReason: null };

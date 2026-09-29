@@ -112,7 +112,7 @@ export const WorkflowSchema = z.object({
    * that does not. 1 means "may fire, may not cause another firing".
    */
   maxDepth: z.number().int().min(0).max(5),
-  steps: z.array(z.object({ recipeId: z.string(), recipeName: z.string(), orderIndex: z.number().int() })),
+  steps: z.array(z.object({ id: z.string(), recipeId: z.string(), recipeName: z.string(), orderIndex: z.number().int() })),
   lastFiredAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
 });
@@ -148,6 +148,8 @@ export const WorkflowStepOutcomeSchema = z.object({
    * reported it as a failure because the two were conflated.
    */
   nothingNeeded: z.string().nullable().default(null),
+  /** Which of the routine's steps this was. Absent on firings recorded before it was kept. */
+  stepId: z.string().nullable().default(null),
 });
 export type WorkflowStepOutcome = z.infer<typeof WorkflowStepOutcomeSchema>;
 
@@ -185,3 +187,35 @@ export type AutomationState = z.infer<typeof AutomationStateSchema>;
 
 export const AutomationControlRequestSchema = z.object({ paused: z.boolean() });
 export type AutomationControlRequest = z.infer<typeof AutomationControlRequestSchema>;
+
+// ── one routine's firings, drawn over its canvas ──
+
+/** What one recipe did in a firing, and where the work it started stands now. */
+export const FiringStepSchema = z.object({
+  stepId: z.string().nullable(),
+  recipeName: z.string(),
+  featureId: z.string().nullable(),
+  featureTitle: z.string().nullable(),
+  /** The first step of the work it started: the one the routine initialled. */
+  incrementId: z.string().nullable(),
+  /** Where that work stands, in words: "at your seal", "building", "sealed"… */
+  now: z.string().nullable(),
+  /** True when what it started is waiting on you. */
+  yours: z.boolean(),
+  costUsd: z.number().nullable(),
+  nothingNeeded: z.string().nullable(),
+  error: z.string().nullable(),
+});
+export type FiringStep = z.infer<typeof FiringStepSchema>;
+
+export const RoutineFiringSchema = z.object({
+  id: z.string(),
+  triggeredBy: z.enum(["schedule", "event", "manual"]),
+  status: WorkflowRunStatusSchema,
+  skipReason: z.string().nullable(),
+  startedAt: z.iso.datetime(),
+  finishedAt: z.iso.datetime().nullable(),
+  costUsd: z.number().nullable(),
+  steps: z.array(FiringStepSchema),
+});
+export type RoutineFiring = z.infer<typeof RoutineFiringSchema>;
