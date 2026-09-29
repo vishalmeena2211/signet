@@ -521,7 +521,7 @@ function buildDispatcher(
           },
           createFeature: (input) => controls.createFeature(input),
           // Signature 1 only. There is deliberately no path from here to merge().
-          approve: (incrementId) => signatures.approve(incrementId),
+          approve: (incrementId, routine) => signatures.approve(incrementId, { routine }),
         }),
       inject: [PRISMA, LOGGER, TOKENS.proposer, TOKENS.controls, TOKENS.signatures],
     },

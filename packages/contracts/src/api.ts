@@ -102,7 +102,8 @@ export const CreateFeatureRequestSchema = z.object({
   title: z.string().min(1).max(200),
   briefMd: z.string().min(1),
   /** The person's own words and when they asked — the thread's first line. */
-  asked: z.object({ goal: z.string().min(1), at: z.iso.datetime() }).optional(),
+  /** Who asked, and when. `routine` names the routine when it was not a person. */
+  asked: z.object({ goal: z.string().min(1), at: z.iso.datetime(), routine: z.string().optional() }).optional(),
   /** What the proposal was built on, for the thread's second line. */
   proposal: z.object({ at: z.iso.datetime(), filesSurveyed: z.number().int().min(0), note: z.string().nullable() }).optional(),
   /** Which repo to build into. Omitted means the configured one. */

@@ -501,6 +501,63 @@ d("take it back, and the places (live DB)", { timeout: 20_000 }, () => {
     expect((await store.firings(wfId))[0]?.steps[0]?.error).toBe("the repo could not be read");
   });
 
+  it("says the routine asked and initialled, never you, including for work a routine made before it was recorded", async () => {
+    const make = async (title: string) => {
+      const featureId = randomUUID();
+      const briefId = randomUUID();
+      const incId = randomUUID();
+      await db.feature.create({ data: { id: featureId, title, stage: "IMPLEMENTING", repoPath: repo, repoLabel: "repo" } });
+      await db.briefVersion.create({ data: { id: briefId, featureId, version: 1, contentMd: "Remove an item." } });
+      await db.increment.create({
+        data: { id: incId, featureId, title: "Add removeItem", status: "CONTEXT_READY", stateJson: JSON.stringify({ status: "CONTEXT_READY" }), declaredSurface: [], briefVersionId: briefId, orderIndex: 0 },
+      });
+      return { featureId, incId };
+    };
+    const deps = {
+      db,
+      diffs: new DiffReader(workspaces, "main"),
+      work: new WorkViews(db, new AgentWorkLog(join(root, "packs"))),
+      log: new AgentWorkLog(join(root, "packs")),
+      proposals: new ProposalsInFlight(),
+      quota: async () => ({ exhausted: false, windowKind: "five_hour" }),
+      configuredRepoLabel: "repo",
+      configuredRepoPath: repo,
+      baseRef: "main",
+    };
+    const views = new PlaceViews(deps);
+    const titles = async (featureId: string) => (await views.thread(featureId)).events.slice(0, 2).map((e) => [e.who, e.title]);
+
+    // Recorded as the routine's, from now on.
+    const now = await make("Recorded");
+    await db.featureEvent.create({ data: { id: randomUUID(), featureId: now.featureId, kind: "asked", payloadJson: JSON.stringify({ goal: "Add removeItem", routine: "Nightly cart" }) } });
+    await db.featureEvent.create({ data: { id: randomUUID(), featureId: now.featureId, incrementId: now.incId, kind: "initialled", payloadJson: JSON.stringify({ routine: "Nightly cart" }), at: new Date(Date.now() + 1000) } });
+    expect(await titles(now.featureId)).toEqual([
+      ["signet", "The routine “Nightly cart” asked for this"],
+      ["signet", "The routine “Nightly cart” initialled the plan"],
+    ]);
+    expect((await new StepViews(deps).sheet(now.incId)).askedBy).toBe("Nightly cart");
+
+    // Made by a routine before that was recorded: its firing says so.
+    const before = await make("Before");
+    const wfId = randomUUID();
+    await db.workflow.create({ data: { id: wfId, name: "Old routine", triggerJson: JSON.stringify({ kind: "manual" }) } });
+    await db.workflowRun.create({ data: { id: randomUUID(), workflowId: wfId, triggeredBy: "manual", status: "succeeded", outcomeJson: JSON.stringify({ outcomes: [{ recipeName: "r", featureId: before.featureId, stepsQueued: 1, error: null, nothingNeeded: null }] }) } });
+    await db.featureEvent.create({ data: { id: randomUUID(), featureId: before.featureId, incrementId: before.incId, kind: "initialled", payloadJson: "{}" } });
+    expect(await titles(before.featureId)).toEqual([
+      ["signet", "The routine “Old routine” asked for this"],
+      ["signet", "The routine “Old routine” initialled the plan"],
+    ]);
+
+    // A person's own feature is still theirs.
+    const mine = await make("Mine");
+    await db.featureEvent.create({ data: { id: randomUUID(), featureId: mine.featureId, kind: "asked", payloadJson: JSON.stringify({ goal: "Add removeItem" }) } });
+    await db.featureEvent.create({ data: { id: randomUUID(), featureId: mine.featureId, incrementId: mine.incId, kind: "initialled", payloadJson: "{}", at: new Date(Date.now() + 1000) } });
+    expect(await titles(mine.featureId)).toEqual([
+      ["you", "You asked"],
+      ["you", "You initialled the plan"],
+    ]);
+  });
+
   it("puts every merge in the ledger, with its commit found in git when it was not recorded", async () => {
     await sealedStep();
     const views = new PlaceViews({

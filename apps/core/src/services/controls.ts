@@ -88,7 +88,12 @@ export class Controls {
       }
     });
     if (req.asked) {
-      await this.events?.record({ featureId, kind: "asked", at: new Date(req.asked.at), payload: { goal: req.asked.goal } });
+      await this.events?.record({
+        featureId,
+        kind: "asked",
+        at: new Date(req.asked.at),
+        payload: { goal: req.asked.goal, ...(req.asked.routine ? { routine: req.asked.routine } : {}) },
+      });
     }
     if (req.proposal) {
       await this.events?.record({

@@ -401,7 +401,7 @@ function DeskSeal({ d, tab, setTab }: { d: StepSheet; tab: "promises" | "change"
                 <div className="clause">
                   <div className="ck">Built from</div>
                   <div className="cv" style={{ fontSize: 13, color: "var(--fg-2)" }}>
-                    What you asked for, version {d.briefVersion}
+                    {d.askedBy ? `What the routine “${d.askedBy}” asked for` : "What you asked for"}, version {d.briefVersion}
                     {d.answers.length > 0 ? ` — including your ${d.answers.length === 1 ? "answer" : "answers"}: “${d.answers.map((a) => a.replace(/[.\s]+$/, "")).join("”, “")}”` : ""}.
                   </div>
                 </div>

@@ -66,8 +66,11 @@ export class Signatures {
   /** The thread's record of initials and seals. Best-effort, like the other hooks. */
   onSigned?: (event: { kind: "initialled" | "merged"; incrementId: string; payload: Record<string, unknown> }) => Promise<void>;
 
-  /** Signature #1 — approve the increment; the run starts. */
-  async approve(incrementId: string): Promise<{ runId: string }> {
+  /**
+   * Signature #1 — approve the increment; the run starts. `by.routine` names the routine
+   * that gave it, when a person did not, so the record never credits you with it.
+   */
+  async approve(incrementId: string, by?: { routine: string }): Promise<{ runId: string }> {
     const incId = IncrementIdSchema.parse(incrementId);
     // Check it exists before enqueueing: otherwise the first failure is a
     // foreign-key violation from inside the run insert, which reaches the
@@ -80,7 +83,7 @@ export class Signatures {
         runId: RunIdSchema.parse(runId),
       });
     });
-    await this.onSigned?.({ kind: "initialled", incrementId: incId, payload: {} }).catch(() => {});
+    await this.onSigned?.({ kind: "initialled", incrementId: incId, payload: by ? { routine: by.routine } : {} }).catch(() => {});
     return { runId };
   }
 

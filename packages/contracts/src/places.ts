@@ -235,6 +235,8 @@ export const StepSheetSchema = z.object({
    * so the person can check the note was heard. Null when it was never sent back, or has
    * not come back yet.
    */
+  /** The routine that asked for this, when a routine did rather than a person. */
+  askedBy: z.string().nullable().default(null),
   heard: z
     .object({
       at: z.iso.datetime(),

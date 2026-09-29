@@ -105,6 +105,22 @@ export interface PlaceDeps {
   baseRef: string;
 }
 
+/**
+ * The routine that asked for a feature, or null when a person did. Read from the "asked"
+ * event since routines recorded it; for features a routine made before that, from the
+ * routine's own record of the firing that started them.
+ */
+async function routineOf(db: PrismaClient, featureId: string, askedPayload: string | null): Promise<string | null> {
+  const recorded = askedPayload ? str(readJson(askedPayload)["routine"]) : null;
+  if (recorded) return recorded;
+  if (askedPayload) return null;
+  const firing = await db.workflowRun.findFirst({
+    where: { outcomeJson: { contains: `"featureId":"${featureId}"` } },
+    include: { workflow: { select: { name: true } } },
+  });
+  return firing?.workflow.name ?? null;
+}
+
 export class PlaceViews {
   constructor(private readonly d: PlaceDeps) {}
 
@@ -296,10 +312,13 @@ export class PlaceViews {
     // What was asked and proposed. Older features have no events, so the first request
     // version stands in for "you asked".
     const asked = events.find((e) => e.kind === "asked");
+    // A routine asks and initials the first step on its own; the record says so, never "you".
+    const routine = await routineOf(db, featureId, asked?.payloadJson ?? null);
+    const askedTitle = routine ? `The routine “${routine}” asked for this` : "You asked";
     if (asked) {
-      push({ at: asked.at.toISOString(), who: "you", title: "You asked", detail: str(readJson(asked.payloadJson)["goal"]), incrementId: null });
+      push({ at: asked.at.toISOString(), who: routine ? "signet" : "you", title: askedTitle, detail: str(readJson(asked.payloadJson)["goal"]), incrementId: null });
     } else if (briefs[0]) {
-      push({ at: briefs[0].frozenAt.toISOString(), who: "you", title: "You asked", detail: firstParagraph(briefs[0].contentMd), incrementId: null });
+      push({ at: briefs[0].frozenAt.toISOString(), who: routine ? "signet" : "you", title: askedTitle, detail: firstParagraph(briefs[0].contentMd), incrementId: null });
     }
     for (const e of events) {
       const p = readJson(e.payloadJson);
@@ -317,15 +336,22 @@ export class PlaceViews {
           });
           break;
         }
-        case "initialled":
+        case "initialled": {
+          // Recorded on the event since routines said so; before that, a routine only ever
+          // initialled the first step of work it started, so that one was the routine's.
+          const by = str(p["routine"]) ?? (routine && stepNo(e.incrementId) <= 1 ? routine : null);
+          const what = stepNo(e.incrementId) <= 1 && steps.length > 0 ? "the plan" : `step ${stepNo(e.incrementId)}`;
           push({
             at,
-            who: "you",
-            title: stepNo(e.incrementId) <= 1 && steps.length > 0 ? "You initialled the plan" : `You initialled step ${stepNo(e.incrementId)}`,
-            detail: str(p["note"]) ?? (num(p["spentUsd"]) === 0 || p["spentUsd"] === undefined ? "Nothing had been spent yet." : null),
+            who: by ? "signet" : "you",
+            title: by ? `The routine “${by}” initialled ${what}` : `You initialled ${what}`,
+            detail: by
+              ? "A routine gives the first signature on its own. The seal stays yours."
+              : (str(p["note"]) ?? (num(p["spentUsd"]) === 0 || p["spentUsd"] === undefined ? "Nothing had been spent yet." : null)),
             incrementId: e.incrementId as never,
           });
           break;
+        }
         case "answered":
           push({ at, who: "you", title: "You answered", detail: str(p["answer"]), incrementId: e.incrementId as never });
           break;
@@ -717,6 +743,7 @@ export class StepViews {
       onTrust: Array.isArray(st["onTrust"]) ? (st["onTrust"] as unknown[]).map(String) : [],
       takenBack: (await db.increment.count({ where: { revertsIncrementId: incrementId, status: "MERGED" } })) > 0,
       next: next ? { title: next.title, status: next.status } : null,
+      askedBy: await routineOf(db, inc.featureId, (await db.featureEvent.findFirst({ where: { featureId: inc.featureId, kind: "asked" } }))?.payloadJson ?? null),
       heard,
     });
   }

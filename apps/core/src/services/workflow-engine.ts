@@ -59,10 +59,12 @@ export interface WorkflowDeps {
     title: string;
     briefMd: string;
     repoId?: string;
+    /** Recorded so the thread says the routine asked, not you. */
+    asked?: { goal: string; at: string; routine: string };
     increments: Array<{ title: string; declaredSurface: string[]; acceptanceMd: string }>;
   }): Promise<{ featureId: string }>;
   /** Signature 1 — starts the run. The only signature automation is given. */
-  approve(incrementId: string): Promise<unknown>;
+  approve(incrementId: string, routine: string): Promise<unknown>;
   log: Logger;
 }
 
@@ -203,6 +205,7 @@ export class WorkflowEngine {
           title: proposal.title,
           briefMd: proposal.briefMd,
           ...(repoId ? { repoId } : {}),
+          asked: { goal: recipe.goalMd, at: new Date().toISOString(), routine: wf.name },
           increments: proposal.increments,
         });
 
@@ -215,7 +218,7 @@ export class WorkflowEngine {
           select: { id: true },
         });
         const first = increments[0];
-        if (first) await this.deps.approve(first.id);
+        if (first) await this.deps.approve(first.id, wf.name);
 
         outcomes.push({
           recipeName: recipe.name,

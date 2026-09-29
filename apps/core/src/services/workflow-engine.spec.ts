@@ -39,7 +39,7 @@ afterAll(async () => {
 
 /** Records every call so the test can assert what automation did and did not touch. */
 function spyDeps(overrides: Partial<WorkflowDeps> = {}) {
-  const calls = { proposed: 0, created: 0, approved: [] as string[] };
+  const calls = { proposed: 0, created: 0, approved: [] as string[], askedBy: [] as string[], initialledBy: [] as string[] };
   const deps: WorkflowDeps = {
     db,
     log: silent,
@@ -57,6 +57,7 @@ function spyDeps(overrides: Partial<WorkflowDeps> = {}) {
     },
     createFeature: async (input) => {
       calls.created += 1;
+      if (input.asked) calls.askedBy.push(input.asked.routine);
       const featureId = randomUUID();
       const briefId = randomUUID();
       await db.feature.create({ data: { id: featureId, title: input.title, stage: "IMPLEMENTING" } });
@@ -81,8 +82,9 @@ function spyDeps(overrides: Partial<WorkflowDeps> = {}) {
       }
       return { featureId };
     },
-    approve: async (incrementId) => {
+    approve: async (incrementId, routine) => {
       calls.approved.push(incrementId);
+      calls.initialledBy.push(routine);
     },
     ...overrides,
   };
@@ -137,6 +139,10 @@ d("automation never merges", () => {
     expect(calls.created).toBe(1);
     // Two increments were created; exactly one was started.
     expect(calls.approved).toHaveLength(1);
+    // And the record says the routine asked and initialled, not a person.
+    const name = (await db.workflow.findUniqueOrThrow({ where: { id: workflowId } })).name;
+    expect(calls.askedBy).toEqual([name]);
+    expect(calls.initialledBy).toEqual([name]);
 
     // Nothing reached MERGED. There is no code path here that could.
     const merged = await db.increment.count({ where: { status: "MERGED" } });
