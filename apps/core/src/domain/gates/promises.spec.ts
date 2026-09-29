@@ -31,9 +31,11 @@ describe("extractPromises — what done when promises", () => {
     expect(extractPromises("   ")).toEqual([]);
   });
 
-  it("drops duplicates and caps a runaway list", () => {
+  it("drops duplicates, and never the thirteenth promise or any other", () => {
+    // A real plan had thirteen promises; the thirteenth vanished from the agent's
+    // instructions, the check and the seal.
     const many = Array.from({ length: 30 }, (_, i) => `- promise ${i}`).join("\n");
-    expect(extractPromises(`${many}\n- promise 0`)).toHaveLength(12);
+    expect(extractPromises(`${many}\n- promise 0`)).toHaveLength(30);
   });
 
   it("numbers them in the prompt so a claim can point at one", () => {

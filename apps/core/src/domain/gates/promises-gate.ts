@@ -54,15 +54,25 @@ export function promisesGate(deps: { packsRoot: string }): Gate {
       }
       const proofs = verifyProofs({ promises, claims, changes, testContents });
 
+      // More promises than the verdict can list: the rest are named as unchecked, never
+      // dropped, so the seal holds on them instead of not knowing they exist.
+      const LISTED = 39;
+      const overflow = proofs.length > LISTED + 1 ? proofs.length - LISTED : 0;
+      const listed = overflow > 0 ? proofs.slice(0, LISTED) : proofs;
       return {
         gate: "promises",
-        outcome: proofs.every((p) => p.proven) ? "pass" : "warn",
-        findings: proofs.map((p) => ({
-          dimension: p.proven ? "proven" : "unproven",
-          message: p.promise,
-          ...(p.reason ? { location: p.reason } : p.test ? { location: `test “${p.test}”` } : {}),
-          proof: { test: p.test, testFile: p.testFile, codeFile: p.codeFile, codeLines: p.codeLines, ...(p.changedTest ? { changedTest: true } : {}), ...(p.existingTest ? { existingTest: true } : {}) },
-        })),
+        outcome: proofs.every((p) => p.proven) && overflow === 0 ? "pass" : "warn",
+        findings: [
+          ...listed.map((p) => ({
+            dimension: p.proven ? "proven" : "unproven",
+            message: p.promise,
+            ...(p.reason ? { location: p.reason } : p.test ? { location: `test “${p.test}”` } : {}),
+            proof: { test: p.test, testFile: p.testFile, codeFile: p.codeFile, codeLines: p.codeLines, ...(p.changedTest ? { changedTest: true } : {}), ...(p.existingTest ? { existingTest: true } : {}) },
+          })),
+          ...(overflow > 0
+            ? [{ dimension: "unproven", message: `${overflow} more promises, too many to check one by one. A step with this many promises should be split.`, location: "Not checked: split the step." }]
+            : []),
+        ],
       };
     },
   };

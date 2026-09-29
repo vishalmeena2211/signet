@@ -2,6 +2,7 @@
 // the actual change on the other.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { GateVerdictViewSchema } from "@signet/contracts";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,6 +66,24 @@ describe("promises gate", () => {
     const v = await run();
     expect(v.outcome).toBe("warn");
     expect(v.findings.every((f) => f.dimension === "unproven")).toBe(true);
+  });
+
+  it("lists all thirteen promises of a thirteen-promise plan", async () => {
+    // The real plan whose thirteenth promise vanished from the seal.
+    const thirteen = Array.from({ length: 13 }, (_, i) => `- promise number ${i + 1}`).join("\n");
+    await writeFile(join(packs, `run-${RUN}`, "acceptance.md"), thirteen);
+    const v = await run();
+    expect(v.findings.map((f) => f.message)).toContain("promise number 13");
+    expect(v.findings).toHaveLength(13);
+  });
+
+  it("names promises beyond what it can list as unchecked, never dropping them", async () => {
+    const many = Array.from({ length: 45 }, (_, i) => `- promise number ${i + 1}`).join("\n");
+    await writeFile(join(packs, `run-${RUN}`, "acceptance.md"), many);
+    const v = GateVerdictViewSchema.parse(await run());
+    expect(v.outcome).toBe("warn");
+    expect(v.findings).toHaveLength(40);
+    expect(v.findings.at(-1)).toMatchObject({ dimension: "unproven", message: expect.stringContaining("6 more promises") });
   });
 
   it("skips a step whose done-when is empty", async () => {

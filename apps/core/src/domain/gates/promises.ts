@@ -16,7 +16,6 @@ import { isTestFile, TEST_DECLARATION } from "./ecosystems.js";
 
 export { isTestFile };
 
-const MAX_PROMISES = 12;
 
 /** Markdown emphasis and code marks, removed so a promise reads as a sentence. */
 function plain(text: string): string {
@@ -68,7 +67,10 @@ function dedupe(items: string[]): string[] {
       out.push(i);
     }
   }
-  return out.slice(0, MAX_PROMISES);
+  // Every promise, never a first few. This used to stop at twelve, and a plan's
+  // thirteenth promise was then never given to the agent to prove, never checked, and
+  // never shown at the seal, which read "12 of 12 proven" for a plan of thirteen.
+  return out;
 }
 
 /**

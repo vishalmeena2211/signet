@@ -84,7 +84,9 @@ export const GateVerdictViewSchema = z.object({
           .optional(),
       }),
     )
-    .max(20), // signal discipline: top findings only, enforced at the type level
+    // Signal discipline: top findings only, enforced at the type level. Room for 40,
+    // because the promises check lists every promise, and a list cut short hides one.
+    .max(40),
 });
 export type GateVerdictView = z.infer<typeof GateVerdictViewSchema>;
 
