@@ -54,7 +54,27 @@ export async function healthLines(d: HealthDeps): Promise<HealthView> {
 
   try {
     const v = (await pexec(d.claudeBinary, ["--version"], { timeout: 15_000 })).stdout.trim().split(" ")[0] ?? "";
-    lines.push(ok("Claude Code", `${v} · your subscription login`));
+    // Installed is not signed in. This line said "your subscription login" on a machine
+    // that had never signed in, and the first ask then failed. `claude auth status`
+    // answers without spending tokens; a version without it keeps the old answer.
+    const signedIn = await pexec(d.claudeBinary, ["auth", "status"], { timeout: 15_000 }).then(
+      (r) => readSignedIn(r.stdout),
+      (e: { stdout?: string }) => readSignedIn(e.stdout ?? ""),
+    );
+    if (signedIn === false) {
+      lines.push({
+        label: "Claude Code",
+        value: `${v} · not signed in`,
+        ok: false,
+        problem: {
+          title: "Nothing can be built: Claude Code is not signed in",
+          explain: "Signet drives your own Claude Code with your subscription. Run claude in a terminal, sign in once, and come back.",
+          command: "claude",
+        },
+      });
+    } else {
+      lines.push(ok("Claude Code", `${v} · your subscription login`));
+    }
   } catch {
     lines.push({
       label: "Claude Code",
@@ -108,4 +128,14 @@ export async function healthLines(d: HealthDeps): Promise<HealthView> {
   }
 
   return HealthViewSchema.parse({ lines });
+}
+
+/** `claude auth status` prints JSON with `loggedIn`; anything else means we cannot tell. */
+function readSignedIn(stdout: string): boolean | null {
+  try {
+    const v = (JSON.parse(stdout) as { loggedIn?: unknown }).loggedIn; // signet-policy-allow: raw-json-parse -- one boolean from claude's own status output
+    return typeof v === "boolean" ? v : null;
+  } catch {
+    return null;
+  }
 }

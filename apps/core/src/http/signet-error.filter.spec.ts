@@ -29,6 +29,11 @@ describe("errors, as the console shows them", () => {
     expect(r.body).toMatchObject({ code: "ask.failed", message: "Claude Code is not signed in." });
   });
 
+  it("says how to sign in when Claude Code is not signed in", () => {
+    const r = send({ kind: "recoverable", code: "adapter.api_error", message: "Not logged in · Please run /login" });
+    expect(r.body.message).toBe("Claude Code is not signed in on this machine. Run claude in a terminal, sign in once, and try again.");
+  });
+
   it("never shows [object Object] for something unexpected", () => {
     const r = send({ weird: true });
     expect(r.status).toBe(500);

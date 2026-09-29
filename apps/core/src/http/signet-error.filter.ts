@@ -51,6 +51,11 @@ const SENTENCE: Record<string, (detail: string) => string> = {
 };
 
 function humanise(err: SignetError): string {
+  // Claude Code's own words are "Not logged in · Please run /login", which reads as a
+  // Signet command. Say what to do, in this console's words.
+  if (/not logged in/i.test(err.message)) {
+    return "Claude Code is not signed in on this machine. Run claude in a terminal, sign in once, and try again.";
+  }
   const phrase = SENTENCE[err.code];
   return phrase ? phrase(err.message) : err.message;
 }
