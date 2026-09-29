@@ -167,12 +167,27 @@ export async function portrait(repo: { id: string; label: string; path: string }
   const tests = new Set(testPaths.flatMap(testedBy));
   const goPackages = new Set(testPaths.filter((t) => t.endsWith("_test.go")).map((t) => t.replace(/[^/]*$/, "")));
   const covered = (p: string) => tests.has(p) || (p.endsWith(".go") && goPackages.has(p.replace(/[^/]*$/, "")));
-  const untested = sources.filter((s) => !covered(s.path)).sort((a, b) => b.bytes - a.bytes);
+  // Rust also keeps unit tests inside the file they test, in a #[cfg(test)] module.
+  const inlineTested = new Set<string>();
+  for (const s of sources.filter((x) => x.path.endsWith(".rs") && !covered(x.path))) {
+    const text = await readFile(join(repo.path, s.path), "utf8").catch(() => "");
+    if (/#\[cfg\(test\)\]|#\[test\]/.test(text)) inlineTested.add(s.path);
+  }
+  const untested = sources.filter((s) => !covered(s.path) && !inlineTested.has(s.path)).sort((a, b) => b.bytes - a.bytes);
   const asks: string[] = [];
   if (untested.length === 1 && untested[0]) asks.push(`Cover ${untested[0].path} — the only module without a test`);
   else for (const u of untested.slice(0, 2)) asks.push(`Cover ${u.path} — one of ${untested.length} modules without a test`);
-  const largest = [...sources].sort((a, b) => b.bytes - a.bytes)[0];
-  if (largest) asks.push(`Explain what ${largest.path} does, in a comment at its top`);
+  // Only for a file that does not already open with one: a Go package comment or a
+  // Rust //! line was being "suggested" for files that had one.
+  let explain: string | null = null;
+  for (const s of [...sources].sort((a, b) => b.bytes - a.bytes).slice(0, 5)) {
+    const text = await readFile(join(repo.path, s.path), "utf8").catch(() => "");
+    if (!opensWithComment(text)) {
+      explain = s.path;
+      break;
+    }
+  }
+  if (explain) asks.push(`Explain what ${explain} does, in a comment at its top`);
 
   return PortraitSchema.parse({ repoId: repo.id, label: repo.label, path: repo.path, pieces, doubt, answered, asks: asks.slice(0, 3) });
 }
@@ -205,6 +220,16 @@ export function testedBy(test: string): string[] {
     return [`${dir}${mod}`, `${dir.replace(/(^|\/)tests?\/$/, "$1")}${mod}`, `src/${mod}`];
   }
   if (name.endsWith("_test.py")) return [`${dir}${name.slice(0, -"_test.py".length)}.py`];
-  if (/(^|\/)tests\/[^/]+\.rs$/.test(test)) return [`src/${name}`];
+  // A crate's integration tests exercise its library through src/lib.rs.
+  if (/(^|\/)tests\/[^/]+\.rs$/.test(test)) {
+    const crate = dir.replace(/tests\/$/, "");
+    return [`${crate}src/${name}`, `${crate}src/lib.rs`];
+  }
   return [];
+}
+
+/** Whether a source file already begins with a comment (after any shebang or blank lines). */
+export function opensWithComment(text: string): boolean {
+  const first = text.split("\n").find((l) => l.trim() !== "" && !l.startsWith("#!"))?.trim() ?? "";
+  return /^(\/\/|\/\*|#(?!\[)|"{3}|'{3})/.test(first);
 }
