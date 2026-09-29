@@ -744,6 +744,50 @@ button { font: inherit; }
 .newtag { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; line-height: 16px; flex: none; }
 .newtag.n { color: var(--seal); border-color: var(--seal-line); }
 
+
+/* ── Routines as a canvas (frames 30–33) ─────────────────────────────────── */
+.rt-head { display: flex; align-items: center; gap: 12px; flex: none; }
+.rt-head .nm { font-size: 16px; font-weight: 500; }
+.rt-head .st { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
+.rt-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 188px minmax(0, 1fr) 240px; gap: 12px; }
+.rt-body.wide { grid-template-columns: minmax(0, 1fr) 240px; }
+.palette { min-width: 0; border: 1px solid var(--line-1); border-radius: 12px; background: var(--ink-1); padding: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.palette .k { font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; margin-top: 6px; }
+.pitem { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line-1); border-radius: 8px; background: var(--ink-2); color: var(--fg-1); cursor: grab; }
+.pitem svg { width: 14px; height: 14px; stroke: var(--fg-3); flex: none; }
+.pitem.add { border-style: dashed; background: transparent; color: var(--fg-3); }
+.pitem.lift { border-color: var(--fg-1); box-shadow: 0 6px 18px rgba(0,0,0,.5); transform: translate(6px, -2px) rotate(-1.5deg); }
+.rboard { position: relative; border: 1px solid var(--line-1); border-radius: 12px; background-color: var(--ink-0); background-image: radial-gradient(var(--line-1) 1px, transparent 1px); background-size: 16px 16px; overflow: hidden; }
+.rboard svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.wires path { fill: none; stroke: var(--line-2); stroke-width: 1.5; }
+.wires path.on { stroke: var(--fg-1); }
+.wires path.seal { stroke: var(--seal); }
+.wires path.dash { stroke-dasharray: 4 4; }
+.wlabel { position: absolute; transform: translate(-50%, -50%); font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); background: var(--ink-0); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.wlabel.on { color: var(--fg-1); border: 1px solid var(--fg-1); }
+.wlabel.seal { color: var(--seal); }
+.node { position: absolute; box-sizing: border-box; border: 1px solid var(--line-2); border-radius: 10px; background: var(--ink-1); padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.node > * { flex-shrink: 0; }
+.node .lab { font-size: 10.5px; color: var(--fg-3); letter-spacing: .06em; text-transform: uppercase; display: flex; gap: 6px; align-items: center; }
+.node .lab svg { width: 12px; height: 12px; stroke: currentColor; }
+.node .t { font-size: 13.5px; font-weight: 500; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node .s { font-size: 12px; color: var(--fg-2); line-height: 1.4; }
+.node.sel { border-color: var(--fg-1); box-shadow: 0 0 0 3px var(--primary-soft); }
+.node.ghost { border-style: dashed; background: transparent; align-items: center; justify-content: center; text-align: center; }
+.node.ghost .s { color: var(--fg-3); }
+.node.yours { border-color: var(--seal-line); background: var(--seal-quiet); }
+.node.muted .t { color: var(--fg-2); }
+.node.end { border-radius: 999px; align-items: center; justify-content: center; padding: 4px 12px; }
+.node.end .t { font-size: 12px; font-weight: 400; color: var(--fg-3); }
+.port { position: absolute; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--ink-0); border: 1.5px solid var(--line-2); }
+.port.in { top: -5px; } .port.out { bottom: -5px; }
+.pip-seal { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--seal); letter-spacing: .04em; }
+.pip-seal::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--seal); }
+.firings { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--fg-3); flex: none; }
+.firings i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line-2); display: inline-block; }
+.firings i.on { border-color: var(--fg-1); background: var(--fg-1); }
+.firings i.seal { border-color: var(--seal); }
+.side2 .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>
 
 <div class="doc">
@@ -1797,9 +1841,9 @@ const SCREENS_B = [
 },
 
 {
-  group: 'Workshop', title: 'Routines, written as sentences',
+  group: 'Workshop', title: 'Routines, written as sentences', tag: 'reworked',
   render: () => desk(`
-    <div class="subnav" style="margin:0"><span class="tab">Conventions</span><span class="tab on">Routines</span><span class="tab">Health</span></div>
+    ${rtab({ view: 'sentence' })}
     <div class="inbox" style="padding:24px 28px">
       <div class="sentence">
         Every <span class="slot">night at 3:00</span>, <span class="slot">cover an untested module</span>
@@ -1824,6 +1868,9 @@ const SCREENS_B = [
     ]],
     ['Behaviour', [
       'Only the first step is built per firing, so one night cannot spend a whole quota. Finding nothing to do is reported, in grey, as the system working.',
+    ]],
+    ['Sentence or canvas', [
+      'The same routine, two views; the switch remembers which you last used. A routine with several recipes reads here as “X, then Y”. One with branches cannot be one sentence, so it opens as a canvas.',
     ]],
   ],
 },
@@ -1909,7 +1956,249 @@ const SCREENS_B = [
 },
 ];
 
-const SCREENS = [...SCREENS_A, ...SCREENS_B];
+
+/* ═════════════════════════ WORKSHOP · ROUTINES AS A CANVAS ═════════════════════════ */
+const RT_ICON = { when: ICON.clock, do: ICON.list, stop: ICON.alert };
+const SEAL_PIP = '<span class="pip-seal">your seal</span>';
+
+/** One card on the routine board. Positions are pixels on the board. */
+function rnode(n) {
+  const w = n.w ?? 210, h = n.h ?? 80;
+  const cls = ['node', n.kind === 'end' ? 'end' : '', n.sel ? 'sel' : '', n.ghost ? 'ghost' : '', n.yours ? 'yours' : '', n.muted ? 'muted' : ''].join(' ');
+  const lab = n.lab ? `<div class="lab">${RT_ICON[n.kind] ?? ''}<span>${n.lab}</span>${n.pip ?? ''}</div>` : '';
+  const portIn = n.kind !== 'when' && !n.ghost ? '<span class="port in"></span>' : '';
+  const portOut = n.kind === 'when' || n.kind === 'do' ? '<span class="port out"></span>' : '';
+  return `<div class="${cls}" style="left:${n.x}px;top:${n.y}px;width:${w}px;height:${h}px">${portIn}${lab}${n.t ? `<div class="t">${n.t}</div>` : ''}${n.s ? `<div class="s">${n.s}</div>` : ''}${portOut}</div>`;
+}
+
+/** The board: cards, the wires between them (bottom of one to top of the next), and labels. */
+function rboard(nodes, wires = [], extra = '') {
+  const by = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const bottom = (n) => ({ x: n.x + (n.w ?? 210) / 2, y: n.y + (n.h ?? 80) });
+  const top = (n) => ({ x: n.x + (n.w ?? 210) / 2, y: n.y });
+  const paths = wires.map((w) => {
+    let d = w.d;
+    if (!d) {
+      const a = bottom(by[w.from]), b = top(by[w.to]), m = (a.y + b.y) / 2;
+      d = `M${a.x} ${a.y} C${a.x} ${m} ${b.x} ${m} ${b.x} ${b.y - 4}`;
+    }
+    const cls = [w.on ? 'on' : '', w.seal ? 'seal' : '', w.dash ? 'dash' : ''].join(' ');
+    return `<path d="${d}" class="${cls}" marker-end="url(#${w.seal ? 'ah-seal' : w.on ? 'ah-on' : 'ah'})"/>`;
+  }).join('');
+  const labels = wires.filter((w) => w.label).map((w) => {
+    let { lx: x, ly: y } = w;
+    if (x === undefined) {
+      const a = bottom(by[w.from]), b = top(by[w.to]);
+      x = (a.x + b.x) / 2; y = (a.y + b.y) / 2;
+    }
+    return `<span class="wlabel ${w.on ? 'on' : ''} ${w.seal ? 'seal' : ''}" style="left:${x}px;top:${y}px">${w.label}</span>`;
+  }).join('');
+  const head = (id, c) => `<marker id="${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="${c}"/></marker>`;
+  return `<div class="rboard"><svg class="wires"><defs>${head('ah', 'var(--line-2)')}${head('ah-on', 'var(--fg-1)')}${head('ah-seal', 'var(--seal)')}</defs>${paths}</svg>${nodes.map(rnode).join('')}${labels}${extra}</div>`;
+}
+
+function rpalette({ lift = '' } = {}) {
+  const item = (icon, t, cls = '') => `<div class="pitem ${cls} ${lift === t ? 'lift' : ''}">${ICON[icon]}<span>${t}</span></div>`;
+  return `<div class="palette">
+    <div class="k" style="margin-top:0">When</div>
+    ${item('clock', 'On a schedule')}${item('transfer', 'When something happens')}${item('play', 'Only when I start it')}
+    <div class="k">Do · your recipes</div>
+    ${item('list', 'Cover an untested module')}${item('list', 'Tidy what lint flags')}${item('list', 'Update the changelog')}${item('plus', 'New recipe', 'add')}
+    <div style="margin-top:auto;font-size:12px;color:var(--fg-3);line-height:1.5">Drag onto the board. Every recipe’s work stops at your seal.</div>
+  </div>`;
+}
+
+function rtab({ view = 'canvas' } = {}) {
+  return `<div class="subnav" style="margin:0"><span class="tab">Conventions</span><span class="tab on">Routines</span><span class="tab">Health</span>
+    <span class="chips" style="margin-left:auto"><span class="chip ${view === 'sentence' ? 'on' : ''}">Sentence</span><span class="chip ${view === 'canvas' ? 'on' : ''}">Canvas</span></span></div>`;
+}
+
+function rhead({ name, state, acts }) {
+  return `<div class="rt-head"><div><div class="nm">${name}</div><div class="st">${state}</div></div><div style="margin-left:auto;display:flex;gap:8px">${acts}</div></div>`;
+}
+
+function fact(k, body) {
+  return `<div class="facts2"><span class="k">${k}</span>${body}</div>`;
+}
+
+const RT_ON = 'Switched on · every night at 3:00 · last fired today, 3:00 am';
+const RT_ACTS = '<span class="btn btn-outline">Run it once now</span><span class="btn btn-outline">Switch off</span>';
+
+const SCREENS_C = [
+{
+  group: 'Workshop', title: 'Routines, drawn as a canvas', tag: 'new',
+  render: () => desk(`${rtab()}
+    ${rhead({ name: 'Nightly coverage', state: RT_ON, acts: RT_ACTS })}
+    <div class="rt-body">
+      ${rpalette({ lift: 'Update the changelog' })}
+      ${rboard([
+        { id: 'w', kind: 'when', x: 168, y: 24, lab: 'When', t: 'Every night at 3:00', s: 'On a schedule' },
+        { id: 'a', kind: 'do', x: 168, y: 136, lab: 'Do', pip: SEAL_PIP, t: 'Cover an untested module', s: 'cartographer · first step only', sel: true },
+        { id: 'b', kind: 'do', x: 168, y: 248, lab: 'Then', pip: SEAL_PIP, t: 'Tidy what lint flags', s: 'cartographer · first step only' },
+        { id: 'g', ghost: true, x: 168, y: 360, h: 56, s: 'Drop here to run it after “Tidy what lint flags”' },
+        { id: 'e', kind: 'end', x: 213, y: 456, w: 120, h: 32, t: 'Done for this firing' },
+      ], [
+        { from: 'w', to: 'a' },
+        { from: 'a', to: 'b', label: 'then' },
+        { from: 'b', to: 'g', dash: true },
+        { from: 'g', to: 'e', dash: true },
+      ])}
+      <div class="side2">
+        ${fact('Recipe', `<b style="font-weight:500">Cover an untested module</b><span style="color:var(--fg-2);line-height:1.55">Find one module in src/ with no test file beside it, and add one that covers its public functions.</span>`)}
+        ${fact('Each firing', '<span style="color:var(--fg-2);line-height:1.55">Proposes a plan, initials it for you, and builds its first step. The rest of the plan waits for you.</span>')}
+        ${fact('Likely cost', '<span style="font-variant-numeric:tabular-nums">About $0.40 a firing, from the last 11</span>')}
+        ${fact('If it cannot start', '<span style="color:var(--fg-2);line-height:1.55">The routine stops here, and it shows on your Desk.</span>')}
+        <div class="btnrow"><span class="btn btn-outline">Open recipe</span><span class="btn btn-outline">Remove</span></div>
+      </div>
+    </div>`, { place: 'workshop', title: 'Workshop' }),
+  notes: [
+    ['The idea', [
+      'The same routine as the sentence, drawn so a longer one can be read and changed at a glance: what starts it, the recipes it runs in order, and where each one stops.',
+      'Sentence and canvas are two views of one routine. Switching between them keeps what you changed.',
+    ]],
+    ['Behaviour', [
+      'Drag a trigger or a recipe from the left onto the board. Dropped between two cards, it goes there; dropped on the trigger, it replaces it. A routine has exactly one trigger.',
+      'Drag a card to reorder. Removing a card joins its neighbours, so the chain never breaks.',
+      'Recipes run in order. The next one starts once the one before has started its work, not once you have sealed it.',
+      'A recipe that finds nothing to do lets the next one run. One that cannot start stops the routine there, and it appears on your Desk.',
+      'Every card that does work carries "your seal" in the seal colour. It cannot be removed: a routine initials for you and never seals for you.',
+      'Clicking a card opens it on the right. Clicking the board clears the selection.',
+    ]],
+    ['Backend', [
+      'Nothing new for this frame. It is the routine as it exists today: one trigger and an ordered list of recipes. The order on the board is the saved order; no layout is stored.',
+    ]],
+    ['Phone', [
+      'The canvas is not drawn on a phone. There, a routine reads as its sentence.',
+    ]],
+  ],
+},
+
+{
+  group: 'Workshop', title: 'Branch on what it found', tag: 'new',
+  render: () => desk(`${rtab()}
+    ${rhead({ name: 'Nightly coverage', state: RT_ON, acts: RT_ACTS })}
+    <div class="rt-body wide">
+      ${rboard([
+        { id: 'w', kind: 'when', x: 273, y: 20, lab: 'When', t: 'Every night at 3:00', s: 'On a schedule' },
+        { id: 'a', kind: 'do', x: 273, y: 124, lab: 'Do', pip: SEAL_PIP, t: 'Cover an untested module', s: 'cartographer · first step only' },
+        { id: 'b1', kind: 'do', x: 20, y: 300, lab: 'Then', pip: SEAL_PIP, t: 'Update the changelog', s: 'cartographer' },
+        { id: 'b2', kind: 'do', x: 273, y: 300, lab: 'Then', pip: SEAL_PIP, t: 'Tidy what lint flags', s: 'cartographer' },
+        { id: 'b3', kind: 'stop', x: 526, y: 300, lab: 'Stop', t: 'Stop and tell me', s: 'It shows on your Desk', yours: true },
+        { id: 'e', kind: 'end', x: 318, y: 440, w: 120, h: 32, t: 'Done for this firing' },
+      ], [
+        { from: 'w', to: 'a' },
+        { from: 'a', to: 'b1', label: 'started work' },
+        { from: 'a', to: 'b2', label: 'nothing to do', on: true },
+        { from: 'a', to: 'b3', label: 'could not start' },
+        { from: 'b1', to: 'e' },
+        { from: 'b2', to: 'e' },
+      ])}
+      <div class="side2">
+        ${fact('Branch', '<span style="line-height:1.55">When “Cover an untested module” finds nothing to do</span>')}
+        ${fact('Then', '<b style="font-weight:500">Tidy what lint flags</b>')}
+        ${fact('Without this branch', '<span style="color:var(--fg-2);line-height:1.55">It would go on to the next recipe anyway. Nothing to do is a result, not a failure.</span>')}
+        ${fact('Every path', '<span style="color:var(--fg-2);line-height:1.55">A branch changes what runs next, never who seals. Each card that does work still stops at your seal.</span>')}
+        <div class="btnrow"><span class="btn btn-outline">Remove branch</span></div>
+      </div>
+    </div>`, { place: 'workshop', title: 'Workshop' }),
+  notes: [
+    ['The idea', [
+      'What runs next can depend on what a recipe found: work to do, nothing to do, or a reason it could not start. Each is its own wire, labelled in words.',
+    ]],
+    ['Behaviour', [
+      'Drag from a card’s lower edge to another card to add a wire, then pick which of the three outcomes it follows. One wire per outcome.',
+      'An outcome with no wire keeps today’s behaviour: nothing to do moves on to the next card, could not start stops and tells you.',
+      'Choosing a wire opens it on the right, as a sentence.',
+    ]],
+    ['Backend', [
+      'New. A routine is a list today; branches need each step to say which step follows it for each outcome. That is a database change and needs approval before it is written.',
+      'Routines without branches keep working unchanged.',
+    ]],
+    ['In the sentence view', [
+      'A routine with branches cannot be written as one sentence, so the sentence view says so and offers the canvas.',
+    ]],
+  ],
+},
+
+{
+  group: 'Workshop', title: 'A routine that could start itself', tag: 'new',
+  render: () => desk(`${rtab()}
+    ${rhead({ name: 'Look into failed runs', state: 'Switched off · fires when a run fails · never fired', acts: '<span class="btn btn-outline">Run it once now</span><span class="btn btn-primary">Switch on</span>' })}
+    <div class="rt-body wide">
+      ${rboard([
+        { id: 'w', kind: 'when', x: 273, y: 36, lab: 'When', t: 'A run fails', s: 'Something happens', sel: true },
+        { id: 'a', kind: 'do', x: 273, y: 176, lab: 'Do', pip: SEAL_PIP, t: 'Diagnose a failed run', s: 'in the repo the run was in' },
+        { id: 'e', kind: 'end', x: 318, y: 316, w: 120, h: 32, t: 'Done for this firing' },
+      ], [
+        { from: 'w', to: 'a' },
+        { from: 'a', to: 'e' },
+        { d: 'M483 216 C620 216 620 76 489 76', seal: true, dash: true, label: 'its own work can fail too', lx: 612, ly: 142 },
+      ], `<div class="now yours" style="position:absolute;left:16px;right:16px;bottom:16px;margin:0">
+          <div style="display:flex;gap:12px;align-items:center"><span class="dot-seal"></span><b>This routine can start itself</b></div>
+          <div style="font-size:13px;color:var(--fg-2);line-height:1.6">The work it starts can fail, and a failed run fires “When a run fails” again. One failure may set off at most this many more firings before it stops and says so:</div>
+          <div style="display:flex;gap:8px;align-items:center"><span class="chips"><span class="chip">0</span><span class="chip on">1</span><span class="chip">2</span><span class="chip">3</span></span>
+            <span class="btn btn-outline" style="margin-left:auto">Change the trigger</span><span class="btn btn-primary">Keep it, with this limit</span></div>
+        </div>`)}
+      <div class="side2">
+        ${fact('When', '<b style="font-weight:500">A run fails</b>')}
+        ${fact('Something happens', `<div class="chips"><span class="chip">A step is sealed</span><span class="chip on">A run fails</span><span class="chip">New conventions are proposed</span><span class="chip">Your Claude quota comes back</span></div>`)}
+        ${fact('Chain limit', '<span style="color:var(--fg-2);line-height:1.55">1 more firing at most. Then it stops, and the Desk says why.</span>')}
+      </div>
+    </div>`, { place: 'workshop', title: 'Workshop' }),
+  notes: [
+    ['The idea', [
+      'A routine started by an event can cause that same event: a fix for a failed run can itself fail. The canvas draws that loop where you can see it, in the seal colour, because whether that is acceptable is your call.',
+    ]],
+    ['Behaviour', [
+      'The loop is drawn when the trigger is an event the routine’s own work can cause. A run failing can be; a step being sealed cannot, because only you seal.',
+      'The chain limit caps how many more firings one cause can set off. 0 means it fires but never fires itself again.',
+      'Keeping it saves the routine with the loop and its limit; the warning stays on the board. A new routine is saved switched off, as today.',
+    ]],
+    ['Backend', [
+      'The chain limit exists today (how far a cascade may go) and is enforced. What is new is showing it. Spotting the loop is a small rule in the console: an event trigger that the routine’s own work can cause.',
+    ]],
+  ],
+},
+
+{
+  group: 'Workshop', title: 'Last night’s firing, on the canvas', tag: 'new',
+  render: () => desk(`${rtab()}
+    ${rhead({ name: 'Nightly coverage', state: RT_ON, acts: RT_ACTS })}
+    <div class="firings"><span>Firings</span><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i><span style="color:var(--fg-1)">Last night, 3:00 am</span><span style="margin-left:auto">Editing <span class="kbd">E</span></span></div>
+    <div class="rt-body wide">
+      ${rboard([
+        { id: 'w', kind: 'when', x: 273, y: 24, lab: 'When', t: 'Every night at 3:00', s: 'Fired at 3:00 am, on schedule', muted: true },
+        { id: 'a', kind: 'do', x: 273, y: 136, h: 80, lab: 'Do', pip: '<span class="pip-seal">at your seal</span>', t: 'Cover an untested module', s: 'Started “Cover src/tiles.ts” · $0.38', yours: true },
+        { id: 'b', kind: 'do', x: 273, y: 256, h: 80, lab: 'Then', t: 'Tidy what lint flags', s: 'Nothing to do: lint reports no warnings', muted: true },
+        { id: 'e', kind: 'end', x: 318, y: 376, w: 120, h: 32, t: 'Done at 3:04 am' },
+      ], [
+        { from: 'w', to: 'a' },
+        { from: 'a', to: 'b', label: 'then' },
+        { from: 'b', to: 'e' },
+      ])}
+      <div class="side2">
+        ${fact('Last night, 3:00 am', '<span style="color:var(--fg-2);line-height:1.55;font-variant-numeric:tabular-nums">Fired on schedule · took 4 minutes · $0.38</span>')}
+        ${fact('Waiting for you', '<span style="line-height:1.55">“Cover src/tiles.ts” is built and at your seal.</span><span class="btn btn-seal" style="align-self:flex-start">Review and seal</span>')}
+        ${fact('Nothing to do', '<span style="color:var(--fg-2);line-height:1.55">Tidy what lint flags found no warnings. That is the routine working, not failing.</span>')}
+      </div>
+    </div>`, { place: 'workshop', title: 'Workshop' }),
+  notes: [
+    ['The idea', [
+      'The canvas also answers “what did it do last night?” by drawing a firing over the same cards: what each recipe did, what it cost, and what is now waiting for you.',
+    ]],
+    ['Behaviour', [
+      'The dots are recent firings, newest on the right; choosing one repaints the board. E returns to editing.',
+      'The only colour is work waiting at your seal. What finished, or found nothing to do, is grey.',
+      'A firing that was skipped says why on the board: automation was switched off, or your quota was held.',
+    ]],
+    ['Backend', [
+      'Mostly exists: each firing already records, per recipe, the feature it started, how many steps it queued, nothing-to-do with its reason, or the error. Needs one read of a routine’s recent firings with the cost of each recipe’s work.',
+    ]],
+  ],
+},
+];
+
+const SCREENS = [...SCREENS_A, ...SCREENS_B, ...SCREENS_C];
 
 /* ── Gallery behaviour ──────────────────────────────────────────────────── */
 const frame = document.getElementById('frame');
