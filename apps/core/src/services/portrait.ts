@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { PortraitSchema, type Portrait } from "@signet/contracts";
 import { z } from "zod";
 import { profileRepo } from "../domain/learner/repo-profiler.js";
-import { detectEcosystem } from "../domain/gates/ecosystems.js";
+import { detectEcosystem, isTestFile } from "../domain/gates/ecosystems.js";
 
 const exists = (p: string) =>
   access(p)
@@ -95,7 +95,16 @@ export async function portrait(repo: { id: string; label: string; path: string }
   t(".");
 
   const testScript = pkg?.scripts?.["test"] ?? "";
-  const framework = deps["vitest"] || /vitest/.test(testScript) ? "vitest" : deps["jest"] || /jest/.test(testScript) ? "jest" : deps["mocha"] ? "mocha" : /node --test|node:test/.test(testScript) ? "node’s own test runner" : testScript ? testScript : null;
+  const eco = await detectEcosystem(repo.path);
+  // Named for the ecosystem: a Go repo's tests are not "a test script".
+  const framework =
+    eco?.name === "go"
+      ? "Go’s own testing package"
+      : eco?.name === "rust"
+        ? "cargo’s test harness"
+        : eco?.name === "python"
+          ? "pytest"
+          : deps["vitest"] || /vitest/.test(testScript) ? "vitest" : deps["jest"] || /jest/.test(testScript) ? "jest" : deps["mocha"] ? "mocha" : /node --test|node:test/.test(testScript) ? "node’s own test runner" : testScript ? testScript : null;
   if (framework || profile.testConvention) {
     t(" Tests are written with ");
     f(framework ?? "a test script");
@@ -146,13 +155,19 @@ export async function portrait(repo: { id: string; label: string; path: string }
   }
 
   // Good first asks: small, and each one checkable. From what the survey found missing.
-  const isTest = (p: string) => /\.(spec|test)\./.test(p) || /(^|\/)(__tests__|tests?)\//.test(p);
+  const isTest = (p: string) => isTestFile(p) || /\.(spec|test)\./.test(p) || /(^|\/)(__tests__|tests?)\//.test(p);
   // Modules, not the scaffolding around them: scripts, runners and config are not worth a test.
   const scaffolding = (p: string) =>
     p.endsWith(".d.ts") || /config/i.test(p) || /(^|\/)(scripts?|bin|tools?)\//.test(p) || /(^|\/)[^/]*(test|spec)[^/]*$/i.test(p) || /(^|\/)run-[^/]*$/.test(p);
   const sources = profile.files.filter((x) => /\.(ts|tsx|js|jsx|mjs|py|go|rs|rb)$/.test(x.path) && !isTest(x.path) && !scaffolding(x.path));
-  const tests = new Set(profile.files.filter((x) => isTest(x.path)).map((x) => x.path.replace(/\.(spec|test)\./, ".")));
-  const untested = sources.filter((s) => !tests.has(s.path)).sort((a, b) => b.bytes - a.bytes);
+  // Which source each test covers, by each ecosystem's own pairing: cart.test.ts for
+  // cart.ts, cart_test.go for cart.go, test_cart.py for cart.py. A Go test covers its
+  // whole package, so any _test.go in a folder covers every file in it.
+  const testPaths = profile.files.filter((x) => isTest(x.path)).map((x) => x.path);
+  const tests = new Set(testPaths.flatMap(testedBy));
+  const goPackages = new Set(testPaths.filter((t) => t.endsWith("_test.go")).map((t) => t.replace(/[^/]*$/, "")));
+  const covered = (p: string) => tests.has(p) || (p.endsWith(".go") && goPackages.has(p.replace(/[^/]*$/, "")));
+  const untested = sources.filter((s) => !covered(s.path)).sort((a, b) => b.bytes - a.bytes);
   const asks: string[] = [];
   if (untested.length === 1 && untested[0]) asks.push(`Cover ${untested[0].path} — the only module without a test`);
   else for (const u of untested.slice(0, 2)) asks.push(`Cover ${u.path} — one of ${untested.length} modules without a test`);
@@ -177,4 +192,19 @@ export async function glance(path: string): Promise<{ branch: string; files: num
   const eco = await detectEcosystem(path);
   const runs = eco && !("none" in eco.tests) ? eco.tests.shown : null;
   return { branch: branch || "no commits", files: profile.files.length, tests: profile.testConvention !== null, changed: changed || null, runs };
+}
+
+/** The source files a test file is the test for, by each ecosystem's naming. */
+export function testedBy(test: string): string[] {
+  const dir = test.replace(/[^/]*$/, "");
+  const name = test.slice(dir.length);
+  if (/\.(spec|test)\./.test(name)) return [test.replace(/\.(spec|test)\./, ".")];
+  if (name.endsWith("_test.go")) return [`${dir}${name.slice(0, -"_test.go".length)}.go`];
+  if (/^test_.+\.py$/.test(name)) {
+    const mod = name.slice("test_".length);
+    return [`${dir}${mod}`, `${dir.replace(/(^|\/)tests?\/$/, "$1")}${mod}`, `src/${mod}`];
+  }
+  if (name.endsWith("_test.py")) return [`${dir}${name.slice(0, -"_test.py".length)}.py`];
+  if (/(^|\/)tests\/[^/]+\.rs$/.test(test)) return [`src/${name}`];
+  return [];
 }
