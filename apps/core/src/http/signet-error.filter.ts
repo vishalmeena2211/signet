@@ -55,10 +55,14 @@ function humanise(err: SignetError): string {
   return phrase ? phrase(err.message) : err.message;
 }
 
-/** Pulls the typed error off a thrown object, if the domain attached one. */
+/**
+ * The typed error, whether the domain attached it to a thrown Error or threw the typed
+ * error itself. Two endpoints threw it bare, and a new user's first ask came back as
+ * "That did not work: [object Object]", with the reason lost from the log too.
+ */
 function signetErrorOf(e: unknown): SignetError | null {
-  if (typeof e !== "object" || e === null || !("signet" in e)) return null;
-  const parsed = SignetErrorSchema.safeParse((e as { signet: unknown }).signet);
+  if (typeof e !== "object" || e === null) return null;
+  const parsed = SignetErrorSchema.safeParse("signet" in e ? (e as { signet: unknown }).signet : e);
   return parsed.success ? parsed.data : null;
 }
 
@@ -99,7 +103,13 @@ export class SignetErrorFilter implements ExceptionFilter {
 
     // Genuinely unexpected: log it in full, but still tell the console
     // something more useful than "Internal server error".
-    const message = exception instanceof Error ? exception.message : String(exception);
+    // Never "[object Object]": an object is shown as what it holds.
+    const message =
+      exception instanceof Error
+        ? exception.message
+        : typeof exception === "object" && exception !== null
+          ? JSON.stringify(exception)
+          : String(exception);
     this.log.error("http.unhandled", {
       message,
       stack: exception instanceof Error ? exception.stack : undefined,
