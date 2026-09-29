@@ -8,7 +8,7 @@
 //      nothing and is rejected.
 
 import { join } from "node:path";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import type { Gate, GateContext } from "./gate-runner.js";
 import { runCommand, topLines } from "./gate-runner.js";
 import type { GateVerdictView } from "@signet/contracts";
@@ -34,6 +34,19 @@ export function typecheckGate(): Gate {
           gate: "typecheck",
           outcome: "fail",
           findings: (found.length ? found : [`go vet exited ${vet.code}`]).map((l) => ({ dimension: "type_error", message: l })),
+        };
+      }
+      const hasRust = !hasTs && !hasGo && (await access(join(ctx.workspacePath, "Cargo.toml")).then(() => true, () => false));
+      if (hasRust) {
+        // Rust's own check: `cargo check` type-checks the crate and its tests without a
+        // full build.
+        const check = await runCommand("cargo", ["check", "--quiet", "--all-targets"], ctx.workspacePath, TIMEOUT);
+        if (check.code === 0) return { gate: "typecheck", outcome: "pass", findings: [] };
+        const found = topLines(check.stdout + check.stderr, /^(error|\s*-->)/, 8);
+        return {
+          gate: "typecheck",
+          outcome: "fail",
+          findings: (found.length ? found : [`cargo check exited ${check.code}`]).map((l) => ({ dimension: "type_error", message: l.trim() })),
         };
       }
       if (!hasTs) return { gate: "typecheck", outcome: "skipped", findings: [] };
@@ -67,6 +80,25 @@ export function lintGate(): Gate {
           gate: "lint",
           outcome: "fail",
           findings: (unformatted.length ? unformatted : [`gofmt exited ${fmt.code}`]).slice(0, 8).map((f) => ({ dimension: "lint", message: `${f} is not gofmt-formatted: run gofmt -w ${f}` })),
+        };
+      }
+      // Rust: changed files must be rustfmt-formatted, in the crate's own edition.
+      const rsFiles: string[] = [];
+      for (const f of ctx.changedFiles.filter((x) => x.endsWith(".rs"))) {
+        if (await access(join(ctx.workspacePath, f)).then(() => true, () => false)) rsFiles.push(f);
+      }
+      if (rsFiles.length > 0) {
+        const manifest = await readFile(join(ctx.workspacePath, "Cargo.toml"), "utf8").catch(() => "");
+        const edition = /^\s*edition\s*=\s*"(\d{4})"/m.exec(manifest)?.[1] ?? "2021";
+        const fmt = await runCommand("rustfmt", ["--check", "--edition", edition, ...rsFiles], ctx.workspacePath, TIMEOUT);
+        // Not installed is the machine, not the code: skipped, and saying so.
+        if (fmt.code === 127) return { gate: "lint", outcome: "skipped", findings: [{ dimension: "no_runner", message: "rustfmt is not installed, so formatting was not checked." }] };
+        if (fmt.code === 0) return { gate: "lint", outcome: "pass", findings: [] };
+        const named = [...new Set([...fmt.stdout.matchAll(/Diff in (.+?) at line/g)].map((m) => m[1] ?? ""))].map((p) => rsFiles.find((f) => p.endsWith(f)) ?? p);
+        return {
+          gate: "lint",
+          outcome: "fail",
+          findings: (named.length ? named : rsFiles).slice(0, 8).map((f) => ({ dimension: "lint", message: `${f} is not rustfmt-formatted: run rustfmt ${f}` })),
         };
       }
       // Diff-scoped: lint only changed JS/TS files; absent config = skip.

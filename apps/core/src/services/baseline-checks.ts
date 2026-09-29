@@ -74,7 +74,7 @@ export class BaselineChecks {
         sha: sha.trim(),
         checkedAt: new Date().toISOString(),
         checks: [
-          toCheck("typecheck", eco?.name === "go" ? "go vet ./..." : "npx tsc --noEmit", typecheck, "No tsconfig.json or go.mod, so there are no types to check."),
+          toCheck("typecheck", eco?.name === "go" ? "go vet ./..." : eco?.name === "rust" ? "cargo check --all-targets" : "npx tsc --noEmit", typecheck, "No tsconfig.json, go.mod or Cargo.toml, so there are no types to check."),
           {
             check: "lint",
             command: null,
