@@ -12,6 +12,9 @@
 // is for, and why the test's name and file are shown next to each promise.
 
 import { ProofClaimsSchema, type ProofClaim, type PromiseProof } from "@signet/contracts";
+import { isTestFile, TEST_DECLARATION } from "./ecosystems.js";
+
+export { isTestFile };
 
 const MAX_PROMISES = 12;
 
@@ -194,7 +197,6 @@ export function parseUnifiedDiff(patch: string): Map<string, FileChange> {
   return files;
 }
 
-export const isTestFile = (f: string): boolean => /\.(spec|test)\.(c|m)?[jt]sx?$/.test(f) || /(^|\/)(__tests__|tests?)\//.test(f);
 
 /** Quotes and whitespace differ between how an agent writes a title and how code does. */
 function norm(s: string): string {
@@ -209,8 +211,6 @@ function parseRange(lines: string): [number, number] | null {
   return a <= b ? [a, b] : [b, a];
 }
 
-/** A line that declares a test: test(...), it(...), and their .only/.skip/.each forms. */
-const TEST_DECLARATION = /^\s*(?:test|it)(?:\.\w+)*\s*\(/;
 
 /**
  * Where an EXISTING test was edited by this change: the named test is declared in the

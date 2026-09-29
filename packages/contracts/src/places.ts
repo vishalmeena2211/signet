@@ -218,7 +218,8 @@ export const StepSheetSchema = z.object({
   added: z.number().int().nullable(),
   removed: z.number().int().nullable(),
   /** Each check's latest outcome, in the order they are named. */
-  checks: z.array(z.object({ gate: z.string(), outcome: z.string() })),
+  /** Each check's latest outcome; `note` says why, when the tests could not be run. */
+  checks: z.array(z.object({ gate: z.string(), outcome: z.string(), note: z.string().nullable().default(null) })),
   briefVersion: z.number().int(),
   /** Answers given along the way, which the step was built with. */
   answers: z.array(z.string()),

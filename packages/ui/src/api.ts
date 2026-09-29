@@ -262,10 +262,10 @@ export const api = {
   desk: (): Promise<DeskView> => get("/api/desk", DeskViewSchema),
   portrait: (repoId?: string): Promise<Portrait> =>
     get(`/api/repos/portrait${repoId ? `?repoId=${encodeURIComponent(repoId)}` : ""}`, PortraitSchema),
-  glance: (repoId: string): Promise<{ branch: string; files: number; tests: boolean; changed: string | null }> =>
+  glance: (repoId: string): Promise<{ branch: string; files: number; tests: boolean; changed: string | null; runs: string | null }> =>
     get(
       `/api/repos/glance?repoId=${encodeURIComponent(repoId)}`,
-      z.object({ branch: z.string(), files: z.number(), tests: z.boolean(), changed: z.string().nullable() }),
+      z.object({ branch: z.string(), files: z.number(), tests: z.boolean(), changed: z.string().nullable(), runs: z.string().nullable().default(null) }),
     ),
   repoNote: (note: string, repoId?: string): Promise<void> =>
     send("/api/repos/notes", { note, ...(repoId ? { repoId } : {}) }, Ack).then(() => undefined),

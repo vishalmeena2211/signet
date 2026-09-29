@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { PortraitSchema, type Portrait } from "@signet/contracts";
 import { z } from "zod";
 import { profileRepo } from "../domain/learner/repo-profiler.js";
+import { detectEcosystem } from "../domain/gates/ecosystems.js";
 
 const exists = (p: string) =>
   access(p)
@@ -162,7 +163,7 @@ export async function portrait(repo: { id: string; label: string; path: string }
 }
 
 /** One line about a repo, for choosing between them: branch, size, tests, how recent. */
-export async function glance(path: string): Promise<{ branch: string; files: number; tests: boolean; changed: string | null }> {
+export async function glance(path: string): Promise<{ branch: string; files: number; tests: boolean; changed: string | null; runs: string | null }> {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const run = promisify(execFile);
@@ -172,5 +173,8 @@ export async function glance(path: string): Promise<{ branch: string; files: num
     git(["log", "-1", "--format=%cr"]),
     profileRepo(path),
   ]);
-  return { branch: branch || "no commits", files: profile.files.length, tests: profile.testConvention !== null, changed: changed || null };
+  // How the tests check will run this repo's suite, so a repo it cannot check says so before any work starts.
+  const eco = await detectEcosystem(path);
+  const runs = eco && !("none" in eco.tests) ? eco.tests.shown : null;
+  return { branch: branch || "no commits", files: profile.files.length, tests: profile.testConvention !== null, changed: changed || null, runs };
 }

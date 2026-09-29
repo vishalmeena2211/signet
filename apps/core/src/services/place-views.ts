@@ -676,6 +676,13 @@ export class StepViews {
     const verdicts = latest ? await db.gateVerdict.findMany({ where: { runId: latest.id }, orderBy: { recordedAt: "asc" } }) : [];
     const lastByGate = new Map<string, string>();
     for (const v of verdicts) lastByGate.set(v.gate, v.outcome);
+    // Why the tests were not run, when they were not: the console says so rather than
+    // leaving every promise "unproven" with no reason.
+    const lastTests = [...verdicts].reverse().find((v) => v.gate === "tests");
+    const testsNote =
+      lastTests?.outcome === "skipped"
+        ? (str(((readJson(`{"f":${lastTests.findingsJson}}`)["f"] as Array<Record<string, unknown>> | undefined) ?? [])[0]?.["message"]) ?? null)
+        : null;
     const brief = await db.briefVersion.findUnique({ where: { id: inc.briefVersionId } });
     const answered = await db.escalation.findMany({ where: { incrementId, status: "ANSWERED" }, orderBy: { updatedAt: "asc" } });
     const spent = await db.usageLedgerEntry.aggregate({ where: { run: { incrementId } }, _sum: { costUsd: true } });
@@ -735,7 +742,7 @@ export class StepViews {
       files,
       added,
       removed,
-      checks: CHECK_ORDER.filter((g) => lastByGate.has(g)).map((gate) => ({ gate, outcome: lastByGate.get(gate) ?? "" })),
+      checks: CHECK_ORDER.filter((g) => lastByGate.has(g)).map((gate) => ({ gate, outcome: lastByGate.get(gate) ?? "", note: gate === "tests" ? testsNote : null })),
       briefVersion: brief?.version ?? 1,
       answers: answered.map((a) => str(readJson(a.stateJson)["answer"])).filter((a): a is string => a !== null),
       mergedAt: str(st["mergedAt"]),

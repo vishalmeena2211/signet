@@ -31,7 +31,10 @@ export function checksSentence(checks: StepSheet["checks"]): string {
   const skipped = core.filter((c) => c.outcome === "skipped").map((c) => CHECK_NAME[c.gate]);
   const parts: string[] = [];
   if (passed.length > 0) parts.push(`${passed.join(" · ")} passed.`);
-  if (skipped.length > 0) parts.push(`${skipped.join(" and ")} had nothing to check.`);
+  const testsNote = checks.find((c) => c.gate === "tests" && c.outcome === "skipped")?.note;
+  const quiet = skipped.filter((n) => !(testsNote && n === CHECK_NAME["tests"]));
+  if (quiet.length > 0) parts.push(`${quiet.join(" and ")} had nothing to check.`);
+  if (testsNote) parts.push(`Tests could not be run: ${testsNote}`);
   const design = checks.find((c) => c.gate === "conformance");
   if (design) parts.push(design.outcome === "skipped" ? "Design has nothing to compare against." : `Design ${design.outcome === "pass" ? "matched" : design.outcome}.`);
   const rules = checks.find((c) => c.gate === "rules");
@@ -363,8 +366,10 @@ function DeskSeal({ d, tab, setTab }: { d: StepSheet; tab: "promises" | "change"
                     Every check passed, and {unproven.length === 1 ? "one thing" : `${words(unproven.length)} things`} you agreed to{" "}
                     {unproven.length === 1 ? "is" : "are"} still unproven.
                   </b>{" "}
-                  Checks only cover what was tested. Ask for the missing {unproven.length === 1 ? "test" : "tests"} — a small, targeted repair — or seal knowing{" "}
-                  {unproven.length === 1 ? "this one is" : "these are"} taken on trust.
+                  {d.checks.some((c) => c.gate === "tests" && c.outcome === "skipped")
+                    ? "Signet could not run this repo’s tests, so no promise can be proven by one here. Read the change, and seal knowing it is taken on trust."
+                    : <>Checks only cover what was tested. Ask for the missing {unproven.length === 1 ? "test" : "tests"} — a small, targeted repair — or seal knowing{" "}
+                  {unproven.length === 1 ? "this one is" : "these are"} taken on trust.</>}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button

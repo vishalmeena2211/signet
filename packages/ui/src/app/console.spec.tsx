@@ -107,13 +107,22 @@ describe("what the sheets say", () => {
   it("reads the checks out as a sentence", () => {
     expect(
       checksSentence([
-        { gate: "typecheck", outcome: "pass" },
-        { gate: "lint", outcome: "pass" },
-        { gate: "tests", outcome: "pass" },
-        { gate: "conformance", outcome: "skipped" },
-        { gate: "rules", outcome: "pass" },
+        { gate: "typecheck", outcome: "pass", note: null },
+        { gate: "lint", outcome: "pass", note: null },
+        { gate: "tests", outcome: "pass", note: null },
+        { gate: "conformance", outcome: "skipped", note: null },
+        { gate: "rules", outcome: "pass", note: null },
       ]),
     ).toBe("Types · Lint · Tests passed. Design has nothing to compare against. Conventions passed.");
+  });
+
+  it("says why the tests could not be run, rather than that they had nothing to check", () => {
+    expect(
+      checksSentence([
+        { gate: "typecheck", outcome: "skipped", note: null },
+        { gate: "tests", outcome: "skipped", note: "No test suite Signet knows how to run was found." },
+      ]),
+    ).toBe("Types had nothing to check. Tests could not be run: No test suite Signet knows how to run was found.");
   });
 
   it("numbers the lines a note can sit on", () => {

@@ -26,6 +26,7 @@ import {
 } from "@signet/contracts";
 import { z } from "zod";
 import type { Gate } from "../domain/gates/gate-runner.js";
+import { detectEcosystem } from "../domain/gates/ecosystems.js";
 
 const pexec = promisify(execFile);
 
@@ -62,6 +63,9 @@ export class BaselineChecks {
       };
       const typecheck = await timed(() => this.deps.typecheck.run(ctx));
       const tests = await timed(() => this.deps.tests.run(ctx));
+      const eco = await detectEcosystem(sandbox);
+      const testCommand = eco && !("none" in eco.tests) ? eco.tests.shown : "npm test";
+      const noSuite = tests.v.findings.find((f) => f.dimension === "no_runner")?.message ?? "No test suite Signet knows how to run was found.";
 
       const report = BaselineReportSchema.parse({
         repoPath: repo.path,
@@ -78,7 +82,7 @@ export class BaselineChecks {
             durationMs: 0,
             detail: "Lint judges only the lines a step changes, so there is nothing to check on main. Existing warnings are the starting point.",
           },
-          toCheck("tests", "npm test", tests, "No package.json with a test command, so there is no suite to run."),
+          toCheck("tests", testCommand, tests, noSuite),
         ],
       });
       await this.save(report);

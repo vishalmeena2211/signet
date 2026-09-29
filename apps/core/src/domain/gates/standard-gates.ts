@@ -12,19 +12,12 @@ import { access } from "node:fs/promises";
 import type { Gate, GateContext } from "./gate-runner.js";
 import { runCommand, topLines } from "./gate-runner.js";
 import type { GateVerdictView } from "@signet/contracts";
+import { detectEcosystem, isTestFile, runnerMissing, suitePassed } from "./ecosystems.js";
+
+/** What the tests check says when it cannot run a repo's tests: plainly, never silently. */
+const RUNS = "Signet runs tests for JavaScript and TypeScript (a test script in package.json), Python (pytest), Go and Rust.";
 
 const TIMEOUT = 120_000;
-
-async function detectRunner(workspacePath: string): Promise<{ cmd: string; args: string[] } | null> {
-  // Phase 0 supports node projects with a test script; the fixture repo and
-  // most TS targets fit. Extended per-ecosystem detection arrives with Phase 2.
-  try {
-    await access(join(workspacePath, "package.json"));
-    return { cmd: "npm", args: ["test", "--silent"] };
-  } catch {
-    return null;
-  }
-}
 
 export function typecheckGate(): Gate {
   return {
@@ -81,17 +74,26 @@ export function testsGate(deps: TestsGateDeps): Gate {
   return {
     name: "tests",
     async run(ctx: GateContext): Promise<GateVerdictView> {
-      const runner = await detectRunner(ctx.workspacePath);
-      if (!runner) return { gate: "tests", outcome: "skipped", findings: [] };
+      const eco = await detectEcosystem(ctx.workspacePath);
+      if (!eco || "none" in eco.tests) {
+        // Skipped, and saying why: a silent skip made every promise unprovable with
+        // nothing on screen to explain it.
+        return {
+          gate: "tests",
+          outcome: "skipped",
+          findings: [{ dimension: "no_runner", message: eco && "none" in eco.tests ? `${eco.tests.none} ${RUNS}` : `No test suite Signet knows how to run was found. ${RUNS}` }],
+        };
+      }
+      const runner = eco.tests;
 
       // 1) full suite on the changed workspace must pass
       const onChanged = await runCommand(runner.cmd, runner.args, ctx.workspacePath, TIMEOUT);
-      if (onChanged.code !== 0) {
-        // 127 is "command not found". That is the ENVIRONMENT, not the code, and no
-        // amount of rewriting tests will fix it — the first real run spent three repairs
-        // and a restart discovering that. The dimension is what tells the run machine to
-        // escalate at once instead of repairing.
-        if (onChanged.code === 127) {
+      if (!suitePassed(eco.name, onChanged.code)) {
+        // A missing runner (127, or pytest not installed) is the ENVIRONMENT, not the code,
+        // and no amount of rewriting tests will fix it — the first real run spent three
+        // repairs and a restart discovering that. The dimension is what tells the run
+        // machine to escalate at once instead of repairing.
+        if (runnerMissing(eco.name, onChanged.code, onChanged.stdout + onChanged.stderr)) {
           return {
             gate: "tests",
             outcome: "fail",
@@ -99,8 +101,9 @@ export function testsGate(deps: TestsGateDeps): Gate {
               {
                 dimension: "environment",
                 message:
-                  `\`${runner.cmd} ${runner.args.join(" ")}\` exited 127 (command not found) in the ` +
-                  `workspace. The test runner is not installed there, so nothing was verified. ` +
+                  `\`${runner.shown}\` could not start in the workspace ` +
+                  `(${onChanged.code === 127 ? "command not found" : "pytest is not installed"}): the test runner is not ` +
+                  `installed there, so nothing was verified. ` +
                   `This is not something the agent can fix by changing code.`,
               },
             ],
@@ -132,7 +135,7 @@ export function testsGate(deps: TestsGateDeps): Gate {
       //
       // Anything that changes behaviour still has to prove it, which is where the check
       // earns its keep.
-      const isTest = (f: string): boolean => /\.(spec|test)\.(c|m)?[jt]sx?$/.test(f);
+      const isTest = isTestFile;
       const testFiles = ctx.changedFiles.filter(isTest);
       const sourceFiles = ctx.changedFiles.filter((f) => !isTest(f));
 
@@ -161,7 +164,7 @@ export function testsGate(deps: TestsGateDeps): Gate {
           cmd: runner.cmd,
           args: runner.args,
         });
-        if (onBase.code === 0) {
+        if (suitePassed(eco.name, onBase.code)) {
           return {
             gate: "tests",
             outcome: "fail",
