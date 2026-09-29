@@ -478,3 +478,52 @@ svg[viewBox="0 0 24 24"] { width: 15px; height: 15px; stroke: currentColor; flex
 .dl { min-width: max-content; }
 /* Routines scroll as a list; a card is never squeezed shorter than its sentence. */
 .routines > * { flex-shrink: 0; }
+
+/* ── Routines as a canvas (frames 30, 32, 33) ───────────────────────────── */
+.rt-head { display: flex; align-items: center; gap: 12px; flex: none; }
+.rt-name { font: inherit; font-size: 16px; font-weight: 500; color: var(--fg-1); background: transparent; border: 0; padding: 0; cursor: pointer; max-width: 100%; }
+.rt-head .st { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
+.rt-body { flex: 1; min-height: 420px; display: grid; grid-template-columns: 188px minmax(0, 1fr) 240px; gap: 12px; }
+.rt-body.wide { grid-template-columns: minmax(0, 1fr) 240px; }
+.rt-body > * { min-height: 0; }
+.palette { min-width: 0; border: 1px solid var(--line-1); border-radius: 12px; background: var(--ink-1); padding: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; overflow: auto; }
+.palette .k { font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; margin-top: 6px; }
+.pitem { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line-1); border-radius: 8px; background: var(--ink-2); color: var(--fg-1); cursor: grab; font: inherit; font-size: 13px; text-align: left; }
+.pitem svg { width: 14px; height: 14px; stroke: var(--fg-3); flex: none; }
+.pitem.add { border-style: dashed; background: transparent; color: var(--fg-3); cursor: pointer; }
+.rboard { position: relative; border: 1px solid var(--line-1); border-radius: 12px; background: var(--ink-0); overflow: hidden; }
+.rboard .react-flow { background: transparent; }
+.rboard .react-flow__node { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.rboard .react-flow__handle { width: 8px; height: 8px; min-width: 0; min-height: 0; background: var(--ink-0); border: 1.5px solid var(--line-2); border-radius: 50%; }
+.rboard .react-flow__attribution { background: transparent; }
+.rboard .react-flow__attribution a { color: var(--fg-3); }
+.rnode { box-sizing: border-box; width: 100%; height: 100%; border: 1px solid var(--line-2); border-radius: 10px; background: var(--ink-1); padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.rnode > * { flex-shrink: 0; }
+.rnode .lab { font-size: 10.5px; color: var(--fg-3); letter-spacing: .06em; text-transform: uppercase; display: flex; gap: 6px; align-items: center; }
+.rnode .lab svg { width: 12px; height: 12px; stroke: currentColor; }
+.rnode .t { font-size: 13.5px; font-weight: 500; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rnode .s { font-size: 12px; color: var(--fg-2); line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rnode.sel { border-color: var(--fg-1); box-shadow: 0 0 0 3px var(--primary-soft); }
+.rnode.ghost { border-style: dashed; background: transparent; align-items: center; justify-content: center; text-align: center; }
+.rnode.ghost .s { color: var(--fg-3); }
+.rnode.yours { border-color: var(--seal-line); background: var(--seal-quiet); }
+.rnode.muted .t { color: var(--fg-2); }
+.rnode.end { border-radius: 999px; align-items: center; justify-content: center; padding: 4px 12px; }
+.rnode.end .t { font-size: 12px; font-weight: 400; color: var(--fg-3); }
+.pip-seal { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--seal); letter-spacing: .04em; }
+.pip-seal::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--seal); }
+.firings { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--fg-3); flex: none; }
+.firings button { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1.5px solid var(--line-2); background: transparent; cursor: pointer; }
+.firings button.seal { border-color: var(--seal); }
+.firings button.on { border-color: var(--fg-1); background: var(--fg-1); }
+.loopwarn { position: absolute; left: 16px; right: 16px; bottom: 16px; margin: 0; z-index: 5; }
+.loopnote { position: absolute; left: 16px; bottom: 16px; z-index: 5; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--seal); background: var(--ink-0); padding: 4px 8px; border-radius: 8px; }
+.loopnote button { border: 0; background: transparent; color: var(--fg-2); text-decoration: underline; cursor: pointer; font: inherit; }
+.clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.field-in { background: var(--ink-0); border: 1px solid var(--line-2); border-radius: 8px; color: var(--fg-1); font: inherit; font-size: 13px; padding: 8px 10px; resize: vertical; }
+.side2 .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-1); display: inline-flex; align-items: center; font: inherit; font-size: 12px; background: var(--ink-1); color: var(--fg-1); cursor: pointer; }
+.chip.on { border-color: var(--fg-1); background: var(--primary-soft); font-weight: 500; }
+.wlabel { position: absolute; pointer-events: none; font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); background: var(--ink-0); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.wlabel.seal { color: var(--seal); }

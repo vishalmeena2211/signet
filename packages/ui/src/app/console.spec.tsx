@@ -12,6 +12,7 @@ import { moveFile, moveStep, promisesOf, replaceFile, splitStep, type DraftStep 
 import { patchRows } from "./patch.js";
 import { checksSentence } from "./sheets.js";
 import { triggerWords, evidenceText } from "./workshop.js";
+import { routineGraph } from "./routine-canvas.js";
 import { rimText, SealButton, HOLD_MS } from "./seal.js";
 import { headline } from "./watch.js";
 import { Desk } from "./desk.js";
@@ -223,5 +224,70 @@ describe("the Desk", () => {
     body = desk([]);
     render(wrap(<Desk />));
     expect(await screen.findByText("Nothing needs you.")).toBeTruthy();
+  });
+});
+
+describe("routines, drawn as a canvas", () => {
+  const recipes = [
+    { id: "r1", name: "Cover an untested module", goalMd: "x".repeat(20), repoPath: null, repoOrigin: "local" as const, repoLabel: "cartographer", placeholders: [], createdAt: new Date().toISOString() },
+    { id: "r2", name: "Tidy what lint flags", goalMd: "x".repeat(20), repoPath: null, repoOrigin: "local" as const, repoLabel: "cartographer", placeholders: [], createdAt: new Date().toISOString() },
+  ];
+  const nightly = {
+    trigger: { kind: "schedule" as const, every: "day" as const, atHour: 3, atMinute: 0, onWeekday: 1 },
+    steps: [
+      { id: "s1", recipeId: "r1", recipeName: "Cover an untested module" },
+      { id: "s2", recipeId: "r2", recipeName: "Tidy what lint flags" },
+    ],
+  };
+
+  it("lays the recipes out in order, each stopping at your seal, and ends the firing", () => {
+    const { nodes, edges } = routineGraph({ routine: nightly, recipes, selected: "step:s1", dropping: false, firing: null });
+    expect(nodes.map((n) => n.id)).toEqual(["when", "step:s1", "step:s2", "end"]);
+    expect(nodes[0]?.data.title).toBe("Every night at 3:00");
+    expect(nodes.filter((n) => n.data.kind === "do").every((n) => n.data.pip === "your seal")).toBe(true);
+    expect(nodes.find((n) => n.id === "step:s1")?.selected).toBe(true);
+    expect(edges.map((e) => [e.source, e.target, e.label ?? null])).toEqual([
+      ["when", "step:s1", null],
+      ["step:s1", "step:s2", "then"],
+      ["step:s2", "end", null],
+    ]);
+    // The order of the cards is the routine: each sits lower than the one before.
+    const ys = nodes.map((n) => n.position.y);
+    expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+  });
+
+  it("draws the loop only for an event the routine's own work can cause", () => {
+    const failing = { ...nightly, trigger: { kind: "event" as const, event: "run_failed" as const } };
+    const loop = routineGraph({ routine: failing, recipes, selected: null, dropping: false, firing: null }).edges.find((e) => e.id === "loop");
+    expect(loop).toMatchObject({ source: "step:s2", target: "when", label: "its own work can fail too" });
+    const landed = { ...nightly, trigger: { kind: "event" as const, event: "step_merged" as const } };
+    expect(routineGraph({ routine: landed, recipes, selected: null, dropping: false, firing: null }).edges.some((e) => e.id === "loop")).toBe(false);
+  });
+
+  it("draws a past firing over the same cards: the only colour is work waiting for you", () => {
+    const firing = {
+      id: "f1",
+      triggeredBy: "schedule" as const,
+      status: "succeeded" as const,
+      skipReason: null,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      costUsd: 0.38,
+      steps: [
+        { stepId: "s1", recipeName: "Cover an untested module", featureId: "f", featureTitle: "Cover src/tiles.ts", incrementId: "i", now: "at your seal", yours: true, costUsd: 0.38, nothingNeeded: null, error: null },
+        { stepId: "s2", recipeName: "Tidy what lint flags", featureId: null, featureTitle: null, incrementId: null, now: null, yours: false, costUsd: null, nothingNeeded: "Lint reports no warnings.", error: null },
+      ],
+    };
+    const { nodes } = routineGraph({ routine: nightly, recipes, selected: null, dropping: false, firing });
+    const [, first, second] = nodes;
+    expect(first?.data).toMatchObject({ yours: true, pip: "at your seal", sub: "Started “Cover src/tiles.ts” · $0.38" });
+    expect(second?.data).toMatchObject({ muted: true, sub: "Nothing to do: lint reports no warnings." });
+    expect(second?.data.pip).toBeUndefined();
+  });
+
+  it("starts a new routine from a blank board", () => {
+    expect(routineGraph({ routine: { trigger: null, steps: [] }, recipes, selected: null, dropping: false, firing: null }).nodes.map((n) => n.data.sub)).toEqual([
+      "Drag a trigger here to start",
+    ]);
   });
 });

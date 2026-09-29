@@ -6,13 +6,13 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AwaySummary, Decision, DeskView, FlowCounts } from "@signet/contracts";
+import type { AwaySummary, Decision, DeskView, FlowCounts, RoutineStop } from "@signet/contracts";
 import { api } from "../api.js";
 import { Shell } from "./shell.js";
 import { useDesk } from "./data.js";
 import { Icon } from "./icons.js";
 import { navigate, type Route } from "./router.js";
-import { clock, money, plural, span, waited, words } from "./format.js";
+import { ago, clock, money, plural, span, waited, words } from "./format.js";
 
 // ── when you last looked ──
 
@@ -165,7 +165,7 @@ function Inbox({ d }: { d: DeskView }): ReactNode {
 
   const flow = <FlowStrip f={d.flow} />;
 
-  if (decisions.length === 0 && !held) {
+  if (decisions.length === 0 && d.stopped.length === 0 && !held) {
     return (
       <>
         {flow}
@@ -201,8 +201,11 @@ function Inbox({ d }: { d: DeskView }): ReactNode {
     <>
       {held && <HeldBanner held={held} />}
       {flow}
-      {decisions.length > 0 && (
+      {(decisions.length > 0 || d.stopped.length > 0) && (
         <div className="inbox">
+          {d.stopped.map((s) => (
+            <StoppedRow key={s.runId} s={s} />
+          ))}
           {decisions.map((dec, i) => (
             <DecisionRow key={dec.incrementId} dec={dec} sel={i === sel} held={held !== null} heldUntil={held?.resetsAt ?? null} onOpen={() => navigate(routeFor(dec))} />
           ))}
@@ -305,6 +308,52 @@ function DecisionRow({
   );
 }
 
+/**
+ * A routine that stopped because a recipe could not start. It is not a step, so it is
+ * not a decision; it is on the Desk because it needs a person all the same.
+ */
+function StoppedRow({ s }: { s: RoutineStop }): ReactNode {
+  const qc = useQueryClient();
+  const dismiss = useMutation({ mutationFn: () => api.dismissRoutineStop(s.runId), onSuccess: () => void qc.invalidateQueries() });
+  const look = () => navigate({ view: "workshop", tab: "routines" });
+  return (
+    <div className="dec" role="button" tabIndex={0} onClick={look} onKeyDown={(e) => e.key === "Enter" && look()}>
+      <span className="dot-seal" />
+      <div style={{ minWidth: 0 }}>
+        <div className="what">“{s.routineName}” stopped</div>
+        <div className="why">
+          {s.recipeName} could not start · {s.reason}
+        </div>
+        <div className="meta">stopped {ago(s.at)}</div>
+      </div>
+      <div className="acts">
+        <button
+          type="button"
+          className="btn btn-quiet"
+          disabled={dismiss.isPending}
+          title="Take it off the Desk. The firing stays in the routine’s history."
+          onClick={(e) => {
+            e.stopPropagation();
+            dismiss.mutate();
+          }}
+        >
+          Dismiss
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={(e) => {
+            e.stopPropagation();
+            look();
+          }}
+        >
+          Look
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** The words a decision is written in — exported so the tests pin them. */
 export function decisionWords(
   dec: Decision,
@@ -341,14 +390,14 @@ export function decisionWords(
       return {
         what: `Signet asked: ${dec.text ?? "a question"}`,
         why: `${dec.stepTitle} · it stopped rather than guess`,
-        meta: `asked ${w} ago`,
+        meta: `asked ${ago(dec.since)}`,
         act: { label: "Answer", seal: false },
       };
     case "failed":
       return {
         what: `“${dec.stepTitle}” stopped with a failure`,
         why: `${dec.featureTitle} · ${dec.text ?? "the run failed"}`,
-        meta: `failed ${w} ago`,
+        meta: `failed ${ago(dec.since)}`,
         act: { label: "Look", seal: false },
       };
   }

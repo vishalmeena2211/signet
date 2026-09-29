@@ -1,7 +1,7 @@
 // Workshop: tuning the machine — conventions, routines, health. Visited rarely, so it
 // is one place with three tabs rather than three places.
 
-import { useState, type ReactNode } from "react";
+import { Suspense, lazy, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Recipe, RuleCard, Workflow, WorkflowRunView, WorkflowTrigger } from "@signet/contracts";
 import { api } from "../api.js";
@@ -9,6 +9,32 @@ import { Shell } from "./shell.js";
 import { navigate, type Route } from "./router.js";
 import { clock } from "./format.js";
 import { useDesk } from "./data.js";
+import { EVENT_WORDS, hm, lowerFirst, triggerWords } from "./routine-words.js";
+// The canvas brings React Flow, which is most of a bundle on its own: it loads only when
+// someone opens the canvas.
+const RoutineCanvas = lazy(() => import("./routine-canvas.js").then((m) => ({ default: m.RoutineCanvas })));
+
+export { triggerWords };
+
+/** Sentence or canvas: two views of the same routines, and the last one used is kept. */
+function useRoutineView(): ["sentence" | "canvas", (v: "sentence" | "canvas") => void] {
+  const [view, setView] = useState<"sentence" | "canvas">(() => {
+    try {
+      return localStorage.getItem("signet.routines.view") === "canvas" ? "canvas" : "sentence";
+    } catch {
+      return "sentence";
+    }
+  });
+  const set = (v: "sentence" | "canvas") => {
+    setView(v);
+    try {
+      localStorage.setItem("signet.routines.view", v);
+    } catch {
+      /* remembering the view is a convenience */
+    }
+  };
+  return [view, set];
+}
 
 export function Workshop({ route }: { route: Extract<Route, { view: "workshop" }> }): ReactNode {
   const tabs = [
@@ -16,6 +42,8 @@ export function Workshop({ route }: { route: Extract<Route, { view: "workshop" }
     ["routines", "Routines"],
     ["health", "Health"],
   ] as const;
+  const [view, setView] = useRoutineView();
+  const narrow = typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)").matches;
   return (
     <Shell place="workshop" title="Workshop">
       <div className="subnav" style={{ margin: 0, padding: 0, border: 0 }}>
@@ -24,9 +52,25 @@ export function Workshop({ route }: { route: Extract<Route, { view: "workshop" }
             {label}
           </button>
         ))}
+        {route.tab === "routines" && !narrow && (
+          <span className="chips" style={{ marginLeft: "auto" }}>
+            <button type="button" className={`chip ${view === "sentence" ? "on" : ""}`} onClick={() => setView("sentence")}>
+              Sentence
+            </button>
+            <button type="button" className={`chip ${view === "canvas" ? "on" : ""}`} onClick={() => setView("canvas")}>
+              Canvas
+            </button>
+          </span>
+        )}
       </div>
       {route.tab === "conventions" && <Conventions />}
-      {route.tab === "routines" && <Routines />}
+      {route.tab === "routines" && (view === "canvas" && !narrow ? (
+          <Suspense fallback={null}>
+            <RoutineCanvas />
+          </Suspense>
+        ) : (
+          <Routines />
+        ))}
       {route.tab === "health" && <Health />}
     </Shell>
   );
@@ -113,38 +157,6 @@ function Conventions(): ReactNode {
 }
 
 // ── routines, as sentences ──
-
-const EVENT_WORDS: Record<string, string> = {
-  step_merged: "a step lands",
-  run_failed: "a run fails",
-  rules_proposed: "new conventions are found",
-  quota_reset: "the Claude quota comes back",
-};
-
-function hm(h: number, m: number): string {
-  return `${h}:${String(m).padStart(2, "0")}`;
-}
-
-/** The trigger, as the opening of a sentence: [prefix, slot]. */
-export function triggerWords(t: WorkflowTrigger): [string, string] {
-  switch (t.kind) {
-    case "schedule": {
-      if (t.every === "hour") return ["Every", "hour"];
-      const part = t.atHour < 6 || t.atHour >= 21 ? "night" : t.atHour < 12 ? "morning" : t.atHour < 18 ? "afternoon" : "evening";
-      if (t.every === "day") return ["Every", `${part} at ${hm(t.atHour, t.atMinute)}`];
-      const day = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][t.onWeekday] ?? "Monday";
-      return ["Every", `${day} at ${hm(t.atHour, t.atMinute)}`];
-    }
-    case "event":
-      return ["When", EVENT_WORDS[t.event] ?? t.event];
-    case "manual":
-      return ["When", "I say so"];
-  }
-}
-
-function lowerFirst(s: string): string {
-  return s ? (s[0]?.toLowerCase() ?? "") + s.slice(1) : s;
-}
 
 function Routines(): ReactNode {
   const qc = useQueryClient();

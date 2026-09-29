@@ -21,6 +21,12 @@ export function waited(fromIso: string, now = Date.now()): string {
   return `${Math.round(h / 24)} days`;
 }
 
+/** "5 min ago", or "just now" — never "just now ago". */
+export function ago(fromIso: string, now = Date.now()): string {
+  const w = waited(fromIso, now);
+  return w === "just now" ? w : `${w} ago`;
+}
+
 /** "2 h 20 m" — a span, for the quota strip. */
 export function span(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60_000));

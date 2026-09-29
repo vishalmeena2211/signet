@@ -54,6 +54,8 @@ import {
   RecipeSchema,
   WorkflowSchema,
   WorkflowRunViewSchema,
+  RoutineFiringSchema,
+  type RoutineFiring,
   type ProposeFeatureRequest,
   type FeatureProposalResponse,
   type RepoOptionsResponse,
@@ -204,6 +206,12 @@ export const api = {
       z.object({ started: z.boolean(), reason: z.string().optional(), runId: z.string().optional() }),
     ),
   workflowRuns: (): Promise<WorkflowRunView[]> => get("/api/workflow-runs", z.array(WorkflowRunViewSchema)),
+  /** One routine's recent firings, newest first, for drawing over its canvas. */
+  firings: (workflowId: string): Promise<RoutineFiring[]> => get(`/api/workflows/${workflowId}/firings`, z.array(RoutineFiringSchema)),
+  /** Takes a stopped routine off the Desk. */
+  dismissRoutineStop: async (runId: string): Promise<void> => {
+    await send(`/api/workflow-runs/${runId}/dismiss`, undefined, Ack);
+  },
 
   /** Every repo work can be sent to: local ones found on this machine, plus github. */
   repoOptions: (): Promise<RepoOptionsResponse> => get("/api/repos", RepoOptionsResponseSchema),

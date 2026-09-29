@@ -11,6 +11,33 @@ function I({ children }: { children: ReactNode }): ReactNode {
 }
 
 export const Icon = {
+  clock: () => (
+    <I>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </I>
+  ),
+  list: () => (
+    <I>
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </I>
+  ),
+  alert: () => (
+    <I>
+      <path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z" />
+      <path d="M12 9v4M12 17h.01" />
+    </I>
+  ),
+  transfer: () => (
+    <I>
+      <path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3" />
+    </I>
+  ),
+  play: () => (
+    <I>
+      <polygon points="6 3 20 12 6 21 6 3" />
+    </I>
+  ),
   inbox: () => (
     <I>
       <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />

@@ -39,7 +39,7 @@ export function Shell({
   const desk = useDesk();
   const d = desk.data;
   const aside = useAside();
-  const waiting = d ? d.decisions.filter((x) => !aside.includes(asideKey(x))).length : 0;
+  const waiting = d ? d.decisions.filter((x) => !aside.includes(asideKey(x))).length + d.stopped.length : 0;
   const moving = d ? d.flow.building + d.flow.checking : 0;
 
   return (
