@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 import { RunIdSchema } from "@signet/contracts";
 import { detectEcosystem, isTestFile, runnerMissing, suitePassed, TEST_DECLARATION } from "./ecosystems.js";
 import { lintGate, testsGate, typecheckGate } from "./standard-gates.js";
-import { portrait, testedBy } from "../../services/portrait.js";
+import { opensWithComment, portrait, testedBy } from "../../services/portrait.js";
 import { makeRunOnBase } from "./base-overlay.js";
 
 const exec = promisify(execFile);
@@ -176,6 +176,51 @@ describe("Go's own checks for types and format, and a portrait in Go's terms", {
     expect(testedBy("pkg/calc_test.go")).toEqual(["pkg/calc.go"]);
     expect(testedBy("tests/test_cart.py")).toContain("cart.py");
     expect(testedBy("cart_test.py")).toEqual(["cart.py"]);
-    expect(testedBy("tests/sub.rs")).toEqual(["src/sub.rs"]);
+    expect(testedBy("tests/sub.rs")).toEqual(["src/sub.rs", "src/lib.rs"]);
+  });
+});
+
+describe("Rust's own checks, and a portrait that knows how a crate is tested", { timeout: 180_000 }, () => {
+  const crate = { "Cargo.toml": '[package]\nname = "calc"\nversion = "0.1.0"\nedition = "2021"\n' };
+
+  it("cargo check passes a sound crate and catches a type error", async (t) => {
+    if (!(await has("cargo", ["--version"]))) return t.skip();
+    const sound = await repo({ ...crate, "src/lib.rs": "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n" });
+    expect(await typecheckGate().run(ctx(sound, ["src/lib.rs"]))).toMatchObject({ outcome: "pass" });
+    const broken = await repo({ ...crate, "src/lib.rs": 'pub fn add(a: i32, b: i32) -> i32 {\n    let x: i32 = "one";\n    a + b + x\n}\n' });
+    const v = await typecheckGate().run(ctx(broken, ["src/lib.rs"]));
+    expect(v.outcome).toBe("fail");
+    expect(v.findings.map((f) => f.message).join("\n")).toContain("src/lib.rs");
+  });
+
+  it("rustfmt flags a changed file that is not formatted, and names the fix", async (t) => {
+    if (!(await has("rustfmt", ["--version"]))) return t.skip();
+    const messy = await repo({ ...crate, "src/lib.rs": "pub fn add(a:i32,b:i32)->i32{a+b}\n" });
+    expect(await lintGate().run(ctx(messy, ["src/lib.rs"]))).toMatchObject({ outcome: "fail", findings: [{ message: "src/lib.rs is not rustfmt-formatted: run rustfmt src/lib.rs" }] });
+    const tidy = await repo({ ...crate, "src/lib.rs": "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n" });
+    expect(await lintGate().run(ctx(tidy, ["src/lib.rs"]))).toMatchObject({ outcome: "pass" });
+  });
+
+  it("counts a crate's tests/ folder as testing src/lib.rs, and does not suggest a comment it already has", async () => {
+    const dir = await repo({
+      ...crate,
+      "src/lib.rs": "//! Counting words.\n\npub fn count(s: &str) -> usize {\n    s.split_whitespace().count()\n}\n",
+      "tests/count.rs": "#[test]\nfn counts() {\n    assert_eq!(calc::count(\"a b\"), 2);\n}\n",
+    });
+    const p = await portrait({ id: dir, label: "calc", path: dir }, { get: async () => null, set: async () => {} } as never);
+    expect(JSON.stringify(p)).toContain("cargo’s test harness");
+    expect(p.asks.some((a) => a.includes("without a test"))).toBe(false);
+    expect(p.asks.some((a) => a.includes("comment at its top"))).toBe(false);
+  });
+
+  it("counts a Rust file with its own #[cfg(test)] module as tested", async () => {
+    const dir = await repo({ ...crate, "src/lib.rs": "pub fn one() -> i32 {\n    1\n}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn is_one() {\n        assert_eq!(super::one(), 1);\n    }\n}\n" });
+    const p = await portrait({ id: dir, label: "calc", path: dir }, { get: async () => null, set: async () => {} } as never);
+    expect(p.asks.some((a) => a.includes("without a test"))).toBe(false);
+  });
+
+  it("knows a file that already opens with a comment, in each language", () => {
+    for (const t of ["// Package calc adds.\npackage calc", "//! Counting words.", '"""Parse temperatures."""', "#!/usr/bin/env python3\n# Tools.", "/* A module */"]) expect(opensWithComment(t), t).toBe(true);
+    for (const t of ["package calc", "#[derive(Debug)]\npub struct X;", "export const a = 1;", ""]) expect(opensWithComment(t), t).toBe(false);
   });
 });
