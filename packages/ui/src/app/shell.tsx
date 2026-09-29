@@ -15,6 +15,7 @@ import { href, navigate } from "./router.js";
 import { useDesk } from "./data.js";
 import { clock, money } from "./format.js";
 import { asideKey, useAside } from "./desk.js";
+import { currentRepo } from "./welcome.js";
 
 export type Place = "desk" | "flow" | "workshop";
 
@@ -47,7 +48,8 @@ export function Shell({
       <aside className="rail2">
         <div className="mark">
           <b>Signet</b>
-          <span>{d?.repoLabel ?? ""}</span>
+          {/* The repo you chose on the first page, when you chose one; else the configured one. */}
+          <span>{currentRepo()?.split("/").filter(Boolean).pop() ?? d?.repoLabel ?? ""}</span>
         </div>
         <button type="button" className="ask" onClick={() => navigate({ view: "ask" })}>
           <Icon.pen />

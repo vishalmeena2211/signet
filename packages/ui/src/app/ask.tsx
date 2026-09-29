@@ -27,7 +27,10 @@ export function Ask(): ReactNode {
   const repos = useQuery({ queryKey: ["repos"], queryFn: api.repoOptions, staleTime: 60_000 });
   const [repoId, setRepoId] = useState<string | undefined>(currentRepo);
   const configured = repos.data?.repos.find((r) => r.isConfigured);
-  const repo = repos.data?.repos.find((r) => r.id === (repoId ?? configured?.id)) ?? configured;
+  // A repo chosen by typing its path is not in the list the scan found; it is still the
+  // repo the work goes to, so it is what the page shows, never the configured one.
+  const listed = repos.data?.repos.find((r) => r.id === (repoId ?? configured?.id));
+  const repo = listed ?? (repoId ? { id: repoId, label: repoId.replace(/^\/Users\/[^/]+/, "~") } : configured);
   const effectiveRepo = repoId ?? configured?.id;
 
   const [phase, setPhase] = useState<Phase>("compose");

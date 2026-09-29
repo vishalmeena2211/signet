@@ -124,9 +124,11 @@ export class RepoDiscovery {
       excluded !== undefined && (path === excluded || path.startsWith(`${excluded}/`));
 
     const configured = this.deps.configuredRepoPath;
+    // Listed even if the scan missed it, but only when it is a git repository: offering a
+    // missing folder as the one repo that works sent a fresh install to a dead end.
+    const configuredIsRepo = await stat(join(configured, ".git")).then(() => true, () => false);
     const local: RepoOption[] = [
-      // Always present even if the scan missed it — it is the one repo we know works.
-      ...new Set([...[...found].filter((p) => !isOurs(p)), configured]),
+      ...new Set([...[...found].filter((p) => !isOurs(p)), ...(configuredIsRepo ? [configured] : [])]),
     ]
       .sort((a, b) => a.localeCompare(b))
       .map((path) => ({
@@ -193,6 +195,8 @@ export class RepoDiscovery {
       // The caller clones and fills the real path in; this only records the choice.
       return { path: "", label: fullName, origin: "github" };
     }
-    return { path: repoId, label: repoId.replace(homedir(), "~"), origin: "local" };
+    // A typed path: "~/code/app" is how people write it, and nothing else expands the "~".
+    const path = repoId === "~" ? homedir() : repoId.startsWith("~/") ? join(homedir(), repoId.slice(2)) : repoId;
+    return { path, label: path.replace(homedir(), "~"), origin: "local" };
   }
 }

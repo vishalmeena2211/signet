@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import { mkdir } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 
 const pexec = promisify(execFile);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -84,8 +84,76 @@ async function startDatabase(port) {
   throw new Error(`the database never opened ${port} within 90s\n${stderr.trim()}`);
 }
 
+/**
+ * The demo repository the README promises: a tiny JavaScript cart module with tests, on
+ * a main branch, for watching a feature go end to end before trusting Signet with a repo
+ * you care about.
+ *
+ * Nothing used to make it. It existed on the machine Signet was written on because it
+ * had been made by hand, so a fresh install pointed at a folder that was not there and
+ * the first screen said "Nothing can start". Made only when you have not named a repo of
+ * your own, and never over anything already there.
+ */
+async function ensureDemoRepo(path) {
+  try {
+    await access(join(path, ".git"));
+    return;
+  } catch {
+    /* not there yet: make it */
+  }
+  try {
+    await access(path);
+    // Something is already at that path that is not a git repo. Leave it alone; the
+    // health page says what is wrong, and deleting a user's folder is never the fix.
+    return;
+  } catch {
+    /* free */
+  }
+  step(`making the demo repository at ${path}`);
+  await mkdir(path, { recursive: true });
+  const files = {
+    "package.json": JSON.stringify({ name: "signet-demo", private: true, type: "module", scripts: { test: "node --test" } }, null, 2) + "\n",
+    "README.md": "# Signet demo\n\nA tiny cart module for trying Signet on. Ask for something small, like\n\"add itemCount(items) to cart.mjs\", and watch it go from a sentence to a merge.\n",
+    "cart.mjs": [
+      "export const total = (items) => items.reduce((sum, i) => sum + i.price, 0);",
+      "",
+      "export const withDiscount = (items, percent) => Math.round(total(items) * (100 - percent)) / 100;",
+      "",
+      "export const cheapest = (items) =>",
+      "  items.reduce((lo, i) => (i.price < lo.price ? i : lo), items[0] ?? null);",
+      "",
+    ].join("\n"),
+    "cart.test.mjs": [
+      'import { strict as assert } from "node:assert";',
+      'import { test } from "node:test";',
+      'import { cheapest, total, withDiscount } from "./cart.mjs";',
+      "",
+      'test("total adds up the prices", () => {',
+      "  assert.equal(total([{ price: 2 }, { price: 3 }]), 5);",
+      "});",
+      "",
+      'test("withDiscount takes a percentage off the total", () => {',
+      "  assert.equal(withDiscount([{ price: 100 }], 10), 90);",
+      "});",
+      "",
+      'test("cheapest finds the lowest price, or null for an empty cart", () => {',
+      "  assert.deepEqual(cheapest([{ price: 3 }, { price: 1 }]), { price: 1 });",
+      "  assert.equal(cheapest([]), null);",
+      "});",
+      "",
+    ].join("\n"),
+  };
+  for (const [name, text] of Object.entries(files)) await writeFile(join(path, name), text);
+  const git = (args) => pexec("git", args, { cwd: path });
+  await git(["init", "-q", "-b", "main"]);
+  await git(["add", "-A"]);
+  // Its own identity: a fresh machine may have no git name set, and this is Signet's commit.
+  await git(["-c", "user.name=signet", "-c", "user.email=signet@local", "commit", "-qm", "A small cart module to try Signet on"]);
+}
+
 async function main() {
   for (const dir of [env.SIGNET_WORKSPACES_ROOT, env.SIGNET_PACKS_ROOT]) await mkdir(dir, { recursive: true });
+  if (!process.env.SIGNET_TARGET_REPO_PATH) await ensureDemoRepo(env.SIGNET_TARGET_REPO_PATH);
 
   if (await portOpen(4700)) {
     console.error(

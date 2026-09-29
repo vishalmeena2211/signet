@@ -52,7 +52,13 @@ function RepoRow({ r, on, onPick }: { r: RepoOption; on: boolean; onPick: () => 
       : g.data
         ? empty
           ? `${home(r.path)} · no source code found`
-          : `${home(r.path)} · on ${g.data.branch} · ${g.data.files} files · ${g.data.tests ? "tests found" : "no tests found — I can plan here, but my checks will have little to go on"}`
+          : `${home(r.path)} · on ${g.data.branch} · ${g.data.files} files · ${
+              g.data.runs
+                ? `tests run with ${g.data.runs}`
+                : g.data.tests
+                  ? "tests found, but I do not know how to run them here — no promise can be proven by one"
+                  : "no tests found — I can plan here, but no promise can be proven by a test"
+            }`
         : home(r.path);
   return (
     <button
@@ -74,6 +80,8 @@ function RepoRow({ r, on, onPick }: { r: RepoOption; on: boolean; onPick: () => 
 function Pick(): ReactNode {
   const repos = useQuery({ queryKey: ["repos"], queryFn: api.repoOptions, staleTime: 60_000 });
   const [chosen, setChosen] = useState<string | undefined>(undefined);
+  // A repo kept somewhere the scan does not look, typed as a path.
+  const [typed, setTyped] = useState("");
   const [dropNote, setDropNote] = useState<string | null>(null);
   const list = (repos.data?.repos ?? []).slice(0, 8);
   const pick = chosen ?? list.find((r) => r.isConfigured)?.id ?? list[0]?.id;
@@ -112,9 +120,25 @@ function Pick(): ReactNode {
             <RepoRow key={r.id} r={r} on={pick === r.id} onPick={() => setChosen(r.id)} />
           ))}
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button type="button" className="btn btn-primary" disabled={!picked} onClick={() => picked && navigate({ view: "welcome", repoId: picked.id })}>
-            Read {picked ? nameOf(picked) : "it"}
+        <label className="typepath">
+          <span>Or type its path</span>
+          <input
+            className="field-in mono"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder="~/code/my-project"
+            spellCheck={false}
+            onKeyDown={(e) => e.key === "Enter" && typed.trim() && navigate({ view: "welcome", repoId: typed.trim() })}
+          />
+        </label>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!typed.trim() && !picked}
+            onClick={() => (typed.trim() ? navigate({ view: "welcome", repoId: typed.trim() }) : picked && navigate({ view: "welcome", repoId: picked.id }))}
+          >
+            Read {typed.trim() ? (typed.trim().split("/").filter(Boolean).pop() ?? "it") : picked ? nameOf(picked) : "it"}
           </button>
           <span style={{ color: "var(--fg-3)", fontSize: 12 }}>About 20 seconds. Free — reading is not a model call.</span>
         </div>

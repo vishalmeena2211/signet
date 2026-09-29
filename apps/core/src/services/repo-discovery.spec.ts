@@ -63,14 +63,19 @@ describe("what it refuses to offer", () => {
 });
 
 describe("the configured repo", () => {
-  it("is always offered, even if the scan missed it", async () => {
+  it("is offered even if the scan missed it, when it is a git repository", async () => {
     // It is the one repo known to work, so its absence would be the worst possible gap.
-    const d = new RepoDiscovery({
-      configuredRepoPath: "/somewhere/not/scanned/my-repo",
-      github: noGithub,
-    });
+    const outside = await mkdtemp(join(tmpdir(), "signet-unscanned-"));
+    await mkdir(join(outside, ".git"));
+    const d = new RepoDiscovery({ configuredRepoPath: outside, github: noGithub });
     const { repos } = await d.list();
-    expect(repos.some((r) => r.id === "/somewhere/not/scanned/my-repo")).toBe(true);
+    expect(repos.some((r) => r.id === outside)).toBe(true);
+  });
+
+  it("is not offered when it is not there, which sent a fresh install to a dead end", async () => {
+    const d = new RepoDiscovery({ configuredRepoPath: "/somewhere/not/scanned/my-repo", github: noGithub });
+    const { repos } = await d.list();
+    expect(repos.some((r) => r.id === "/somewhere/not/scanned/my-repo")).toBe(false);
   });
 
   it("is offered first, so the safe default is not buried", async () => {
