@@ -35,6 +35,13 @@ export interface ExecuteInput {
   resumeSession?: SessionRef | null;
   maxTurns?: number;
   model?: string; // e.g. tiny tasks pin claude-haiku-4-5 to spare the quota window
+  /**
+   * Folders the agent may READ but not change, for the read-and-think steps (asking,
+   * proposing). With these set, the run gets only Read, Glob and Grep: no edits and no
+   * shell, anywhere. On a repo bigger than a few files, a text survey alone left the
+   * planner guessing at code it could simply have read.
+   */
+  readOnlyDirs?: string[];
   signal?: AbortSignal; // user abort — SIGTERM the worker, classify as aborted
   onEvent: (ev: AdapterEvent) => Promise<void>;
 }
@@ -88,9 +95,15 @@ export class ClaudeAdapter {
    * everything else default-deny (prompts would block a headless run, so
    * denied means the model must work within its sandbox).
    */
-  private async writePermissionProfile(workspacePath: string): Promise<string> {
+  private async writePermissionProfile(workspacePath: string, readOnlyDirs: string[] = []): Promise<string> {
     const dir = join(workspacePath, ".claude");
     await mkdir(dir, { recursive: true });
+    const secrets = [`Read(${join(workspacePath, ".env")})`, `Read(**/.env*)`, ...readOnlyDirs.map((d) => `Read(${join(d, "**/.env*")})`)];
+    if (readOnlyDirs.length > 0) {
+      const file = join(dir, "settings.json");
+      await writeFile(file, JSON.stringify({ permissions: { allow: ["Read", "Glob", "Grep"], deny: ["Edit", "Write", "Bash", "WebFetch", "WebSearch", ...secrets] } }, null, 2), "utf8");
+      return file;
+    }
     const settings = {
       permissions: {
         allow: [
@@ -105,11 +118,20 @@ export class ClaudeAdapter {
           `Bash(node:*)`,
           `Bash(pnpm test:*)`,
           `Bash(pnpm run test:*)`,
+          // Every ecosystem's own test command, so the agent can run the suite it is
+          // changing, not only a pnpm one.
+          `Bash(npm test:*)`,
+          `Bash(npm run test:*)`,
+          `Bash(yarn test:*)`,
+          `Bash(go test:*)`,
+          `Bash(cargo test:*)`,
+          `Bash(python3 -m pytest:*)`,
+          `Bash(pytest:*)`,
           `Bash(git status:*)`,
           `Bash(git diff:*)`,
           `Bash(git log:*)`,
         ],
-        deny: ["WebFetch", "WebSearch", `Read(${join(workspacePath, ".env")})`, `Read(**/.env*)`],
+        deny: ["WebFetch", "WebSearch", ...secrets],
       },
     };
     const file = join(dir, "settings.json");
@@ -118,13 +140,14 @@ export class ClaudeAdapter {
   }
 
   async execute(input: ExecuteInput): Promise<ExecuteResult> {
-    await this.writePermissionProfile(input.workspacePath);
+    await this.writePermissionProfile(input.workspacePath, input.readOnlyDirs);
 
     const args = ["--print", "--output-format", "stream-json", "--verbose"];
     if (input.resumeSession) args.push("--resume", input.resumeSession);
     if (input.maxTurns !== undefined) args.push("--max-turns", String(input.maxTurns));
     if (input.model !== undefined) args.push("--model", input.model);
     if (input.appendSystemPromptFile) args.push("--append-system-prompt-file", input.appendSystemPromptFile);
+    for (const d of input.readOnlyDirs ?? []) args.push("--add-dir", d);
 
     const log = this.log.child({});
     log.info("adapter.spawn", { args: args.join(" ") });

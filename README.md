@@ -70,12 +70,14 @@ A *signet* is a seal ring. The irreversible gesture in the product is a seal you
 ## How far to trust it
 
 > [!IMPORTANT]
-> **Signet is early.** One person uses it, on their own machine. It has taken real features end to end, from a request in plain words to a merge commit: on its demo repository, and on a published npm package whose tests pass on main afterwards. The console was redesigned from scratch on 28 September 2026 to match [the wireframes](design). The frame-by-frame check that it matches is tracked in [`docs/wireframe-build.md`](docs/wireframe-build.md).
+> **Signet is early.** One person uses it, on their own machine. It has taken real features end to end, from a request in plain words to a merge commit: on its demo repository, on a published npm package whose tests pass on main afterwards, and on a copy of a 262-file TypeScript service with a 570-test suite, where the change was proven by five new tests and every existing one still passed. A clean install from GitHub, on a machine with no Signet on it, has been walked through. The console was redesigned from scratch on 28 September 2026 to match [the wireframes](design). The frame-by-frame check that it matches is tracked in [`docs/wireframe-build.md`](docs/wireframe-build.md).
 
 What it does not do yet:
 
 - **Push.** GitHub repositories can be planned against, but not merged into, because landing work there means pushing.
 - **Reach your phone.** The console has a phone layout, but Signet only listens on your own machine. How a phone should reach it (a tunnel you control, or a relay) has not been decided.
+- **Run every kind of test suite.** The tests check runs JavaScript and TypeScript (the `test` script in `package.json`, with npm, pnpm or yarn), Python (pytest, when it is installed), Go and Rust. On anything else it says it cannot run the tests, and no promise can be proven by one, so each seal is your judgement. The types and lint checks are JavaScript and TypeScript only.
+- **Run anywhere but macOS, so far.** Nothing is macOS-only by design, but Linux and Windows have not been tried.
 - **Judge how good a test is.** The promises check proves the named test was added in this change and that the suite passed. It does not prove the test asserts the promise well. That is still yours to read at the seal.
 
 ## How it works
@@ -124,7 +126,7 @@ pnpm install
 pnpm console
 ```
 
-Then open http://127.0.0.1:4700. That one command starts the database, applies migrations, builds whatever is out of date, and serves the console and the API together. With no settings at all it points at a demo repository under `~/.signet/`, so you can watch a feature go end to end before trusting it with a repo you care about.
+Then open http://127.0.0.1:4700. That one command starts the database, applies migrations, builds whatever is out of date, and serves the console and the API together. With no settings at all, the first run makes a small demo repository at `~/.signet/demo-repo` (a cart module with tests), so you can watch a feature go end to end before trusting it with a repo you care about. To use your own, pick it on the first page, where repos under `~/Desktop`, `~/code` and similar folders are listed, or type its path.
 
 <details>
 <summary>Settings</summary>

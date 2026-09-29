@@ -58,6 +58,8 @@ export interface ProposerAdapter {
     prompt: string;
     maxTurns: number;
     model?: string;
+    /** The repo, readable but not writable: see ExecuteInput.readOnlyDirs. */
+    readOnlyDirs?: string[];
     signal?: AbortSignal;
     // `null` rather than optional, matching the adapter: it always reports an error
     // field and uses null for "there wasn't one". Declaring it optional here made the
@@ -285,8 +287,9 @@ export class FeatureProposer {
         : req.goal;
       const result = await this.deps.adapter.execute({
         workspacePath: scratch,
-        prompt: buildPrompt(goal, profileText),
-        maxTurns: this.deps.maxTurns ?? 6,
+        prompt: `${buildPrompt(goal, profileText)}\n\n${readTheRepo(repo.path)}`,
+        readOnlyDirs: [repo.path],
+        maxTurns: this.deps.maxTurns ?? 14,
         ...(this.deps.model !== undefined ? { model: this.deps.model } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
@@ -365,6 +368,19 @@ export async function surveyFindings(repoPath: string, label: string): Promise<A
 }
 
 /** The questions whose answers would change the plan, asked before proposing it. */
+/**
+ * The repo itself, for reading. The survey is a summary; on anything bigger than a few
+ * files the answer to a question is usually in a file the summary only names.
+ */
+function readTheRepo(path: string): string {
+  return [
+    "## The repository itself",
+    `You may READ the repository at ${path} (Read, Grep and Glob only; you cannot change it).`,
+    "Look at the files the request touches before you ask or plan anything the code already answers.",
+    "Keep it short: read what the request needs, not the whole repository.",
+  ].join("\n");
+}
+
 export async function askQuestions(
   deps: { adapter: ProposerAdapter; model?: string },
   repoPath: string,
@@ -389,12 +405,15 @@ export async function askQuestions(
       "## The request",
       goal,
       "",
+      readTheRepo(repoPath),
+      "",
       profileText,
     ].join("\n");
     const result = await deps.adapter.execute({
       workspacePath: scratch,
       prompt,
-      maxTurns: 4,
+      readOnlyDirs: [repoPath],
+      maxTurns: 10,
       ...(deps.model !== undefined ? { model: deps.model } : {}),
     });
     if (!result.ok) return { ok: false, error: result.error ?? nonRecoverable("ask.failed", "the question pass did not finish") };
