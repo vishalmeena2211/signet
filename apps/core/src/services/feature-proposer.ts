@@ -163,7 +163,7 @@ export function nearestPath(pattern: string, paths: readonly string[]): string |
 /**
  * How input really arrives. A plan for `by=<name>` in a Slack bot was built, checked and
  * sealed with every promise proven, and still did the wrong thing on the first real use:
- * people type `by=@ankit`, Slack turns the mention into an id, the bot strips mentions
+ * people type `by=@alex`, Slack turns the mention into an id, the bot strips mentions
  * before parsing, and the filter was silently dropped. The code that strips mentions was
  * in the files the question pass read. Nobody asked what reaches the parser.
  */
